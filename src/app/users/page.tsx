@@ -35,7 +35,6 @@ const userRoles = [
   { id: "1", name: "Administrador" },
   { id: "2", name: "Gerente" },
   { id: "3", name: "Operador" },
-  { id: "4", name: "Visitante" },
 ]
 
 export default function UsersPage() {
@@ -213,5 +212,3 @@ export default function UsersPage() {
     </Card>
   )
 }
-
-    
