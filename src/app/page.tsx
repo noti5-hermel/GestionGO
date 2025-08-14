@@ -1,90 +1,27 @@
 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import Link from 'next/link'
-import { ArrowRight } from "lucide-react"
-
 export default function Home() {
   return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle>Gestión de Clientes</CardTitle>
-            <CardDescription>Añada, edite y vea su base de clientes.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/customers" passHref>
-              <Button>
-                Ir a Clientes <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Gestión de Despachos</CardTitle>
-            <CardDescription>Gestione toda la información de sus envíos.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/shipments" passHref>
-              <Button>
-                Ir a Despachos <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Facturación</CardTitle>
-            <CardDescription>Cree y visualice facturas para sus clientes.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/invoicing" passHref>
-              <Button>
-                Ir a Facturación <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-         <Card>
-          <CardHeader>
-            <CardTitle>Gestión de Vehículos</CardTitle>
-            <CardDescription>Añada y mantenga su flota de vehículos.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/vehicles" passHref>
-              <Button>
-                Ir a Vehículos <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Facturación por Despacho</CardTitle>
-            <CardDescription>Gestione las facturas asociadas a cada despacho.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/shipment-invoicing" passHref>
-              <Button>
-                Ir a Facturación Despacho <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Roles de Usuario</CardTitle>
-            <CardDescription>Gestione los roles y permisos de los usuarios.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/user-roles" passHref>
-              <Button>
-                Ir a Roles <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+    <div className="flex flex-col items-center justify-center h-[calc(100vh-8rem)]">
+      <div className="flex items-center space-x-4">
+        <svg
+          className="h-16 w-16 text-primary"
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M12 2L2 7l10 5 10-5-10-5z" />
+          <path d="M2 17l10 5 10-5" />
+          <path d="M2 12l10 5 10-5" />
+        </svg>
+        <h1 className="text-4xl font-bold">GestiónGo</h1>
       </div>
+      <p className="mt-4 text-lg text-muted-foreground">
+        Tu solución integral para la gestión.
+      </p>
+    </div>
   )
 }
