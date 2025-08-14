@@ -11,7 +11,6 @@ import {
   User,
   Map as MapIcon,
   CalendarDays,
-  FileCog,
   LayoutDashboard,
   Car,
 } from 'lucide-react'
@@ -29,7 +28,6 @@ const menuItems = [
   { href: '/routes', label: 'Rutas', icon: MapIcon },
   { href: '/vehicles', label: 'Vehículos', icon: Car },
   { href: '/payment-terms', label: 'Términos de Pago', icon: CalendarDays },
-  { href: '/vehicle-billing', label: 'Facturación Vehicular', icon: FileCog },
   { href: '/users', label: 'Usuarios', icon: User },
   { href: '/user-roles', label: 'Roles de Usuario', icon: Shield },
 ]

@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useState } from "react"
@@ -11,7 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { Checkbox } from "@/components/ui/checkbox"
+import { Checkbox } from "@/components/ui/checkbox" // Importar Checkbox
 import { PlusCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 
@@ -73,7 +72,7 @@ const StatusBadge = ({ checked }: { checked: boolean }) => {
   return <Badge variant={checked ? "default" : "secondary"}>{checked ? "OK" : "Pend."}</Badge>
 }
 
-export default function ShipmentsPage() {
+export default function ShipmentsPage() { // Cambiado a ShipmentsPage
   const [shipments, setShipments] = useState<Shipment[]>(initialShipments)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
 
@@ -127,24 +126,228 @@ export default function ShipmentsPage() {
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField control={form.control} name="id_despacho" render={({ field }) => ( <FormItem> <FormLabel>ID Despacho</FormLabel> <FormControl> <Input placeholder="Ej: DS-003" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
-                    <FormField control={form.control} name="id_ruta" render={({ field }) => ( <FormItem> <FormLabel>ID Ruta</FormLabel> <FormControl> <Input placeholder="Ej: Ruta-Central" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
-                    <FormField control={form.control} name="id_motorista" render={({ field }) => ( <FormItem> <FormLabel>ID Motorista</FormLabel> <FormControl> <Input placeholder="Ej: MOT-03" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
-                    <FormField control={form.control} name="id_auxiliar" render={({ field }) => ( <FormItem> <FormLabel>ID Auxiliar</FormLabel> <FormControl> <Input placeholder="Ej: AUX-03" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
-                    <FormField control={form.control} name="total_contado" render={({ field }) => ( <FormItem> <FormLabel>Total Contado</FormLabel> <FormControl> <Input type="number" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
-                    <FormField control={form.control} name="total_credito" render={({ field }) => ( <FormItem> <FormLabel>Total Crédito</FormLabel> <FormControl> <Input type="number" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
-                    <FormField control={form.control} name="total_general" render={({ field }) => ( <FormItem> <FormLabel>Total General</FormLabel> <FormControl> <Input type="number" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
-                    <FormField control={form.control} name="fecha_despacho" render={({ field }) => ( <FormItem> <FormLabel>Fecha Despacho</FormLabel> <FormControl> <Input type="date" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
+                    <FormField
+                      control={form.control}
+                      name="id_despacho"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>ID Despacho</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Ej: DS-003" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="id_ruta"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>ID Ruta</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Ej: Ruta-Central" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="id_motorista"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>ID Motorista</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Ej: MOT-03" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="id_auxiliar"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>ID Auxiliar</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Ej: AUX-03" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="total_contado"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Total Contado</FormLabel>
+                          <FormControl>
+                            <Input type="number" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="total_credito"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Total Crédito</FormLabel>
+                          <FormControl>
+                            <Input type="number" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="total_general"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Total General</FormLabel>
+                          <FormControl>
+                            <Input type="number" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="fecha_despacho"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Fecha Despacho</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </div>
                   <Card>
                     <CardHeader><CardTitle>Estados</CardTitle></CardHeader>
                     <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                        <FormField control={form.control} name="bodega" render={({ field }) => (<FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4"> <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><div className="space-y-1 leading-none"><FormLabel>Bodega</FormLabel></div></FormItem>)} />
-                        <FormField control={form.control} name="reparto" render={({ field }) => (<FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4"> <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><div className="space-y-1 leading-none"><FormLabel>Reparto</FormLabel></div></FormItem>)} />
-                        <FormField control={form.control} name="facturacion" render={({ field }) => (<FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4"> <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><div className="space-y-1 leading-none"><FormLabel>Facturación</FormLabel></div></FormItem>)} />
-                        <FormField control={form.control} name="asist_admon" render={({ field }) => (<FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4"> <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><div className="space-y-1 leading-none"><FormLabel>Asist. Admon.</FormLabel></div></FormItem>)} />
-                        <FormField control={form.control} name="cobros" render={({ field }) => (<FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4"> <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><div className="space-y-1 leading-none"><FormLabel>Cobros</FormLabel></div></FormItem>)} />
-                        <FormField control={form.control} name="gerente_admon" render={({ field }) => (<FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4"> <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><div className="space-y-1 leading-none"><FormLabel>Gerente Admon.</FormLabel></div></FormItem>)} />
+                      {/* Campo: Bodega (Checkbox) */}
+                      <FormField
+                        control={form.control}
+                        name="bodega"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                              />
+                            </FormControl>
+                            <div className="space-y-1 leading-none">
+                              <FormLabel>Bodega</FormLabel>
+                            </div>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      {/* Campo: Reparto (Checkbox) */}
+                      <FormField
+                        control={form.control}
+                        name="reparto"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                              />
+                            </FormControl>
+                            <div className="space-y-1 leading-none">
+                              <FormLabel>Reparto</FormLabel>
+                            </div>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      {/* Campo: Facturación (Checkbox) */}
+                      <FormField
+                        control={form.control}
+                        name="facturacion"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                              />
+                            </FormControl>
+                            <div className="space-y-1 leading-none">
+                              <FormLabel>Facturación</FormLabel>
+                            </div>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      {/* Campo: Asist. Admon. (Checkbox) */}
+                      <FormField
+                        control={form.control}
+                        name="asist_admon"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                              />
+                            </FormControl>
+                            <div className="space-y-1 leading-none">
+                              <FormLabel>Asist. Admon.</FormLabel>
+                            </div>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      {/* Campo: Cobros (Checkbox) */}
+                      <FormField
+                        control={form.control}
+                        name="cobros"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                              />
+                            </FormControl>
+                            <div className="space-y-1 leading-none">
+                              <FormLabel>Cobros</FormLabel>
+                            </div>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      {/* Campo: Gerente Admon. (Checkbox) */}
+                      <FormField
+                        control={form.control}
+                        name="gerente_admon"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                              />
+                            </FormControl>
+                            <div className="space-y-1 leading-none">
+                              <FormLabel>Gerente Admon.</FormLabel>
+                            </div>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                     </CardContent>
                   </Card>
                   <DialogFooter>
@@ -197,7 +400,7 @@ export default function ShipmentsPage() {
           </TableBody>
         </Table>
       </CardContent>
-       <CardFooter>
+      <CardFooter>
         <div className="text-xs text-muted-foreground">
           Mostrando <strong>1-{shipments.length}</strong> de <strong>{shipments.length}</strong> despachos.
         </div>
