@@ -1,47 +1,119 @@
 
 'use client'
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogClose
+} from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { PlusCircle } from "lucide-react"
+import { PlusCircle, Trash2 } from "lucide-react"
+import { supabase } from "@/lib/supabase"
+import { useToast } from "@/hooks/use-toast"
 
 const routeSchema = z.object({
-  id: z.string().min(1, { message: "El ID de la ruta es requerido." }),
-  description: z.string().min(1, { message: "La descripción es requerida." }),
+  id_ruta: z.string().min(1, { message: "El ID de la ruta es requerido." }),
+  descripcion: z.string().min(1, { message: "La descripción es requerida." }),
 })
 
 type Route = z.infer<typeof routeSchema>
 
-const initialRoutes: Route[] = [
-  { id: "Ruta-Norte", description: "Ruta hacia el norte del país." },
-  { id: "Ruta-Sur", description: "Ruta hacia el sur del país." },
-  { id: "Ruta-Local", description: "Ruta de distribución local." },
-]
-
 export default function RoutesPage() {
-  const [routes, setRoutes] = useState<Route[]>(initialRoutes)
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [routes, setRoutes] = useState<Route[]>([])
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const { toast } = useToast()
+
+  useEffect(() => {
+    fetchRoutes()
+  }, [])
+
+  const fetchRoutes = async () => {
+    const { data, error } = await supabase.from('rutas').select('id_ruta, descripcion')
+    if (error) {
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar las rutas.",
+        variant: "destructive",
+      })
+    } else {
+      setRoutes(data as Route[])
+    }
+  }
 
   const form = useForm<Route>({
     resolver: zodResolver(routeSchema),
     defaultValues: {
-      id: "",
-      description: "",
+      id_ruta: "",
+      descripcion: "",
     },
   })
 
-  const onSubmit = (values: Route) => {
-    setRoutes([...routes, values])
-    form.reset()
-    setIsDialogOpen(false)
+  const onSubmit = async (values: Route) => {
+    const { error } = await supabase
+      .from('rutas')
+      .insert([values])
+      .select()
+
+    if (error) {
+      toast({
+        title: "Error al guardar",
+        description: error.message,
+        variant: "destructive",
+      })
+    } else {
+      toast({
+        title: "Éxito",
+        description: "Ruta guardada correctamente.",
+      })
+      fetchRoutes()
+      form.reset()
+      setIsDialogOpen(false)
+    }
+  }
+
+  const handleDelete = async (routeId: string) => {
+    const { error } = await supabase
+      .from('rutas')
+      .delete()
+      .eq('id_ruta', routeId)
+
+    if (error) {
+      toast({
+        title: "Error al eliminar",
+        description: error.message,
+        variant: "destructive",
+      })
+    } else {
+      toast({
+        title: "Éxito",
+        description: "Ruta eliminada correctamente.",
+      })
+      fetchRoutes()
+    }
   }
 
   return (
@@ -69,7 +141,7 @@ export default function RoutesPage() {
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                   <FormField
                     control={form.control}
-                    name="id"
+                    name="id_ruta"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>ID Ruta</FormLabel>
@@ -82,7 +154,7 @@ export default function RoutesPage() {
                   />
                   <FormField
                     control={form.control}
-                    name="description"
+                    name="descripcion"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Descripción</FormLabel>
@@ -111,13 +183,37 @@ export default function RoutesPage() {
             <TableRow>
               <TableHead>ID Ruta</TableHead>
               <TableHead>Descripción</TableHead>
+              <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {routes.map((route) => (
-              <TableRow key={route.id}>
-                <TableCell className="font-medium">{route.id}</TableCell>
-                <TableCell>{route.description}</TableCell>
+              <TableRow key={route.id_ruta}>
+                <TableCell className="font-medium">{route.id_ruta}</TableCell>
+                <TableCell>{route.descripcion}</TableCell>
+                <TableCell className="text-right">
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" size="icon">
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Esta acción no se puede deshacer. Esto eliminará permanentemente la ruta.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => handleDelete(route.id_ruta)}>
+                          Eliminar
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
