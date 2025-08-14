@@ -160,7 +160,11 @@ export default function InvoicingPage() {
                       <FormItem>
                         <FormLabel>Cliente</FormLabel>
                         <Select onValueChange={(value) => { field.onChange(value); handleCustomerChange(value); }} defaultValue={field.value}>
-                          <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un cliente" /></SelectTrigger></FormControl>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccione un cliente" />
+                            </SelectTrigger>
+                          </FormControl>
                           <SelectContent>
                             {initialCustomers.map((customer) => ( <SelectItem key={customer.code} value={customer.code}> {customer.name} ({customer.code}) </SelectItem> ))}
                           </SelectContent>
@@ -181,7 +185,11 @@ export default function InvoicingPage() {
                       <FormItem>
                         <FormLabel>Estado</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl><SelectTrigger><SelectValue placeholder="Seleccione un estado" /></SelectTrigger></FormControl>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccione un estado" />
+                            </SelectTrigger>
+                          </FormControl>
                           <SelectContent>
                             {statusOptions.map((status) => ( <SelectItem key={status} value={status}> {status} </SelectItem> ))}
                           </SelectContent>
