@@ -18,20 +18,20 @@ import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 
 const userSchema = z.object({
-  id: z.string().min(1, { message: "El ID de usuario es requerido." }),
-  name: z.string().min(1, { message: "El nombre es requerido." }),
+  id_usuario: z.string().min(1, { message: "El ID de usuario es requerido." }),
+  nombre: z.string().min(1, { message: "El nombre es requerido." }),
   email: z.string().email({ message: "Debe ser un correo electrónico válido." }),
   password: z.string().min(6, { message: "La contraseña debe tener al menos 6 caracteres." }),
-  roleId: z.string().min(1, { message: "El rol es requerido." }),
+  id_rol: z.string().min(1, { message: "El rol es requerido." }),
 })
 
-type User = z.infer<typeof userSchema> & { avatar: string }
-
-const initialUsers: User[] = [
-  { id: "1", name: "Admin", email: "admin@example.com", password: "password", roleId: "1", avatar: "https://placehold.co/40x40.png" },
-  { id: "2", name: "Gerente Logística", email: "gerente.log@example.com", password: "password", roleId: "2", avatar: "https://placehold.co/40x40.png" },
-  { id: "3", name: "Operador", email: "operador@example.com", password: "password", roleId: "3", avatar: "https://placehold.co/40x40.png" },
-]
+type User = {
+  id_usuario: string;
+  nombre: string;
+  email: string;
+  id_rol: string;
+  avatar: string;
+}
 
 type Role = {
   id_rol: string
@@ -39,14 +39,29 @@ type Role = {
 }
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<User[]>(initialUsers)
+  const [users, setUsers] = useState<User[]>([])
   const [roles, setRoles] = useState<Role[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { toast } = useToast()
 
   useEffect(() => {
     fetchRoles()
+    fetchUsers()
   }, [])
+
+  const fetchUsers = async () => {
+    const { data, error } = await supabase.from('usuario').select('id_usuario, nombre, email, id_rol')
+    if (error) {
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los usuarios.",
+        variant: "destructive",
+      })
+    } else {
+      const usersWithAvatars = data.map(u => ({...u, avatar: "https://placehold.co/40x40.png"}))
+      setUsers(usersWithAvatars as User[])
+    }
+  }
 
   const fetchRoles = async () => {
     const { data, error } = await supabase.from('rol').select('id_rol, rol_desc')
@@ -64,20 +79,43 @@ export default function UsersPage() {
   const form = useForm<z.infer<typeof userSchema>>({
     resolver: zodResolver(userSchema),
     defaultValues: {
-      id: "",
-      name: "",
+      id_usuario: "",
+      nombre: "",
       email: "",
       password: "",
-      roleId: "",
+      id_rol: "",
     },
   })
 
-  const onSubmit = (values: z.infer<typeof userSchema>) => {
-    // Aquí iría la lógica para guardar el usuario en Supabase también
-    const newUser: User = { ...values, avatar: "https://placehold.co/40x40.png" }
-    setUsers([...users, newUser])
-    form.reset()
-    setIsDialogOpen(false)
+  const onSubmit = async (values: z.infer<typeof userSchema>) => {
+    const { data, error } = await supabase
+      .from('usuario')
+      .insert([
+        { 
+          id_usuario: values.id_usuario, 
+          nombre: values.nombre, 
+          email: values.email, 
+          password: values.password, 
+          id_rol: values.id_rol 
+        },
+      ])
+      .select()
+
+    if (error) {
+      toast({
+        title: "Error al crear usuario",
+        description: error.message,
+        variant: "destructive",
+      })
+    } else {
+      toast({
+        title: "Éxito",
+        description: "Usuario creado correctamente.",
+      })
+      fetchUsers()
+      form.reset()
+      setIsDialogOpen(false)
+    }
   }
 
   const getRoleName = (roleId: string) => {
@@ -109,7 +147,7 @@ export default function UsersPage() {
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                    <FormField
                     control={form.control}
-                    name="id"
+                    name="id_usuario"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>ID Usuario</FormLabel>
@@ -122,7 +160,7 @@ export default function UsersPage() {
                   />
                   <FormField
                     control={form.control}
-                    name="name"
+                    name="nombre"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Nombre</FormLabel>
@@ -161,7 +199,7 @@ export default function UsersPage() {
                   />
                   <FormField
                     control={form.control}
-                    name="roleId"
+                    name="id_rol"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Rol de Usuario</FormLabel>
@@ -207,19 +245,19 @@ export default function UsersPage() {
           </TableHeader>
           <TableBody>
             {users.map((user) => (
-              <TableRow key={user.id}>
-                <TableCell>{user.id}</TableCell>
+              <TableRow key={user.id_usuario}>
+                <TableCell>{user.id_usuario}</TableCell>
                 <TableCell>
                   <div className="flex items-center gap-3">
                     <Avatar>
-                      <AvatarImage src={user.avatar} alt={user.name} data-ai-hint="profile picture" />
-                      <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                      <AvatarImage src={user.avatar} alt={user.nombre} data-ai-hint="profile picture" />
+                      <AvatarFallback>{user.nombre.charAt(0)}</AvatarFallback>
                     </Avatar>
-                    <span className="font-medium">{user.name}</span>
+                    <span className="font-medium">{user.nombre}</span>
                   </div>
                 </TableCell>
                 <TableCell>{user.email}</TableCell>
-                <TableCell>{getRoleName(user.roleId)}</TableCell>
+                <TableCell>{getRoleName(user.id_rol)}</TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -233,3 +271,5 @@ export default function UsersPage() {
     </Card>
   )
 }
+
+    
