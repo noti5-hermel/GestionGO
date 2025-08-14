@@ -15,8 +15,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { PlusCircle } from "lucide-react"
 
+// Esquema de validación para la factura usando Zod
 const invoiceSchema = z.object({
   id_factura: z.string().min(1, "ID de factura es requerido."),
+  code_customer: z.string().min(1, "El código de cliente es requerido."),
+  customer_name: z.string().min(1, "El nombre del cliente es requerido."),
   invoice_number: z.string().min(1, "El número de factura es requerido."),
   tax_id_number: z.string().min(1, "El NIF es requerido."),
   subtotal: z.coerce.number().min(0, "Subtotal debe ser positivo."),
@@ -29,11 +32,15 @@ const invoiceSchema = z.object({
   estado: z.enum(["Pagada", "Pendiente", "Vencida"]),
 })
 
+// Tipo inferido del esquema de Zod
 type Invoice = z.infer<typeof invoiceSchema>
 
+// Datos de facturas iniciales
 const initialInvoices: Invoice[] = [
   {
     id_factura: "FACT-001",
+    code_customer: "C001",
+    customer_name: "Juan Pérez",
     invoice_number: "INV-2024-001",
     tax_id_number: "JP123",
     subtotal: 1000,
@@ -47,6 +54,8 @@ const initialInvoices: Invoice[] = [
   },
   {
     id_factura: "FACT-002",
+    code_customer: "C002",
+    customer_name: "Maria García",
     invoice_number: "INV-2024-002",
     tax_id_number: "MG456",
     subtotal: 800,
@@ -60,15 +69,25 @@ const initialInvoices: Invoice[] = [
   },
 ]
 
+// Opciones disponibles para el estado de la factura
 const statusOptions: Invoice['estado'][] = ["Pagada", "Pendiente", "Vencida"]
+
+const customers = [
+    { code: "C001", name: "Juan Pérez" },
+    { code: "C002", name: "Maria García" },
+]
 
 export default function InvoicingPage() {
   const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+
+  // Configuración del formulario con react-hook-form y Zod
   const form = useForm<Invoice>({
     resolver: zodResolver(invoiceSchema),
     defaultValues: {
       id_factura: "",
+      code_customer: "",
+      customer_name: "",
       invoice_number: "",
       tax_id_number: "",
       subtotal: 0,
@@ -77,17 +96,19 @@ export default function InvoicingPage() {
       payment: 0,
       net_to_pay: 0,
       term_description: "",
-      date: new Date().toISOString().split('T')[0],
+      date: new Date().toISOString().split('T')[0], // Establece la fecha actual por defecto
       estado: "Pendiente",
     },
   })
 
+  // Función para manejar el envío del formulario
   const onSubmit = (values: Invoice) => {
-    setInvoices([...invoices, values])
-    form.reset()
-    setIsDialogOpen(false)
+    setInvoices([...invoices, values]) // Agrega la nueva factura al estado
+    form.reset() // Resetea el formulario
+    setIsDialogOpen(false) // Cierra el diálogo
   }
 
+  // Función para obtener la variante del Badge según el estado
   const getBadgeVariant = (status: Invoice['estado']) => {
     switch (status) {
       case "Pagada":
@@ -109,6 +130,7 @@ export default function InvoicingPage() {
             <CardTitle>Facturación</CardTitle>
             <CardDescription>Cree y visualice facturas.</CardDescription>
           </div>
+          {/* Diálogo para crear una nueva factura */}
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button>
@@ -122,26 +144,184 @@ export default function InvoicingPage() {
                   Complete todos los campos para generar una nueva factura.
                 </DialogDescription>
               </DialogHeader>
+              {/* Formulario de creación de factura */}
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField control={form.control} name="id_factura" render={({ field }) => ( <FormItem> <FormLabel>ID Factura</FormLabel> <FormControl> <Input placeholder="Ej: FACT-003" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
-                    <FormField control={form.control} name="invoice_number" render={({ field }) => ( <FormItem> <FormLabel>Número de Factura</FormLabel> <FormControl> <Input placeholder="Ej: INV-2024-003" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
-                    <FormField control={form.control} name="tax_id_number" render={({ field }) => ( <FormItem> <FormLabel>NIF</FormLabel> <FormControl> <Input placeholder="Ej: 12345678A" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
-                    <FormField control={form.control} name="date" render={({ field }) => ( <FormItem> <FormLabel>Fecha</FormLabel> <FormControl> <Input type="date" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
-                    <FormField control={form.control} name="subtotal" render={({ field }) => ( <FormItem> <FormLabel>Subtotal</FormLabel> <FormControl> <Input type="number" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
-                    <FormField control={form.control} name="total_sale" render={({ field }) => ( <FormItem> <FormLabel>Venta Total</FormLabel> <FormControl> <Input type="number" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
-                    <FormField control={form.control} name="grand_total" render={({ field }) => ( <FormItem> <FormLabel>Total General</FormLabel> <FormControl> <Input type="number" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
-                    <FormField control={form.control} name="payment" render={({ field }) => ( <FormItem> <FormLabel>Pago</FormLabel> <FormControl> <Input type="number" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
-                    <FormField control={form.control} name="net_to_pay" render={({ field }) => ( <FormItem> <FormLabel>Neto a Pagar</FormLabel> <FormControl> <Input type="number" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
-                    <FormField control={form.control} name="term_description" render={({ field }) => ( <FormItem> <FormLabel>Descripción Término</FormLabel> <FormControl> <Input placeholder="Ej: Pago a 30 días" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
+                    <FormField
+                      control={form.control}
+                      name="id_factura"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>ID Factura</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Ej: FACT-003" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                      <FormField
+                      control={form.control}
+                      name="code_customer"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Code Customer</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Seleccione un cliente" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {customers.map((customer) => (
+                                <SelectItem key={customer.code} value={customer.code}>
+                                  {customer.code} - {customer.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="customer_name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Customer Name</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Ej: Juan Pérez" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="invoice_number"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Invoice Number</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Ej: INV-2024-003" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="tax_id_number"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Tax Number</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Ej: 12345678A" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="subtotal"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Subtotal</FormLabel>
+                          <FormControl>
+                            <Input type="number" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="total_sale"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Total Sale</FormLabel>
+                          <FormControl>
+                            <Input type="number" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="grand_total"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Grand Total</FormLabel>
+                          <FormControl>
+                            <Input type="number" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="payment"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Payment</FormLabel>
+                          <FormControl>
+                            <Input type="number" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="net_to_pay"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Net to Pay</FormLabel>
+                          <FormControl>
+                            <Input type="number" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                     <FormField
+                      control={form.control}
+                      name="term_description"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Term Description</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Ej: Pago a 30 días" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="date"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Fecha</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
                       control={form.control}
                       name="estado"
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Estado</FormLabel>
-                           <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="Seleccione un estado" />
@@ -177,9 +357,15 @@ export default function InvoicingPage() {
           <TableHeader>
             <TableRow>
               <TableHead>ID Factura</TableHead>
-              <TableHead># Factura</TableHead>
+              <TableHead>Invoice Number</TableHead>
+              <TableHead>Tax Number</TableHead>
+              <TableHead>Subtotal</TableHead>
+              <TableHead>Total Sale</TableHead>
+              <TableHead>Grand Total</TableHead>
+              <TableHead>Payment</TableHead>
+              <TableHead>Net to Pay</TableHead>
+              <TableHead>Term Description</TableHead>
               <TableHead>Fecha</TableHead>
-              <TableHead>Total</TableHead>
               <TableHead>Estado</TableHead>
             </TableRow>
           </TableHeader>
@@ -188,15 +374,21 @@ export default function InvoicingPage() {
               <TableRow key={invoice.id_factura}>
                 <TableCell className="font-medium">{invoice.id_factura}</TableCell>
                 <TableCell>{invoice.invoice_number}</TableCell>
-                <TableCell>{invoice.date}</TableCell>
+                <TableCell>{invoice.tax_id_number}</TableCell>
+                <TableCell>${invoice.subtotal.toFixed(2)}</TableCell>
+                <TableCell>${invoice.total_sale.toFixed(2)}</TableCell>
                 <TableCell>${invoice.grand_total.toFixed(2)}</TableCell>
+                <TableCell>${invoice.payment.toFixed(2)}</TableCell>
+                <TableCell>${invoice.net_to_pay.toFixed(2)}</TableCell>
+                <TableCell>{invoice.term_description}</TableCell>
+                <TableCell>{invoice.date}</TableCell>
                 <TableCell><Badge variant={getBadgeVariant(invoice.estado)}>{invoice.estado}</Badge></TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </CardContent>
-       <CardFooter>
+      <CardFooter>
         <div className="text-xs text-muted-foreground">
           Mostrando <strong>1-{invoices.length}</strong> de <strong>{invoices.length}</strong> facturas.
         </div>
