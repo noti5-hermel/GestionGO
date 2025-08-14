@@ -18,16 +18,16 @@ import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 
 const userSchema = z.object({
-  nombre: z.string().min(1, { message: "El nombre es requerido." }),
-  email: z.string().email({ message: "Debe ser un correo electrónico válido." }),
-  password: z.string().min(6, { message: "La contraseña debe tener al menos 6 caracteres." }),
+  name: z.string().min(1, { message: "El nombre es requerido." }),
+  correo: z.string().email({ message: "Debe ser un correo electrónico válido." }),
+  contraseña: z.string().min(6, { message: "La contraseña debe tener al menos 6 caracteres." }),
   id_rol: z.string().min(1, { message: "El rol es requerido." }),
 })
 
 type User = {
   id_usuario: string;
-  nombre: string;
-  email: string;
+  name: string;
+  correo: string;
   id_rol: string;
   avatar: string;
 }
@@ -49,7 +49,7 @@ export default function UsersPage() {
   }, [])
 
   const fetchUsers = async () => {
-    const { data, error } = await supabase.from('usuario').select('id_usuario, nombre, email, id_rol')
+    const { data, error } = await supabase.from('usuario').select('id_usuario, name, correo, id_rol')
     if (error) {
       toast({
         title: "Error",
@@ -78,21 +78,21 @@ export default function UsersPage() {
   const form = useForm<z.infer<typeof userSchema>>({
     resolver: zodResolver(userSchema),
     defaultValues: {
-      nombre: "",
-      email: "",
-      password: "",
+      name: "",
+      correo: "",
+      contraseña: "",
       id_rol: "",
     },
   })
 
   const onSubmit = async (values: z.infer<typeof userSchema>) => {
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('usuario')
       .insert([
         { 
-          nombre: values.nombre, 
-          email: values.email, 
-          password: values.password, 
+          name: values.name, 
+          correo: values.correo, 
+          contraseña: values.contraseña, 
           id_rol: values.id_rol 
         },
       ])
@@ -144,7 +144,7 @@ export default function UsersPage() {
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                   <FormField
                     control={form.control}
-                    name="nombre"
+                    name="name"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Nombre</FormLabel>
@@ -157,7 +157,7 @@ export default function UsersPage() {
                   />
                   <FormField
                     control={form.control}
-                    name="email"
+                    name="correo"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Correo Electrónico</FormLabel>
@@ -170,7 +170,7 @@ export default function UsersPage() {
                   />
                   <FormField
                     control={form.control}
-                    name="password"
+                    name="contraseña"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Contraseña</FormLabel>
@@ -234,13 +234,13 @@ export default function UsersPage() {
                 <TableCell>
                   <div className="flex items-center gap-3">
                     <Avatar>
-                      <AvatarImage src={user.avatar} alt={user.nombre} data-ai-hint="profile picture" />
-                      <AvatarFallback>{user.nombre.charAt(0)}</AvatarFallback>
+                      <AvatarImage src={user.avatar} alt={user.name} data-ai-hint="profile picture" />
+                      <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
                     </Avatar>
-                    <span className="font-medium">{user.nombre}</span>
+                    <span className="font-medium">{user.name}</span>
                   </div>
                 </TableCell>
-                <TableCell>{user.email}</TableCell>
+                <TableCell>{user.correo}</TableCell>
                 <TableCell>{getRoleName(user.id_rol)}</TableCell>
               </TableRow>
             ))}
