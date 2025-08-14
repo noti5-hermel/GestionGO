@@ -1,3 +1,4 @@
+
 'use client'
 
 import Link from 'next/link'
@@ -11,7 +12,8 @@ import {
   Map as MapIcon,
   CalendarDays,
   FileCog,
-  LayoutDashboard
+  LayoutDashboard,
+  Car,
 } from 'lucide-react'
 import {
   SidebarMenu,
@@ -25,6 +27,7 @@ const menuItems = [
   { href: '/shipments', label: 'Despachos', icon: Truck },
   { href: '/invoicing', label: 'Facturación', icon: FileText },
   { href: '/routes', label: 'Rutas', icon: MapIcon },
+  { href: '/vehicles', label: 'Vehículos', icon: Car },
   { href: '/payment-terms', label: 'Términos de Pago', icon: CalendarDays },
   { href: '/vehicle-billing', label: 'Facturación Vehicular', icon: FileCog },
   { href: '/users', label: 'Usuarios', icon: User },

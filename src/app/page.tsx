@@ -1,3 +1,4 @@
+
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from 'next/link'
@@ -51,6 +52,19 @@ export default function Home() {
             <Link href="/invoicing" passHref>
               <Button>
                 Ir a Facturación <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+         <Card>
+          <CardHeader>
+            <CardTitle>Gestión de Vehículos</CardTitle>
+            <CardDescription>Añada y mantenga su flota de vehículos.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/vehicles" passHref>
+              <Button>
+                Ir a Vehículos <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </Link>
           </CardContent>
