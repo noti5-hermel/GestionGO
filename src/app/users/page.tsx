@@ -13,7 +13,6 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PlusCircle } from "lucide-react"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 
@@ -29,7 +28,6 @@ type User = {
   name: string;
   correo: string;
   id_rol: string;
-  avatar: string;
 }
 
 type Role = {
@@ -59,8 +57,7 @@ export default function UsersPage() {
         variant: "destructive",
       })
     } else {
-      const usersWithAvatars = (usuario || []).map(u => ({...u, avatar: "https://placehold.co/40x40.png"}))
-      setUsers(usersWithAvatars as User[])
+      setUsers((usuario || []) as User[])
     }
   }
 
@@ -234,10 +231,7 @@ export default function UsersPage() {
               <TableRow key={user.id_usuario || index}>
                 <TableCell>{user.id_usuario}</TableCell>
                 <TableCell>
-                  <div className="flex items-center gap-3">
-                    <img src={user.avatar} alt={user.name} data-ai-hint="profile picture" className="h-10 w-10 rounded-md object-cover" />
-                    <span className="font-medium">{user.name}</span>
-                  </div>
+                  <span className="font-medium">{user.name}</span>
                 </TableCell>
                 <TableCell>{user.correo}</TableCell>
                 <TableCell>{getRoleName(user.id_rol)}</TableCell>
