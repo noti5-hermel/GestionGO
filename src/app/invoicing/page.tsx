@@ -141,14 +141,18 @@ export default function InvoicingPage() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Estado</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                           <Select onValueChange={field.onChange} defaultValue={field.value}>
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="Seleccione un estado" />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {statusOptions.map((status) => ( <SelectItem key={status} value={status}> {status} </SelectItem> ))}
+                              {statusOptions.map((status) => (
+                                <SelectItem key={status} value={status}>
+                                  {status}
+                                </SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
                           <FormMessage />
@@ -200,3 +204,5 @@ export default function InvoicingPage() {
     </Card>
   )
 }
+
+    
