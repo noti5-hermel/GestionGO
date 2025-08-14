@@ -135,22 +135,26 @@ export default function InvoicingPage() {
                     <FormField control={form.control} name="payment" render={({ field }) => ( <FormItem> <FormLabel>Pago</FormLabel> <FormControl> <Input type="number" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
                     <FormField control={form.control} name="net_to_pay" render={({ field }) => ( <FormItem> <FormLabel>Neto a Pagar</FormLabel> <FormControl> <Input type="number" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
                     <FormField control={form.control} name="term_description" render={({ field }) => ( <FormItem> <FormLabel>Descripción Término</FormLabel> <FormControl> <Input placeholder="Ej: Pago a 30 días" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
-                     <FormField control={form.control} name="estado" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Estado</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Seleccione un estado" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {statusOptions.map((status) => ( <SelectItem key={status} value={status}> {status} </SelectItem> ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
+                     <FormField
+                      control={form.control}
+                      name="estado"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Estado</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Seleccione un estado" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {statusOptions.map((status) => ( <SelectItem key={status} value={status}> {status} </SelectItem> ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </div>
                   <DialogFooter>
                     <DialogClose asChild>
