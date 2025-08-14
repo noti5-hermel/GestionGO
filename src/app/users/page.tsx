@@ -228,8 +228,8 @@ export default function UsersPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {users.map((user) => (
-              <TableRow key={user.id_usuario}>
+            {users.map((user, index) => (
+              <TableRow key={user.id_usuario || index}>
                 <TableCell>{user.id_usuario}</TableCell>
                 <TableCell>
                   <div className="flex items-center gap-3">
