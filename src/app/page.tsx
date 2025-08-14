@@ -69,6 +69,19 @@ export default function Home() {
             </Link>
           </CardContent>
         </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Facturación por Despacho</CardTitle>
+            <CardDescription>Gestione las facturas asociadas a cada despacho.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/shipment-invoicing" passHref>
+              <Button>
+                Ir a Facturación Despacho <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

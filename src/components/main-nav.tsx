@@ -13,6 +13,7 @@ import {
   CalendarDays,
   LayoutDashboard,
   Car,
+  ClipboardList
 } from 'lucide-react'
 import {
   SidebarMenu,
@@ -25,6 +26,7 @@ const menuItems = [
   { href: '/customers', label: 'Clientes', icon: Users },
   { href: '/shipments', label: 'Despachos', icon: Truck },
   { href: '/invoicing', label: 'Facturación', icon: FileText },
+  { href: '/shipment-invoicing', label: 'Facturación por Despacho', icon: ClipboardList },
   { href: '/routes', label: 'Rutas', icon: MapIcon },
   { href: '/vehicles', label: 'Vehículos', icon: Car },
   { href: '/payment-terms', label: 'Términos de Pago', icon: CalendarDays },
