@@ -1,10 +1,56 @@
+
+'use client'
+
+import { useState } from "react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { z } from "zod"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { Input } from "@/components/ui/input"
 import { PlusCircle } from "lucide-react"
 
+const customerSchema = z.object({
+  code: z.string().min(1, { message: "El código es requerido." }),
+  name: z.string().min(1, { message: "El nombre es requerido." }),
+  taxCode: z.string().min(1, { message: "El código de impuesto es requerido." }),
+  paymentTermId: z.string().min(1, { message: "El término de pago es requerido." }),
+  routeNumber: z.string().min(1, { message: "El número de ruta es requerido." }),
+  geofence: z.string().min(1, { message: "La geocerca es requerida." }),
+})
+
+type Customer = z.infer<typeof customerSchema>
+
+const initialCustomers: Customer[] = [
+  { code: "C001", name: "Juan Pérez", taxCode: "JP123", paymentTermId: "Neto-30", routeNumber: "Ruta-Norte", geofence: "Zona A" },
+  { code: "C002", name: "Maria García", taxCode: "MG456", paymentTermId: "Pago-Inmediato", routeNumber: "Ruta-Sur", geofence: "Zona B" },
+]
+
 export default function CustomersPage() {
+  const [customers, setCustomers] = useState<Customer[]>(initialCustomers)
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  const form = useForm<Customer>({
+    resolver: zodResolver(customerSchema),
+    defaultValues: {
+      code: "",
+      name: "",
+      taxCode: "",
+      paymentTermId: "",
+      routeNumber: "",
+      geofence: "",
+    },
+  })
+
+  const onSubmit = (values: Customer) => {
+    setCustomers([...customers, values])
+    form.reset()
+    setIsDialogOpen(false)
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -13,50 +59,140 @@ export default function CustomersPage() {
             <CardTitle>Clientes</CardTitle>
             <CardDescription>Gestione su base de clientes.</CardDescription>
           </div>
-          <Button>
-            <PlusCircle className="mr-2 h-4 w-4" /> Añadir Cliente
-          </Button>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <PlusCircle className="mr-2 h-4 w-4" /> Añadir Cliente
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Añadir Nuevo Cliente</DialogTitle>
+                <DialogDescription>
+                  Complete los detalles para crear un nuevo cliente.
+                </DialogDescription>
+              </DialogHeader>
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="code"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Código Cliente</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Ej: C003" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nombre</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Ej: Carlos Rodriguez" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="taxCode"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Código de Impuesto</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Ej: CR789" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="paymentTermId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>ID Término de Pago</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Ej: Neto-60" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="routeNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Número de Ruta</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Ej: Ruta-Local" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="geofence"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Geocerca</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Ej: Zona C" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <DialogFooter>
+                    <DialogClose asChild>
+                      <Button type="button" variant="secondary">Cancelar</Button>
+                    </DialogClose>
+                    <Button type="submit">Guardar Cliente</Button>
+                  </DialogFooter>
+                </form>
+              </Form>
+            </DialogContent>
+          </Dialog>
         </div>
       </CardHeader>
       <CardContent>
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead>Código</TableHead>
               <TableHead>Nombre</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Teléfono</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead>Fecha de Registro</TableHead>
+              <TableHead>Cód. Impuesto</TableHead>
+              <TableHead>Térm. Pago</TableHead>
+              <TableHead>Nro. Ruta</TableHead>
+              <TableHead>Geocerca</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            <TableRow>
-              <TableCell className="font-medium">Juan Pérez</TableCell>
-              <TableCell>juan.perez@example.com</TableCell>
-              <TableCell>+1 234 567 890</TableCell>
-              <TableCell><Badge>Activo</Badge></TableCell>
-              <TableCell>2023-10-26</TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell className="font-medium">Maria García</TableCell>
-              <TableCell>maria.garcia@example.com</TableCell>
-              <TableCell>+1 987 654 321</TableCell>
-              <TableCell><Badge variant="secondary">Inactivo</Badge></TableCell>
-              <TableCell>2023-09-15</TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell className="font-medium">Carlos Rodriguez</TableCell>
-              <TableCell>carlos.r@example.com</TableCell>
-              <TableCell>+1 555 555 555</TableCell>
-              <TableCell><Badge>Activo</Badge></TableCell>
-              <TableCell>2024-01-05</TableCell>
-            </TableRow>
+            {customers.map((customer) => (
+              <TableRow key={customer.code}>
+                <TableCell className="font-medium">{customer.code}</TableCell>
+                <TableCell>{customer.name}</TableCell>
+                <TableCell>{customer.taxCode}</TableCell>
+                <TableCell>{customer.paymentTermId}</TableCell>
+                <TableCell>{customer.routeNumber}</TableCell>
+                <TableCell>{customer.geofence}</TableCell>
+              </TableRow>
+            ))}
           </TableBody>
         </Table>
       </CardContent>
       <CardFooter>
         <div className="text-xs text-muted-foreground">
-          Mostrando <strong>1-3</strong> de <strong>3</strong> clientes.
+          Mostrando <strong>1-{customers.length}</strong> de <strong>{customers.length}</strong> clientes.
         </div>
       </CardFooter>
     </Card>
