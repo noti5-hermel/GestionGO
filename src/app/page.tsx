@@ -82,6 +82,19 @@ export default function Home() {
             </Link>
           </CardContent>
         </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Roles de Usuario</CardTitle>
+            <CardDescription>Gestione los roles y permisos de los usuarios.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/user-roles" passHref>
+              <Button>
+                Ir a Roles <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )
