@@ -49,7 +49,7 @@ export default function UsersPage() {
   }, [])
 
   const fetchUsers = async () => {
-    const { data, error } = await supabase.from('usuario').select('id_usuario, name, correo, id_rol')
+    const { data, error } = await supabase.from('usuario').select('*')
     if (error) {
       toast({
         title: "Error",
