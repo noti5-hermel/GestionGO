@@ -1,47 +1,119 @@
 
 'use client'
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogClose
+} from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { PlusCircle } from "lucide-react"
+import { PlusCircle, Trash2 } from "lucide-react"
+import { supabase } from "@/lib/supabase"
+import { useToast } from "@/hooks/use-toast"
 
 const vehicleSchema = z.object({
-  plate: z.string().min(1, { message: "La placa del vehículo es requerida." }),
-  description: z.string().min(1, { message: "La descripción es requerida." }),
+  placa_vehiculo: z.string().min(1, { message: "La placa del vehículo es requerida." }),
+  vehiculo_desc: z.string().min(1, { message: "La descripción es requerida." }),
 })
 
 type Vehicle = z.infer<typeof vehicleSchema>
 
-const initialVehicles: Vehicle[] = [
-  { plate: "ABC-123", description: "Camión de carga principal." },
-  { plate: "DEF-456", description: "Furgoneta para entregas locales." },
-  { plate: "GHI-789", description: "Camión refrigerado." },
-]
-
 export default function VehiclesPage() {
-  const [vehicles, setVehicles] = useState<Vehicle[]>(initialVehicles)
+  const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const { toast } = useToast()
+
+  useEffect(() => {
+    fetchVehicles()
+  }, [])
+
+  const fetchVehicles = async () => {
+    const { data, error } = await supabase.from('vehiculos').select('placa_vehiculo, vehiculo_desc')
+    if (error) {
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los vehículos.",
+        variant: "destructive",
+      })
+    } else {
+      setVehicles(data as Vehicle[])
+    }
+  }
 
   const form = useForm<Vehicle>({
     resolver: zodResolver(vehicleSchema),
     defaultValues: {
-      plate: "",
-      description: "",
+      placa_vehiculo: "",
+      vehiculo_desc: "",
     },
   })
 
-  const onSubmit = (values: Vehicle) => {
-    setVehicles([...vehicles, values])
-    form.reset()
-    setIsDialogOpen(false)
+  const onSubmit = async (values: Vehicle) => {
+    const { error } = await supabase
+      .from('vehiculos')
+      .insert([values])
+      .select()
+
+    if (error) {
+      toast({
+        title: "Error al guardar",
+        description: error.message,
+        variant: "destructive",
+      })
+    } else {
+      toast({
+        title: "Éxito",
+        description: "Vehículo guardado correctamente.",
+      })
+      fetchVehicles()
+      form.reset()
+      setIsDialogOpen(false)
+    }
+  }
+
+  const handleDelete = async (plate: string) => {
+    const { error } = await supabase
+      .from('vehiculos')
+      .delete()
+      .eq('placa_vehiculo', plate)
+
+    if (error) {
+      toast({
+        title: "Error al eliminar",
+        description: error.message,
+        variant: "destructive",
+      })
+    } else {
+      toast({
+        title: "Éxito",
+        description: "Vehículo eliminado correctamente.",
+      })
+      fetchVehicles()
+    }
   }
 
   return (
@@ -69,7 +141,7 @@ export default function VehiclesPage() {
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                   <FormField
                     control={form.control}
-                    name="plate"
+                    name="placa_vehiculo"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Placa Vehículo</FormLabel>
@@ -82,7 +154,7 @@ export default function VehiclesPage() {
                   />
                   <FormField
                     control={form.control}
-                    name="description"
+                    name="vehiculo_desc"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Descripción</FormLabel>
@@ -111,13 +183,37 @@ export default function VehiclesPage() {
             <TableRow>
               <TableHead>Placa Vehículo</TableHead>
               <TableHead>Descripción</TableHead>
+              <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {vehicles.map((vehicle) => (
-              <TableRow key={vehicle.plate}>
-                <TableCell className="font-medium">{vehicle.plate}</TableCell>
-                <TableCell>{vehicle.description}</TableCell>
+              <TableRow key={vehicle.placa_vehiculo}>
+                <TableCell className="font-medium">{vehicle.placa_vehiculo}</TableCell>
+                <TableCell>{vehicle.vehiculo_desc}</TableCell>
+                <TableCell className="text-right">
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" size="icon">
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Esta acción no se puede deshacer. Esto eliminará permanentemente el vehículo.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => handleDelete(vehicle.placa_vehiculo)}>
+                          Eliminar
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
