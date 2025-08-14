@@ -27,6 +27,7 @@ type User = {
   id_usuario: string;
   name: string;
   correo: string;
+  contraseña: string;
   id_rol: string;
 }
 
@@ -222,6 +223,7 @@ export default function UsersPage() {
             <TableRow>
               <TableHead>Nombre</TableHead>
               <TableHead>Email</TableHead>
+              <TableHead>Contraseña</TableHead>
               <TableHead>Rol</TableHead>
             </TableRow>
           </TableHeader>
@@ -232,6 +234,7 @@ export default function UsersPage() {
                   <span className="font-medium">{user.name}</span>
                 </TableCell>
                 <TableCell>{user.correo}</TableCell>
+                <TableCell>********</TableCell>
                 <TableCell>{getRoleName(user.id_rol)}</TableCell>
               </TableRow>
             ))}
