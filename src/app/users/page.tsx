@@ -49,7 +49,9 @@ export default function UsersPage() {
   }, [])
 
   const fetchUsers = async () => {
-    const { data, error } = await supabase.from('usuario').select('*')
+    let { data: usuario, error } = await supabase
+      .from('usuario')
+      .select('*')
     if (error) {
       toast({
         title: "Error",
@@ -57,7 +59,7 @@ export default function UsersPage() {
         variant: "destructive",
       })
     } else {
-      const usersWithAvatars = data.map(u => ({...u, avatar: "https://placehold.co/40x40.png"}))
+      const usersWithAvatars = (usuario || []).map(u => ({...u, avatar: "https://placehold.co/40x40.png"}))
       setUsers(usersWithAvatars as User[])
     }
   }
@@ -233,10 +235,7 @@ export default function UsersPage() {
                 <TableCell>{user.id_usuario}</TableCell>
                 <TableCell>
                   <div className="flex items-center gap-3">
-                    <Avatar>
-                      <AvatarImage src={user.avatar} alt={user.name} data-ai-hint="profile picture" />
-                      <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-                    </Avatar>
+                    <img src={user.avatar} alt={user.name} data-ai-hint="profile picture" className="h-10 w-10 rounded-md object-cover" />
                     <span className="font-medium">{user.name}</span>
                   </div>
                 </TableCell>
