@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PlusCircle } from "lucide-react"
 
 const customerSchema = z.object({
@@ -27,6 +28,12 @@ type Customer = z.infer<typeof customerSchema>
 const initialCustomers: Customer[] = [
   { code: "C001", name: "Juan Pérez", taxCode: "JP123", paymentTermId: "Neto-30", routeNumber: "Ruta-Norte", geofence: "Zona A" },
   { code: "C002", name: "Maria García", taxCode: "MG456", paymentTermId: "Pago-Inmediato", routeNumber: "Ruta-Sur", geofence: "Zona B" },
+]
+
+const paymentTerms = [
+  { id: "Neto-30", description: "Pago requerido en 30 días." },
+  { id: "Neto-60", description: "Pago requerido en 60 días." },
+  { id: "Pago-Inmediato", description: "Pago requerido al momento de la entrega." },
 ]
 
 export default function CustomersPage() {
@@ -119,9 +126,20 @@ export default function CustomersPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>ID Término de Pago</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Ej: Neto-60" {...field} />
-                        </FormControl>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccione un término de pago" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {paymentTerms.map((term) => (
+                              <SelectItem key={term.id} value={term.id}>
+                                {term.id}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}
