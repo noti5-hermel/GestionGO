@@ -1,7 +1,7 @@
 
 'use client'
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -14,6 +14,8 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PlusCircle } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { supabase } from "@/lib/supabase"
+import { useToast } from "@/hooks/use-toast"
 
 const userSchema = z.object({
   id: z.string().min(1, { message: "El ID de usuario es requerido." }),
@@ -31,15 +33,33 @@ const initialUsers: User[] = [
   { id: "3", name: "Operador", email: "operador@example.com", password: "password", roleId: "3", avatar: "https://placehold.co/40x40.png" },
 ]
 
-const userRoles = [
-  { id: "1", name: "Administrador" },
-  { id: "2", name: "Gerente" },
-  { id: "3", name: "Operador" },
-]
+type Role = {
+  id_rol: string
+  rol_desc: string
+}
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>(initialUsers)
+  const [roles, setRoles] = useState<Role[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const { toast } = useToast()
+
+  useEffect(() => {
+    fetchRoles()
+  }, [])
+
+  const fetchRoles = async () => {
+    const { data, error } = await supabase.from('rol').select('id_rol, rol_desc')
+    if (error) {
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los roles.",
+        variant: "destructive",
+      })
+    } else {
+      setRoles(data as Role[])
+    }
+  }
 
   const form = useForm<z.infer<typeof userSchema>>({
     resolver: zodResolver(userSchema),
@@ -53,6 +73,7 @@ export default function UsersPage() {
   })
 
   const onSubmit = (values: z.infer<typeof userSchema>) => {
+    // Aquí iría la lógica para guardar el usuario en Supabase también
     const newUser: User = { ...values, avatar: "https://placehold.co/40x40.png" }
     setUsers([...users, newUser])
     form.reset()
@@ -60,7 +81,7 @@ export default function UsersPage() {
   }
 
   const getRoleName = (roleId: string) => {
-    return userRoles.find(role => role.id === roleId)?.name || "N/A"
+    return roles.find(role => role.id_rol === roleId)?.rol_desc || "N/A"
   }
 
   return (
@@ -151,9 +172,9 @@ export default function UsersPage() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {userRoles.map((role) => (
-                              <SelectItem key={role.id} value={role.id}>
-                                {role.name}
+                            {roles.map((role) => (
+                              <SelectItem key={role.id_rol} value={role.id_rol}>
+                                {role.rol_desc}
                               </SelectItem>
                             ))}
                           </SelectContent>

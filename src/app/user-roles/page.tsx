@@ -1,7 +1,7 @@
 
 'use client'
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -12,36 +12,70 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { PlusCircle } from "lucide-react"
+import { supabase } from "@/lib/supabase"
+import { useToast } from "@/hooks/use-toast"
+
 
 const roleSchema = z.object({
-  id: z.string().min(1, { message: "El ID es requerido." }),
-  name: z.string().min(1, { message: "El nombre del rol es requerido." }),
+  id_rol: z.string().min(1, { message: "El ID es requerido." }),
+  rol_desc: z.string().min(1, { message: "El nombre del rol es requerido." }),
 })
 
 type Role = z.infer<typeof roleSchema>
 
-const initialRoles: Role[] = [
-  { id: "1", name: "Administrador" },
-  { id: "2", name: "Gerente" },
-  { id: "3", name: "Operador" },
-]
-
 export default function UserRolesPage() {
-  const [roles, setRoles] = useState<Role[]>(initialRoles)
+  const [roles, setRoles] = useState<Role[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const { toast } = useToast()
+
+  useEffect(() => {
+    fetchRoles()
+  }, [])
+
+  const fetchRoles = async () => {
+    const { data, error } = await supabase.from('rol').select('id_rol, rol_desc')
+    if (error) {
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los roles.",
+        variant: "destructive",
+      })
+    } else {
+      setRoles(data as Role[])
+    }
+  }
 
   const form = useForm<Role>({
     resolver: zodResolver(roleSchema),
     defaultValues: {
-      id: "",
-      name: "",
+      id_rol: "",
+      rol_desc: "",
     },
   })
 
-  const onSubmit = (values: Role) => {
-    setRoles([...roles, values])
-    form.reset()
-    setIsDialogOpen(false)
+  const onSubmit = async (values: Role) => {
+    const { error } = await supabase
+      .from('rol')
+      .insert([
+        { id_rol: values.id_rol, rol_desc: values.rol_desc },
+      ])
+      .select()
+
+    if (error) {
+      toast({
+        title: "Error al guardar",
+        description: error.message,
+        variant: "destructive",
+      })
+    } else {
+      toast({
+        title: "Éxito",
+        description: "Rol guardado correctamente.",
+      })
+      fetchRoles()
+      form.reset()
+      setIsDialogOpen(false)
+    }
   }
 
   return (
@@ -69,7 +103,7 @@ export default function UserRolesPage() {
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                   <FormField
                     control={form.control}
-                    name="id"
+                    name="id_rol"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>ID del Rol</FormLabel>
@@ -82,7 +116,7 @@ export default function UserRolesPage() {
                   />
                   <FormField
                     control={form.control}
-                    name="name"
+                    name="rol_desc"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Nombre del Rol</FormLabel>
@@ -115,9 +149,9 @@ export default function UserRolesPage() {
           </TableHeader>
           <TableBody>
             {roles.map((role) => (
-              <TableRow key={role.id}>
-                <TableCell className="font-medium">{role.id}</TableCell>
-                <TableCell>{role.name}</TableCell>
+              <TableRow key={role.id_rol}>
+                <TableCell className="font-medium">{role.id_rol}</TableCell>
+                <TableCell>{role.rol_desc}</TableCell>
               </TableRow>
             ))}
           </TableBody>
