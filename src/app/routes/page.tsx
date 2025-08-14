@@ -37,7 +37,7 @@ import { useToast } from "@/hooks/use-toast"
 
 const routeSchema = z.object({
   id_ruta: z.string().min(1, { message: "El ID de la ruta es requerido." }),
-  descripcion: z.string().min(1, { message: "La descripción es requerida." }),
+  ruta_desc: z.string().min(1, { message: "La descripción es requerida." }),
 })
 
 type Route = z.infer<typeof routeSchema>
@@ -52,7 +52,7 @@ export default function RoutesPage() {
   }, [])
 
   const fetchRoutes = async () => {
-    const { data, error } = await supabase.from('rutas').select('id_ruta, descripcion')
+    const { data, error } = await supabase.from('rutas').select('id_ruta, ruta_desc')
     if (error) {
       toast({
         title: "Error",
@@ -68,7 +68,7 @@ export default function RoutesPage() {
     resolver: zodResolver(routeSchema),
     defaultValues: {
       id_ruta: "",
-      descripcion: "",
+      ruta_desc: "",
     },
   })
 
@@ -154,7 +154,7 @@ export default function RoutesPage() {
                   />
                   <FormField
                     control={form.control}
-                    name="descripcion"
+                    name="ruta_desc"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Descripción</FormLabel>
@@ -190,7 +190,7 @@ export default function RoutesPage() {
             {routes.map((route) => (
               <TableRow key={route.id_ruta}>
                 <TableCell className="font-medium">{route.id_ruta}</TableCell>
-                <TableCell>{route.descripcion}</TableCell>
+                <TableCell>{route.ruta_desc}</TableCell>
                 <TableCell className="text-right">
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
