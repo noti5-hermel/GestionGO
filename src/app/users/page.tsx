@@ -18,7 +18,6 @@ import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 
 const userSchema = z.object({
-  id_usuario: z.string().min(1, { message: "El ID de usuario es requerido." }),
   nombre: z.string().min(1, { message: "El nombre es requerido." }),
   email: z.string().email({ message: "Debe ser un correo electrónico válido." }),
   password: z.string().min(6, { message: "La contraseña debe tener al menos 6 caracteres." }),
@@ -79,7 +78,6 @@ export default function UsersPage() {
   const form = useForm<z.infer<typeof userSchema>>({
     resolver: zodResolver(userSchema),
     defaultValues: {
-      id_usuario: "",
       nombre: "",
       email: "",
       password: "",
@@ -92,7 +90,6 @@ export default function UsersPage() {
       .from('usuario')
       .insert([
         { 
-          id_usuario: values.id_usuario, 
           nombre: values.nombre, 
           email: values.email, 
           password: values.password, 
@@ -145,19 +142,6 @@ export default function UsersPage() {
               </DialogHeader>
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                   <FormField
-                    control={form.control}
-                    name="id_usuario"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>ID Usuario</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Ej: 4" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
                   <FormField
                     control={form.control}
                     name="nombre"
@@ -271,5 +255,3 @@ export default function UsersPage() {
     </Card>
   )
 }
-
-    
