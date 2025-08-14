@@ -16,7 +16,7 @@ import { LogOut } from 'lucide-react'
 import { Toaster } from "@/components/ui/toaster"
 
 export const metadata: Metadata = {
-  title: 'Gestión Fácil',
+  title: 'GestiónGo',
   description: 'Aplicación de gestión',
 };
 
@@ -36,8 +36,8 @@ export default function RootLayout({
         <SidebarProvider>
           <Sidebar variant="sidebar" collapsible="icon">
             <SidebarHeader className="p-4">
-              <h1 className="text-2xl font-bold text-primary group-data-[state=collapsed]:hidden">Gestión Fácil</h1>
-              <h1 className="text-2xl font-bold text-primary group-data-[state=expanded]:hidden">GF</h1>
+              <h1 className="text-2xl font-bold text-primary group-data-[state=collapsed]:hidden">GestiónGo</h1>
+              <h1 className="text-2xl font-bold text-primary group-data-[state=expanded]:hidden">GG</h1>
             </SidebarHeader>
             <SidebarContent>
               <MainNav />

@@ -9,7 +9,7 @@ export default function Home() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Bienvenido a Gestión Fácil</CardTitle>
+          <CardTitle>Bienvenido a GestiónGo</CardTitle>
           <CardDescription>Su panel de control central para gestionar todas sus operaciones.</CardDescription>
         </CardHeader>
         <CardContent>
