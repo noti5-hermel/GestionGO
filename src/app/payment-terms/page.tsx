@@ -52,7 +52,7 @@ export default function PaymentTermsPage() {
   }, [])
 
   const fetchTerms = async () => {
-    const { data, error } = await supabase.from('termino_pago').select('id_term, term_desc')
+    const { data, error } = await supabase.from('terminos_pago').select('id_term, term_desc')
     if (error) {
       toast({
         title: "Error",
@@ -74,7 +74,7 @@ export default function PaymentTermsPage() {
 
   const onSubmit = async (values: PaymentTerm) => {
     const { error } = await supabase
-      .from('termino_pago')
+      .from('terminos_pago')
       .insert([values])
       .select()
 
@@ -97,7 +97,7 @@ export default function PaymentTermsPage() {
 
   const handleDelete = async (termId: string) => {
     const { error } = await supabase
-      .from('termino_pago')
+      .from('terminos_pago')
       .delete()
       .eq('id_term', termId)
 
