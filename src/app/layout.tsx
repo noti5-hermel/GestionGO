@@ -36,9 +36,12 @@ export default function RootLayout({
       <body className="font-body antialiased">
         <SidebarProvider>
           <Sidebar variant="sidebar" collapsible="icon">
-            <SidebarHeader className="p-4">
-              <h1 className="text-2xl font-bold text-primary group-data-[state=collapsed]:hidden">GestiónGo</h1>
-              <h1 className="text-2xl font-bold text-primary group-data-[state=expanded]:hidden">GG</h1>
+            <SidebarHeader className="p-4 flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold text-primary group-data-[state=collapsed]:hidden">GestiónGo</h1>
+                <h1 className="text-2xl font-bold text-primary group-data-[state=expanded]:hidden">GG</h1>
+              </div>
+              <SidebarTrigger className="md:flex" />
             </SidebarHeader>
             <SidebarContent>
               <MainNav />
@@ -61,7 +64,6 @@ export default function RootLayout({
           </Sidebar>
           <SidebarInset>
             <header className="flex h-16 items-center gap-4 border-b bg-card px-6 sticky top-0 z-10">
-              <SidebarTrigger className="md:flex" />
               <div className="flex-1 text-right">
                 
               </div>
