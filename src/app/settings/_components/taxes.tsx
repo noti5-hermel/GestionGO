@@ -5,7 +5,6 @@ import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import {
@@ -31,9 +30,10 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { PlusCircle, Trash2 } from "lucide-react"
+import { PlusCircle, Trash2, Pencil } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
+import { Card, CardFooter } from "@/components/ui/card"
 
 const taxSchema = z.object({
   id_impuesto: z.string().min(1, { message: "El ID del impuesto es requerido." }),
@@ -45,11 +45,28 @@ type Tax = z.infer<typeof taxSchema>
 export default function Taxes() {
   const [taxes, setTaxes] = useState<Tax[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingTax, setEditingTax] = useState<Tax | null>(null);
   const { toast } = useToast()
+
+  const form = useForm<Tax>({
+    resolver: zodResolver(taxSchema),
+    defaultValues: {
+      id_impuesto: "",
+      impt_desc: "",
+    },
+  })
 
   useEffect(() => {
     fetchTaxes()
   }, [])
+
+  useEffect(() => {
+    if (editingTax) {
+      form.reset(editingTax);
+    } else {
+      form.reset({ id_impuesto: "", impt_desc: "" });
+    }
+  }, [editingTax, form]);
 
   const fetchTaxes = async () => {
     const { data, error } = await supabase.from('tipo_impuesto').select('id_impuesto, impt_desc')
@@ -64,19 +81,22 @@ export default function Taxes() {
     }
   }
 
-  const form = useForm<Tax>({
-    resolver: zodResolver(taxSchema),
-    defaultValues: {
-      id_impuesto: "",
-      impt_desc: "",
-    },
-  })
-
   const onSubmit = async (values: Tax) => {
-    const { error } = await supabase
-      .from('tipo_impuesto')
-      .insert([values])
-      .select()
+    let error;
+    if (editingTax) {
+      const { error: updateError } = await supabase
+        .from('tipo_impuesto')
+        .update(values)
+        .eq('id_impuesto', editingTax.id_impuesto)
+        .select()
+      error = updateError;
+    } else {
+      const { error: insertError } = await supabase
+        .from('tipo_impuesto')
+        .insert([values])
+        .select()
+      error = insertError;
+    }
 
     if (error) {
       toast({
@@ -87,11 +107,10 @@ export default function Taxes() {
     } else {
       toast({
         title: "Éxito",
-        description: "Impuesto guardado correctamente.",
+        description: `Impuesto ${editingTax ? 'actualizado' : 'guardado'} correctamente.`,
       })
       fetchTaxes()
-      form.reset()
-      setIsDialogOpen(false)
+      handleCloseDialog();
     }
   }
 
@@ -115,21 +134,39 @@ export default function Taxes() {
       fetchTaxes()
     }
   }
+  
+  const handleEdit = (tax: Tax) => {
+    setEditingTax(tax);
+    setIsDialogOpen(true);
+  }
+
+  const handleOpenDialog = (open: boolean) => {
+    setIsDialogOpen(open);
+    if (!open) {
+      setEditingTax(null);
+    }
+  };
+  
+  const handleCloseDialog = () => {
+    setEditingTax(null);
+    form.reset({ id_impuesto: "", impt_desc: "" });
+    setIsDialogOpen(false);
+  }
 
   return (
     <Card>
         <div className="flex justify-end items-center mb-4">
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <Dialog open={isDialogOpen} onOpenChange={handleOpenDialog}>
             <DialogTrigger asChild>
-              <Button>
+              <Button onClick={() => { setEditingTax(null); form.reset(); setIsDialogOpen(true); }}>
                 <PlusCircle className="mr-2 h-4 w-4" /> Añadir Impuesto
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Añadir Nuevo Impuesto</DialogTitle>
+                <DialogTitle>{editingTax ? 'Editar Impuesto' : 'Añadir Nuevo Impuesto'}</DialogTitle>
                 <DialogDescription>
-                  Complete los detalles para crear un nuevo impuesto.
+                  {editingTax ? 'Modifique los detalles del impuesto.' : 'Complete los detalles para crear un nuevo impuesto.'}
                 </DialogDescription>
               </DialogHeader>
               <Form {...form}>
@@ -141,7 +178,7 @@ export default function Taxes() {
                       <FormItem>
                         <FormLabel>ID Impuesto</FormLabel>
                         <FormControl>
-                          <Input placeholder="Ej: IVA-15" {...field} />
+                          <Input placeholder="Ej: IVA-15" {...field} disabled={!!editingTax} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -162,9 +199,9 @@ export default function Taxes() {
                   />
                   <DialogFooter>
                     <DialogClose asChild>
-                      <Button type="button" variant="secondary">Cancelar</Button>
+                      <Button type="button" variant="secondary" onClick={handleCloseDialog}>Cancelar</Button>
                     </DialogClose>
-                    <Button type="submit">Guardar Impuesto</Button>
+                    <Button type="submit">{editingTax ? 'Guardar Cambios' : 'Guardar Impuesto'}</Button>
                   </DialogFooter>
                 </form>
               </Form>
@@ -185,6 +222,9 @@ export default function Taxes() {
                 <TableCell className="font-medium">{tax.id_impuesto}</TableCell>
                 <TableCell>{tax.impt_desc}</TableCell>
                 <TableCell className="text-right">
+                   <Button variant="ghost" size="icon" onClick={() => handleEdit(tax)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button variant="ghost" size="icon">

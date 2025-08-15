@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { PlusCircle, Trash2 } from "lucide-react"
+import { PlusCircle, Trash2, Pencil } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 
@@ -45,11 +45,28 @@ type Route = z.infer<typeof routeSchema>
 export default function RoutesPage() {
   const [routes, setRoutes] = useState<Route[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingRoute, setEditingRoute] = useState<Route | null>(null);
   const { toast } = useToast()
 
+  const form = useForm<Route>({
+    resolver: zodResolver(routeSchema),
+    defaultValues: {
+      id_ruta: "",
+      ruta_desc: "",
+    },
+  })
+  
   useEffect(() => {
     fetchRoutes()
   }, [])
+
+  useEffect(() => {
+    if (editingRoute) {
+      form.reset(editingRoute);
+    } else {
+      form.reset({ id_ruta: "", ruta_desc: "" });
+    }
+  }, [editingRoute, form]);
 
   const fetchRoutes = async () => {
     const { data, error } = await supabase.from('rutas').select('id_ruta, ruta_desc')
@@ -64,19 +81,22 @@ export default function RoutesPage() {
     }
   }
 
-  const form = useForm<Route>({
-    resolver: zodResolver(routeSchema),
-    defaultValues: {
-      id_ruta: "",
-      ruta_desc: "",
-    },
-  })
-
   const onSubmit = async (values: Route) => {
-    const { error } = await supabase
-      .from('rutas')
-      .insert([values])
-      .select()
+    let error;
+    if (editingRoute) {
+      const { error: updateError } = await supabase
+        .from('rutas')
+        .update(values)
+        .eq('id_ruta', editingRoute.id_ruta)
+        .select()
+      error = updateError;
+    } else {
+      const { error: insertError } = await supabase
+        .from('rutas')
+        .insert([values])
+        .select()
+      error = insertError;
+    }
 
     if (error) {
       toast({
@@ -87,11 +107,10 @@ export default function RoutesPage() {
     } else {
       toast({
         title: "Éxito",
-        description: "Ruta guardada correctamente.",
+        description: `Ruta ${editingRoute ? 'actualizada' : 'guardada'} correctamente.`,
       })
       fetchRoutes()
-      form.reset()
-      setIsDialogOpen(false)
+      handleCloseDialog();
     }
   }
 
@@ -116,6 +135,24 @@ export default function RoutesPage() {
     }
   }
 
+  const handleEdit = (route: Route) => {
+    setEditingRoute(route);
+    setIsDialogOpen(true);
+  }
+
+  const handleOpenDialog = (open: boolean) => {
+    setIsDialogOpen(open);
+    if (!open) {
+      setEditingRoute(null);
+    }
+  };
+
+  const handleCloseDialog = () => {
+    setEditingRoute(null);
+    form.reset({ id_ruta: "", ruta_desc: "" });
+    setIsDialogOpen(false);
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -124,17 +161,17 @@ export default function RoutesPage() {
             <CardTitle>Rutas</CardTitle>
             <CardDescription>Gestione las rutas de despacho.</CardDescription>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <Dialog open={isDialogOpen} onOpenChange={handleOpenDialog}>
             <DialogTrigger asChild>
-              <Button>
+              <Button onClick={() => { setEditingRoute(null); form.reset(); setIsDialogOpen(true); }}>
                 <PlusCircle className="mr-2 h-4 w-4" /> Añadir Ruta
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Añadir Nueva Ruta</DialogTitle>
+                <DialogTitle>{editingRoute ? 'Editar Ruta' : 'Añadir Nueva Ruta'}</DialogTitle>
                 <DialogDescription>
-                  Complete los detalles para crear una nueva ruta.
+                  {editingRoute ? 'Modifique los detalles de la ruta.' : 'Complete los detalles para crear una nueva ruta.'}
                 </DialogDescription>
               </DialogHeader>
               <Form {...form}>
@@ -146,7 +183,7 @@ export default function RoutesPage() {
                       <FormItem>
                         <FormLabel>ID Ruta</FormLabel>
                         <FormControl>
-                          <Input placeholder="Ej: Ruta-Este" {...field} />
+                          <Input placeholder="Ej: Ruta-Este" {...field} disabled={!!editingRoute} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -167,9 +204,9 @@ export default function RoutesPage() {
                   />
                   <DialogFooter>
                     <DialogClose asChild>
-                      <Button type="button" variant="secondary">Cancelar</Button>
+                      <Button type="button" variant="secondary" onClick={handleCloseDialog}>Cancelar</Button>
                     </DialogClose>
-                    <Button type="submit">Guardar Ruta</Button>
+                    <Button type="submit">{editingRoute ? 'Guardar Cambios' : 'Guardar Ruta'}</Button>
                   </DialogFooter>
                 </form>
               </Form>
@@ -192,6 +229,9 @@ export default function RoutesPage() {
                 <TableCell className="font-medium">{route.id_ruta}</TableCell>
                 <TableCell>{route.ruta_desc}</TableCell>
                 <TableCell className="text-right">
+                  <Button variant="ghost" size="icon" onClick={() => handleEdit(route)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button variant="ghost" size="icon">

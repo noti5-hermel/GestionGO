@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { PlusCircle, Trash2 } from "lucide-react"
+import { PlusCircle, Trash2, Pencil } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 
@@ -45,11 +45,28 @@ type Vehicle = z.infer<typeof vehicleSchema>
 export default function VehiclesPage() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
   const { toast } = useToast()
+
+  const form = useForm<Vehicle>({
+    resolver: zodResolver(vehicleSchema),
+    defaultValues: {
+      placa_vehiculo: "",
+      vehiculo_desc: "",
+    },
+  })
 
   useEffect(() => {
     fetchVehicles()
   }, [])
+
+  useEffect(() => {
+    if (editingVehicle) {
+      form.reset(editingVehicle);
+    } else {
+      form.reset({ placa_vehiculo: "", vehiculo_desc: "" });
+    }
+  }, [editingVehicle, form]);
 
   const fetchVehicles = async () => {
     const { data, error } = await supabase.from('vehiculos').select('placa_vehiculo, vehiculo_desc')
@@ -64,19 +81,22 @@ export default function VehiclesPage() {
     }
   }
 
-  const form = useForm<Vehicle>({
-    resolver: zodResolver(vehicleSchema),
-    defaultValues: {
-      placa_vehiculo: "",
-      vehiculo_desc: "",
-    },
-  })
-
   const onSubmit = async (values: Vehicle) => {
-    const { error } = await supabase
-      .from('vehiculos')
-      .insert([values])
-      .select()
+    let error;
+    if (editingVehicle) {
+      const { error: updateError } = await supabase
+        .from('vehiculos')
+        .update(values)
+        .eq('placa_vehiculo', editingVehicle.placa_vehiculo)
+        .select()
+      error = updateError;
+    } else {
+      const { error: insertError } = await supabase
+        .from('vehiculos')
+        .insert([values])
+        .select()
+      error = insertError;
+    }
 
     if (error) {
       toast({
@@ -87,11 +107,10 @@ export default function VehiclesPage() {
     } else {
       toast({
         title: "Éxito",
-        description: "Vehículo guardado correctamente.",
+        description: `Vehículo ${editingVehicle ? 'actualizado' : 'guardado'} correctamente.`,
       })
       fetchVehicles()
-      form.reset()
-      setIsDialogOpen(false)
+      handleCloseDialog();
     }
   }
 
@@ -116,6 +135,24 @@ export default function VehiclesPage() {
     }
   }
 
+  const handleEdit = (vehicle: Vehicle) => {
+    setEditingVehicle(vehicle);
+    setIsDialogOpen(true);
+  }
+
+  const handleOpenDialog = (open: boolean) => {
+    setIsDialogOpen(open);
+    if (!open) {
+      setEditingVehicle(null);
+    }
+  };
+
+  const handleCloseDialog = () => {
+    setEditingVehicle(null);
+    form.reset({ placa_vehiculo: "", vehiculo_desc: "" });
+    setIsDialogOpen(false);
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -124,17 +161,17 @@ export default function VehiclesPage() {
             <CardTitle>Vehículos</CardTitle>
             <CardDescription>Gestione la flota de vehículos.</CardDescription>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <Dialog open={isDialogOpen} onOpenChange={handleOpenDialog}>
             <DialogTrigger asChild>
-              <Button>
+              <Button onClick={() => { setEditingVehicle(null); form.reset(); setIsDialogOpen(true); }}>
                 <PlusCircle className="mr-2 h-4 w-4" /> Añadir Vehículo
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Añadir Nuevo Vehículo</DialogTitle>
+                <DialogTitle>{editingVehicle ? 'Editar Vehículo' : 'Añadir Nuevo Vehículo'}</DialogTitle>
                 <DialogDescription>
-                  Complete los detalles para registrar un nuevo vehículo.
+                  {editingVehicle ? 'Modifique los detalles del vehículo.' : 'Complete los detalles para registrar un nuevo vehículo.'}
                 </DialogDescription>
               </DialogHeader>
               <Form {...form}>
@@ -146,7 +183,7 @@ export default function VehiclesPage() {
                       <FormItem>
                         <FormLabel>Placa Vehículo</FormLabel>
                         <FormControl>
-                          <Input placeholder="Ej: JKL-012" {...field} />
+                          <Input placeholder="Ej: JKL-012" {...field} disabled={!!editingVehicle} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -167,9 +204,9 @@ export default function VehiclesPage() {
                   />
                   <DialogFooter>
                     <DialogClose asChild>
-                      <Button type="button" variant="secondary">Cancelar</Button>
+                      <Button type="button" variant="secondary" onClick={handleCloseDialog}>Cancelar</Button>
                     </DialogClose>
-                    <Button type="submit">Guardar Vehículo</Button>
+                    <Button type="submit">{editingVehicle ? 'Guardar Cambios' : 'Guardar Vehículo'}</Button>
                   </DialogFooter>
                 </form>
               </Form>
@@ -192,6 +229,9 @@ export default function VehiclesPage() {
                 <TableCell className="font-medium">{vehicle.placa_vehiculo}</TableCell>
                 <TableCell>{vehicle.vehiculo_desc}</TableCell>
                 <TableCell className="text-right">
+                  <Button variant="ghost" size="icon" onClick={() => handleEdit(vehicle)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button variant="ghost" size="icon">
