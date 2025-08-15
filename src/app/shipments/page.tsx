@@ -139,7 +139,7 @@ export default function ShipmentsPage() {
     const { data: auxiliarRoles, error: auxiliarRolesError } = await supabase
       .from('rol')
       .select('id_rol')
-      .ilike('rol_desc', '%Auxiliar%');
+      .ilike('rol_desc', '%auxiliar%');
       
     if (auxiliarRolesError) {
         toast({ title: "Error", description: "No se pudo encontrar el rol de auxiliar.", variant: "destructive" });
@@ -500,7 +500,7 @@ export default function ShipmentsPage() {
                   <TableCell><StatusBadge checked={shipment.reparto} /></TableCell>
                   <TableCell><StatusBadge checked={shipment.facturacion} /></TableCell>
                   <TableCell><StatusBadge checked={shipment.asist_admon} /></TableCell>
-                  <TableCell><StatusBadge checked={ship.cobros} /></TableCell>
+                  <TableCell><StatusBadge checked={shipment.cobros} /></TableCell>
                   <TableCell><StatusBadge checked={shipment.gerente_admon} /></TableCell>
                 </TableRow>
               ))}
@@ -516,5 +516,3 @@ export default function ShipmentsPage() {
     </Card>
   )
 }
-
-    
