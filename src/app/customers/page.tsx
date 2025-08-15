@@ -19,7 +19,7 @@ import { useToast } from "@/hooks/use-toast"
 const customerSchema = z.object({
   code_customer: z.string().min(1, { message: "El código es requerido." }),
   customer_name: z.string().min(1, { message: "El nombre es requerido." }),
-  codigo_impuesto: z.string().min(1, { message: "El código de impuesto es requerido." }),
+  id_impuesto: z.string().min(1, { message: "El ID de impuesto es requerido." }),
   id_term: z.string().min(1, { message: "El término de pago es requerido." }),
   ruta: z.string().min(1, { message: "El número de ruta es requerido." }),
 })
@@ -43,7 +43,7 @@ export default function CustomersPage() {
   }, [])
 
   const fetchCustomers = async () => {
-    const { data, error } = await supabase.from('customer').select('code_customer,customer_name,codigo_impuesto,id_term,ruta')
+    const { data, error } = await supabase.from('customer').select('code_customer,customer_name,id_impuesto,id_term,ruta')
     if (error) {
       toast({
         title: "Error",
@@ -73,7 +73,7 @@ export default function CustomersPage() {
     defaultValues: {
       code_customer: "",
       customer_name: "",
-      codigo_impuesto: "",
+      id_impuesto: "",
       id_term: "",
       ruta: "",
     },
@@ -153,12 +153,12 @@ export default function CustomersPage() {
                   />
                   <FormField
                     control={form.control}
-                    name="codigo_impuesto"
+                    name="id_impuesto"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Código de Impuesto</FormLabel>
+                        <FormLabel>ID de Impuesto</FormLabel>
                         <FormControl>
-                          <Input placeholder="Ej: CR789" {...field} />
+                          <Input placeholder="Ej: IMP-01" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -219,7 +219,7 @@ export default function CustomersPage() {
             <TableRow>
               <TableHead>Código</TableHead>
               <TableHead>Nombre</TableHead>
-              <TableHead>Cód. Impuesto</TableHead>
+              <TableHead>ID Impuesto</TableHead>
               <TableHead>Térm. Pago</TableHead>
               <TableHead>Ruta</TableHead>
             </TableRow>
@@ -229,7 +229,7 @@ export default function CustomersPage() {
               <TableRow key={customer.code_customer}>
                 <TableCell className="font-medium">{customer.code_customer}</TableCell>
                 <TableCell>{customer.customer_name}</TableCell>
-                <TableCell>{customer.codigo_impuesto}</TableCell>
+                <TableCell>{customer.id_impuesto}</TableCell>
                 <TableCell>{customer.id_term}</TableCell>
                 <TableCell>{customer.ruta}</TableCell>
               </TableRow>
