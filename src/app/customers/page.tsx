@@ -55,11 +55,37 @@ export default function CustomersPage() {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const { toast } = useToast()
 
+  const form = useForm<Customer>({
+    resolver: zodResolver(customerSchema),
+    defaultValues: {
+      code_customer: "",
+      customer_name: "",
+      id_impuesto: "",
+      id_term: "",
+      ruta: "",
+    },
+  })
+
   useEffect(() => {
     fetchCustomers()
     fetchPaymentTerms()
     fetchTaxes()
   }, [])
+  
+  useEffect(() => {
+    if (editingCustomer) {
+      form.reset(editingCustomer);
+    } else {
+      form.reset({
+        code_customer: "",
+        customer_name: "",
+        id_impuesto: "",
+        id_term: "",
+        ruta: "",
+      });
+    }
+  }, [editingCustomer, form]);
+
 
   const fetchCustomers = async () => {
     const { data, error } = await supabase.from('customer').select('code_customer,customer_name,id_impuesto,id_term,ruta')
@@ -99,32 +125,6 @@ export default function CustomersPage() {
         setTaxes(data as Tax[])
     }
   }
-
-  const form = useForm<Customer>({
-    resolver: zodResolver(customerSchema),
-    defaultValues: {
-      code_customer: "",
-      customer_name: "",
-      id_impuesto: "",
-      id_term: "",
-      ruta: "",
-    },
-  })
-  
-  useEffect(() => {
-    if (editingCustomer) {
-      form.reset(editingCustomer);
-    } else {
-      form.reset({
-        code_customer: "",
-        customer_name: "",
-        id_impuesto: "",
-        id_term: "",
-        ruta: "",
-      });
-    }
-  }, [editingCustomer, form]);
-
 
   const onSubmit = async (values: Customer) => {
     let error;
@@ -213,7 +213,7 @@ export default function CustomersPage() {
           </div>
           <Dialog open={isDialogOpen} onOpenChange={handleOpenDialog}>
             <DialogTrigger asChild>
-              <Button onClick={() => { setEditingCustomer(null); setIsDialogOpen(true); }}>
+              <Button onClick={() => { setEditingCustomer(null); form.reset(); setIsDialogOpen(true); }}>
                 <PlusCircle className="mr-2 h-4 w-4" /> Añadir Cliente
               </Button>
             </DialogTrigger>
