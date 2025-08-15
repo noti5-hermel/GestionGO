@@ -37,7 +37,7 @@ import { useToast } from "@/hooks/use-toast"
 
 const taxSchema = z.object({
   id_impuesto: z.string().min(1, { message: "El ID del impuesto es requerido." }),
-  descripcion: z.string().min(1, { message: "La descripción es requerida." }),
+  impt_desc: z.string().min(1, { message: "La descripción es requerida." }),
 })
 
 type Tax = z.infer<typeof taxSchema>
@@ -52,7 +52,7 @@ export default function Taxes() {
   }, [])
 
   const fetchTaxes = async () => {
-    const { data, error } = await supabase.from('impuesto').select('id_impuesto, descripcion')
+    const { data, error } = await supabase.from('tipo_impuesto').select('id_impuesto, impt_desc')
     if (error) {
       toast({
         title: "Error",
@@ -68,13 +68,13 @@ export default function Taxes() {
     resolver: zodResolver(taxSchema),
     defaultValues: {
       id_impuesto: "",
-      descripcion: "",
+      impt_desc: "",
     },
   })
 
   const onSubmit = async (values: Tax) => {
     const { error } = await supabase
-      .from('impuesto')
+      .from('tipo_impuesto')
       .insert([values])
       .select()
 
@@ -97,7 +97,7 @@ export default function Taxes() {
 
   const handleDelete = async (taxId: string) => {
     const { error } = await supabase
-      .from('impuesto')
+      .from('tipo_impuesto')
       .delete()
       .eq('id_impuesto', taxId)
 
@@ -149,7 +149,7 @@ export default function Taxes() {
                   />
                   <FormField
                     control={form.control}
-                    name="descripcion"
+                    name="impt_desc"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Descripción</FormLabel>
@@ -183,7 +183,7 @@ export default function Taxes() {
             {taxes.map((tax) => (
               <TableRow key={tax.id_impuesto}>
                 <TableCell className="font-medium">{tax.id_impuesto}</TableCell>
-                <TableCell>{tax.descripcion}</TableCell>
+                <TableCell>{tax.impt_desc}</TableCell>
                 <TableCell className="text-right">
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
@@ -219,4 +219,3 @@ export default function Taxes() {
     </Card>
   )
 }
-
