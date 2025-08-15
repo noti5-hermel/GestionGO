@@ -66,7 +66,7 @@ export default function RootLayout({
               </div>
             </SidebarFooter>
           </Sidebar>
-          <SidebarInset className='flex flex-col h-full'>
+          <SidebarInset>
             <header className="flex h-16 items-center gap-4 border-b bg-card px-6 sticky top-0 z-10 shrink-0">
               <div className="flex-1 text-right">
                 

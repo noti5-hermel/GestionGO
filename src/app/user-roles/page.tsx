@@ -227,8 +227,8 @@ export default function UserRolesPage() {
           </Dialog>
         </div>
       </CardHeader>
-      <CardContent className="flex-1 overflow-hidden">
-        <div className="relative w-full overflow-auto h-full">
+      <CardContent className="flex-1 overflow-auto">
+        <div className="relative w-full overflow-auto">
           <Table>
             <TableHeader>
               <TableRow>
