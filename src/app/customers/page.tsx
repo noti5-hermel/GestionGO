@@ -23,7 +23,7 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { PlusCircle, Trash2 } from "lucide-react"
+import { PlusCircle, Trash2, Pencil } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 
@@ -52,6 +52,7 @@ export default function CustomersPage() {
   const [paymentTerms, setPaymentTerms] = useState<PaymentTerm[]>([])
   const [taxes, setTaxes] = useState<Tax[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const { toast } = useToast()
 
   useEffect(() => {
@@ -109,12 +110,39 @@ export default function CustomersPage() {
       ruta: "",
     },
   })
+  
+  useEffect(() => {
+    if (editingCustomer) {
+      form.reset(editingCustomer);
+    } else {
+      form.reset({
+        code_customer: "",
+        customer_name: "",
+        id_impuesto: "",
+        id_term: "",
+        ruta: "",
+      });
+    }
+  }, [editingCustomer, form]);
+
 
   const onSubmit = async (values: Customer) => {
-    const { error } = await supabase
-      .from('customer')
-      .insert([values])
-      .select()
+    let error;
+
+    if (editingCustomer) {
+      const { error: updateError } = await supabase
+        .from('customer')
+        .update(values)
+        .eq('code_customer', editingCustomer.code_customer)
+        .select()
+      error = updateError;
+    } else {
+      const { error: insertError } = await supabase
+        .from('customer')
+        .insert([values])
+        .select()
+      error = insertError;
+    }
 
     if (error) {
       toast({
@@ -125,10 +153,11 @@ export default function CustomersPage() {
     } else {
       toast({
         title: "Éxito",
-        description: "Cliente guardado correctamente.",
+        description: `Cliente ${editingCustomer ? 'actualizado' : 'guardado'} correctamente.`,
       })
       fetchCustomers()
       form.reset()
+      setEditingCustomer(null)
       setIsDialogOpen(false)
     }
   }
@@ -154,6 +183,18 @@ export default function CustomersPage() {
     }
   }
 
+  const handleEdit = (customer: Customer) => {
+    setEditingCustomer(customer);
+    setIsDialogOpen(true);
+  }
+
+  const handleOpenDialog = (open: boolean) => {
+    setIsDialogOpen(open);
+    if (!open) {
+      setEditingCustomer(null);
+    }
+  };
+
   const getTaxDescription = (taxId: string) => {
     return taxes.find(tax => tax.id_impuesto === taxId)?.impt_desc || taxId;
   }
@@ -170,17 +211,17 @@ export default function CustomersPage() {
             <CardTitle>Clientes</CardTitle>
             <CardDescription>Gestione su base de clientes.</CardDescription>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <Dialog open={isDialogOpen} onOpenChange={handleOpenDialog}>
             <DialogTrigger asChild>
-              <Button>
+              <Button onClick={() => { setEditingCustomer(null); setIsDialogOpen(true); }}>
                 <PlusCircle className="mr-2 h-4 w-4" /> Añadir Cliente
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Añadir Nuevo Cliente</DialogTitle>
+                <DialogTitle>{editingCustomer ? 'Editar Cliente' : 'Añadir Nuevo Cliente'}</DialogTitle>
                 <DialogDescription>
-                  Complete los detalles para crear un nuevo cliente.
+                  {editingCustomer ? 'Modifique los detalles del cliente.' : 'Complete los detalles para crear un nuevo cliente.'}
                 </DialogDescription>
               </DialogHeader>
               <Form {...form}>
@@ -192,7 +233,7 @@ export default function CustomersPage() {
                       <FormItem>
                         <FormLabel>Código Cliente</FormLabel>
                         <FormControl>
-                          <Input placeholder="Ej: C003" {...field} />
+                          <Input placeholder="Ej: C003" {...field} disabled={!!editingCustomer} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -280,7 +321,7 @@ export default function CustomersPage() {
                     <DialogClose asChild>
                       <Button type="button" variant="secondary">Cancelar</Button>
                     </DialogClose>
-                    <Button type="submit">Guardar Cliente</Button>
+                    <Button type="submit">{editingCustomer ? 'Guardar Cambios' : 'Guardar Cliente'}</Button>
                   </DialogFooter>
                 </form>
               </Form>
@@ -309,6 +350,9 @@ export default function CustomersPage() {
                 <TableCell>{getTermDescription(customer.id_term)}</TableCell>
                 <TableCell>{customer.ruta}</TableCell>
                 <TableCell className="text-right">
+                  <Button variant="ghost" size="icon" onClick={() => handleEdit(customer)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button variant="ghost" size="icon">
