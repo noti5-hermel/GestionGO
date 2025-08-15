@@ -154,8 +154,8 @@ export default function Taxes() {
   }
 
   return (
-    <Card>
-      <CardContent className="space-y-2 p-0">
+    <Card className="h-full flex flex-col p-0 border-0 shadow-none">
+      <CardContent className="space-y-2 p-0 flex-1 overflow-hidden">
         <div className="flex justify-end items-center mb-4">
           <Dialog open={isDialogOpen} onOpenChange={handleOpenDialog}>
             <DialogTrigger asChild>
@@ -209,7 +209,7 @@ export default function Taxes() {
             </DialogContent>
           </Dialog>
         </div>
-        <div className="relative w-full overflow-auto">
+        <div className="relative w-full overflow-auto h-full">
           <Table>
             <TableHeader>
               <TableRow>

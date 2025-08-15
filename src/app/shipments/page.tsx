@@ -294,7 +294,7 @@ export default function ShipmentsPage() {
   }
 
   return (
-    <Card>
+    <Card className="h-full flex flex-col">
       <CardHeader>
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
@@ -573,8 +573,8 @@ export default function ShipmentsPage() {
           </Dialog>
         </div>
       </CardHeader>
-      <CardContent>
-        <div className="relative w-full overflow-auto">
+      <CardContent className="flex-1 overflow-hidden">
+        <div className="relative w-full overflow-auto h-full">
           <Table>
             <TableHeader>
               <TableRow>
