@@ -22,18 +22,22 @@ const shipmentInvoiceSchema = z.object({
   voucher: z.string().min(1, "El comprobante es requerido."),
   paymentMethod: z.enum(["Efectivo", "Tarjeta", "Transferencia"]),
   amount: z.coerce.number().min(0, "El monto debe ser un número positivo."),
-  status: z.enum(["Pagado", "Pendiente"]),
+  status: z.boolean(),
 })
 
 type ShipmentInvoice = z.infer<typeof shipmentInvoiceSchema>
 
 const initialData: ShipmentInvoice[] = [
-  { id: "SI-001", invoiceId: "FACT-001", shipmentId: "DS-001", voucher: "C-123", paymentMethod: "Efectivo", amount: 700, status: "Pagado" },
-  { id: "SI-002", invoiceId: "FACT-002", shipmentId: "DS-002", voucher: "C-456", paymentMethod: "Tarjeta", amount: 900, status: "Pendiente" },
+  { id: "SI-001", invoiceId: "FACT-001", shipmentId: "DS-001", voucher: "C-123", paymentMethod: "Efectivo", amount: 700, status: true },
+  { id: "SI-002", invoiceId: "FACT-002", shipmentId: "DS-002", voucher: "C-456", paymentMethod: "Tarjeta", amount: 900, status: false },
 ]
 
 const paymentMethods: ShipmentInvoice['paymentMethod'][] = ["Efectivo", "Tarjeta", "Transferencia"];
-const statusOptions: ShipmentInvoice['status'][] = ["Pagado", "Pendiente"];
+
+const statusOptions: { label: string; value: boolean }[] = [
+  { label: "Pagado", value: true },
+  { label: "Pendiente", value: false },
+]
 
 export default function ShipmentInvoicingPage() {
   const [invoices, setInvoices] = useState<ShipmentInvoice[]>(initialData)
@@ -48,7 +52,7 @@ export default function ShipmentInvoicingPage() {
       voucher: "",
       paymentMethod: "Efectivo",
       amount: 0,
-      status: "Pendiente",
+      status: false,
     },
   })
 
@@ -58,15 +62,12 @@ export default function ShipmentInvoicingPage() {
     setIsDialogOpen(false)
   }
   
-  const getBadgeVariant = (status: ShipmentInvoice['status']) => {
-    switch (status) {
-      case "Pagado":
-        return "default"
-      case "Pendiente":
-        return "secondary"
-      default:
-        return "outline"
-    }
+  const getBadgeVariant = (status: boolean) => {
+    return status ? "default" : "secondary"
+  }
+
+  const getStatusLabel = (status: boolean) => {
+    return status ? "Pagado" : "Pendiente"
   }
 
   return (
@@ -187,16 +188,19 @@ export default function ShipmentInvoicingPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Estado</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select
+                          onValueChange={(value) => field.onChange(value === 'true')}
+                          value={String(field.value)}
+                        >
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Seleccione un estado" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {statusOptions.map((status) => (
-                              <SelectItem key={status} value={status}>
-                                {status}
+                            {statusOptions.map((option) => (
+                              <SelectItem key={option.label} value={String(option.value)}>
+                                {option.label}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -239,7 +243,7 @@ export default function ShipmentInvoicingPage() {
                 <TableCell>{invoice.voucher}</TableCell>
                 <TableCell>{invoice.paymentMethod}</TableCell>
                 <TableCell>${invoice.amount.toFixed(2)}</TableCell>
-                <TableCell><Badge variant={getBadgeVariant(invoice.status)}>{invoice.status}</Badge></TableCell>
+                <TableCell><Badge variant={getBadgeVariant(invoice.status)}>{getStatusLabel(invoice.status)}</Badge></TableCell>
               </TableRow>
             ))}
           </TableBody>
