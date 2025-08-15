@@ -36,6 +36,7 @@ const shipmentSchema = z.object({
 
 type Shipment = z.infer<typeof shipmentSchema> & { id_despacho: string }
 type Route = { id_ruta: string; ruta_desc: string }
+type User = { id_usuario: string; name: string }
 
 const StatusBadge = ({ checked }: { checked: boolean }) => {
   return <Badge variant={checked ? "default" : "outline"}>{checked ? "OK" : "Pend."}</Badge>
@@ -44,6 +45,9 @@ const StatusBadge = ({ checked }: { checked: boolean }) => {
 export default function ShipmentsPage() {
   const [shipments, setShipments] = useState<Shipment[]>([])
   const [routes, setRoutes] = useState<Route[]>([])
+  const [motoristas, setMotoristas] = useState<User[]>([])
+  const [auxiliares, setAuxiliares] = useState<User[]>([])
+  const [users, setUsers] = useState<User[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const { toast } = useToast()
 
@@ -69,7 +73,18 @@ export default function ShipmentsPage() {
   useEffect(() => {
     fetchShipments()
     fetchRoutes()
+    fetchUsersByRole()
+    fetchAllUsers()
   }, [])
+
+  const fetchAllUsers = async () => {
+    const { data, error } = await supabase.from('usuario').select('id_usuario, name');
+    if (error) {
+      toast({ title: "Error", description: "No se pudieron cargar los usuarios.", variant: "destructive" });
+    } else {
+      setUsers(data || []);
+    }
+  }
 
   const fetchShipments = async () => {
     const { data, error } = await supabase.from('despacho').select('*')
@@ -97,6 +112,44 @@ export default function ShipmentsPage() {
     }
   };
 
+  const fetchUsersByRole = async () => {
+    // Fetch Roles
+    const { data: roles, error: rolesError } = await supabase.from('rol').select('id_rol, rol_desc');
+    if (rolesError) {
+      toast({ title: "Error", description: "No se pudieron cargar los roles.", variant: "destructive" });
+      return;
+    }
+
+    const motoristaRole = roles.find(r => r.rol_desc.toLowerCase() === 'motorista');
+    const auxiliarRole = roles.find(r => r.rol_desc.toLowerCase() === 'auxiliar');
+
+    // Fetch Motoristas
+    if (motoristaRole) {
+      const { data: motoristasData, error: motoristasError } = await supabase
+        .from('usuario')
+        .select('id_usuario, name')
+        .eq('id_rol', motoristaRole.id_rol);
+      if (motoristasError) {
+        toast({ title: "Error", description: "No se pudieron cargar los motoristas.", variant: "destructive" });
+      } else {
+        setMotoristas(motoristasData || []);
+      }
+    }
+    
+    // Fetch Auxiliares
+    if (auxiliarRole) {
+        const { data: auxiliaresData, error: auxiliaresError } = await supabase
+        .from('usuario')
+        .select('id_usuario, name')
+        .eq('id_rol', auxiliarRole.id_rol);
+        if (auxiliaresError) {
+        toast({ title: "Error", description: "No se pudieron cargar los auxiliares.", variant: "destructive" });
+        } else {
+        setAuxiliares(auxiliaresData || []);
+        }
+    }
+  }
+
   const onSubmit = async (values: z.infer<typeof shipmentSchema>) => {
     const { error } = await supabase
       .from('despacho')
@@ -122,6 +175,10 @@ export default function ShipmentsPage() {
 
   const getRouteDescription = (routeId: string) => {
     return routes.find(route => route.id_ruta === routeId)?.ruta_desc || routeId;
+  }
+  
+  const getUserName = (userId: string) => {
+    return users.find(user => user.id_usuario === userId)?.name || userId;
   }
 
   return (
@@ -177,10 +234,21 @@ export default function ShipmentsPage() {
                       name="id_motorista"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>ID Motorista</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Ej: MOT-03" {...field} />
-                          </FormControl>
+                          <FormLabel>Motorista</FormLabel>
+                           <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <FormControl>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Seleccione un motorista" />
+                                    </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                    {motoristas.map((motorista) => (
+                                        <SelectItem key={motorista.id_usuario} value={motorista.id_usuario}>
+                                            {motorista.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -190,10 +258,21 @@ export default function ShipmentsPage() {
                       name="id_auxiliar"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>ID Auxiliar</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Ej: AUX-03" {...field} />
-                          </FormControl>
+                          <FormLabel>Auxiliar</FormLabel>
+                           <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <FormControl>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Seleccione un auxiliar" />
+                                    </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                    {auxiliares.map((auxiliar) => (
+                                        <SelectItem key={auxiliar.id_usuario} value={auxiliar.id_usuario}>
+                                            {auxiliar.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -383,6 +462,8 @@ export default function ShipmentsPage() {
               <TableRow>
                 <TableHead>ID Despacho</TableHead>
                 <TableHead>Ruta</TableHead>
+                <TableHead>Motorista</TableHead>
+                <TableHead>Auxiliar</TableHead>
                 <TableHead>Fecha</TableHead>
                 <TableHead>T. Contado</TableHead>
                 <TableHead>T. Crédito</TableHead>
@@ -400,6 +481,8 @@ export default function ShipmentsPage() {
                 <TableRow key={shipment.id_despacho}>
                   <TableCell className="font-medium">{shipment.id_despacho}</TableCell>
                   <TableCell>{getRouteDescription(shipment.id_ruta)}</TableCell>
+                  <TableCell>{getUserName(shipment.id_motorista)}</TableCell>
+                  <TableCell>{getUserName(shipment.id_auxiliar)}</TableCell>
                   <TableCell>{shipment.fecha_despacho}</TableCell>
                   <TableCell>${shipment.total_contado.toFixed(2)}</TableCell>
                   <TableCell>${shipment.total_credito.toFixed(2)}</TableCell>
@@ -408,7 +491,7 @@ export default function ShipmentsPage() {
                   <TableCell><StatusBadge checked={shipment.reparto} /></TableCell>
                   <TableCell><StatusBadge checked={shipment.facturacion} /></TableCell>
                   <TableCell><StatusBadge checked={shipment.asist_admon} /></TableCell>
-                  <TableCell><StatusBadge checked={ship.cobros} /></TableCell>
+                  <TableCell><StatusBadge checked={shipment.cobros} /></TableCell>
                   <TableCell><StatusBadge checked={shipment.gerente_admon} /></TableCell>
                 </TableRow>
               ))}
