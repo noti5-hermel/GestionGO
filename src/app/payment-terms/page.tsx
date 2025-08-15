@@ -218,12 +218,12 @@ export default function PaymentTermsPage() {
             ))}
           </TableBody>
         </Table>
+        <CardFooter className="pt-6">
+          <div className="text-xs text-muted-foreground">
+            Mostrando <strong>1-{terms.length}</strong> de <strong>{terms.length}</strong> términos.
+          </div>
+        </CardFooter>
       </CardContent>
-      <CardFooter>
-        <div className="text-xs text-muted-foreground">
-          Mostrando <strong>1-{terms.length}</strong> de <strong>{terms.length}</strong> términos.
-        </div>
-      </CardFooter>
     </Card>
   )
 }

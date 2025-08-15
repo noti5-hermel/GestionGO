@@ -394,12 +394,12 @@ export default function CustomersPage() {
             ))}
           </TableBody>
         </Table>
+        <CardFooter className="pt-6">
+          <div className="text-xs text-muted-foreground">
+            Mostrando <strong>1-{customers.length}</strong> de <strong>{customers.length}</strong> clientes.
+          </div>
+        </CardFooter>
       </CardContent>
-      <CardFooter>
-        <div className="text-xs text-muted-foreground">
-          Mostrando <strong>1-{customers.length}</strong> de <strong>{customers.length}</strong> clientes.
-        </div>
-      </CardFooter>
     </Card>
   )
 }

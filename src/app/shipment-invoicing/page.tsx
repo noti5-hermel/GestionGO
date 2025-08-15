@@ -244,12 +244,12 @@ export default function ShipmentInvoicingPage() {
             ))}
           </TableBody>
         </Table>
+        <CardFooter className="pt-6">
+          <div className="text-xs text-muted-foreground">
+            Mostrando <strong>1-{invoices.length}</strong> de <strong>{invoices.length}</strong> registros.
+          </div>
+        </CardFooter>
       </CardContent>
-      <CardFooter>
-        <div className="text-xs text-muted-foreground">
-          Mostrando <strong>1-{invoices.length}</strong> de <strong>{invoices.length}</strong> registros.
-        </div>
-      </CardFooter>
     </Card>
   )
 }

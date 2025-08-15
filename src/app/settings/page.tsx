@@ -21,7 +21,7 @@ export default function SettingsPage() {
             <CardTitle>Términos de Pago</CardTitle>
             <CardDescription>Gestione los términos de pago para facturas.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent>
             <PaymentTerms />
           </CardContent>
         </Card>
@@ -32,7 +32,7 @@ export default function SettingsPage() {
             <CardTitle>Impuestos</CardTitle>
             <CardDescription>Gestione los impuestos aplicables.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent>
             <Taxes />
           </CardContent>
         </Card>

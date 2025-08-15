@@ -33,7 +33,7 @@ import { Input } from "@/components/ui/input"
 import { PlusCircle, Trash2, Pencil } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
-import { Card, CardFooter } from "@/components/ui/card"
+import { Card, CardFooter, CardContent } from "@/components/ui/card"
 
 const taxSchema = z.object({
   id_impuesto: z.string().min(1, { message: "El ID del impuesto es requerido." }),
@@ -155,6 +155,7 @@ export default function Taxes() {
 
   return (
     <Card>
+      <CardContent className="space-y-2 p-0">
         <div className="flex justify-end items-center mb-4">
           <Dialog open={isDialogOpen} onOpenChange={handleOpenDialog}>
             <DialogTrigger asChild>
@@ -251,11 +252,12 @@ export default function Taxes() {
             ))}
           </TableBody>
         </Table>
-      <CardFooter>
-        <div className="text-xs text-muted-foreground">
-          Mostrando <strong>1-{taxes.length}</strong> de <strong>{taxes.length}</strong> impuestos.
-        </div>
-      </CardFooter>
+        <CardFooter className="pt-6">
+          <div className="text-xs text-muted-foreground">
+            Mostrando <strong>1-{taxes.length}</strong> de <strong>{taxes.length}</strong> impuestos.
+          </div>
+        </CardFooter>
+      </CardContent>
     </Card>
   )
 }

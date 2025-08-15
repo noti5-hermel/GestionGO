@@ -399,12 +399,12 @@ export default function ShipmentsPage() { // Cambiado a ShipmentsPage
             ))}
           </TableBody>
         </Table>
+        <CardFooter className="pt-6">
+          <div className="text-xs text-muted-foreground">
+            Mostrando <strong>1-{shipments.length}</strong> de <strong>{shipments.length}</strong> despachos.
+          </div>
+        </CardFooter>
       </CardContent>
-      <CardFooter>
-        <div className="text-xs text-muted-foreground">
-          Mostrando <strong>1-{shipments.length}</strong> de <strong>{shipments.length}</strong> despachos.
-        </div>
-      </CardFooter>
     </Card>
   )
 }
