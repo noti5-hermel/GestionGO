@@ -296,7 +296,7 @@ export default function ShipmentsPage() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <CardTitle>Despachos</CardTitle>
             <CardDescription>Gestione la información de sus envíos y estados.</CardDescription>
@@ -652,3 +652,5 @@ export default function ShipmentsPage() {
     </Card>
   )
 }
+
+    

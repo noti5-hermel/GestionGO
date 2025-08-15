@@ -38,9 +38,10 @@ const customerSchema = z.object({
     (val) => String(val),
     z.string().min(1, { message: "El término de pago es requerido." })
   ),
+  ruta: z.string().min(1, { message: "La ruta es requerida." }),
 })
 
-type Customer = z.infer<typeof customerSchema> & { id_term: string | number, id_impuesto: string | number }
+type Customer = z.infer<typeof customerSchema> & { id_term: string | number, id_impuesto: string | number, ruta: string | number }
 
 
 type PaymentTerm = {
@@ -61,13 +62,14 @@ export default function CustomersPage() {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const { toast } = useToast()
 
-  const form = useForm<Customer>({
+  const form = useForm<z.infer<typeof customerSchema>>({
     resolver: zodResolver(customerSchema),
     defaultValues: {
       code_customer: "",
       customer_name: "",
       id_impuesto: "",
       id_term: "",
+      ruta: "",
     },
   })
 
@@ -83,6 +85,7 @@ export default function CustomersPage() {
         ...editingCustomer,
         id_impuesto: String(editingCustomer.id_impuesto),
         id_term: String(editingCustomer.id_term),
+        ruta: String(editingCustomer.ruta),
       });
     } else {
       form.reset({
@@ -90,13 +93,14 @@ export default function CustomersPage() {
         customer_name: "",
         id_impuesto: "",
         id_term: "",
+        ruta: "",
       });
     }
   }, [editingCustomer, form]);
 
 
   const fetchCustomers = async () => {
-    const { data, error } = await supabase.from('customer').select('code_customer,customer_name,id_impuesto,id_term')
+    const { data, error } = await supabase.from('customer').select('code_customer,customer_name,id_impuesto,id_term,ruta')
     if (error) {
       toast({
         title: "Error",
@@ -134,7 +138,7 @@ export default function CustomersPage() {
     }
   }
 
-  const onSubmit = async (values: Customer) => {
+  const onSubmit = async (values: z.infer<typeof customerSchema>) => {
     let error;
 
     if (editingCustomer) {
@@ -214,7 +218,7 @@ export default function CustomersPage() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <CardTitle>Clientes</CardTitle>
             <CardDescription>Gestione su base de clientes.</CardDescription>
@@ -255,6 +259,19 @@ export default function CustomersPage() {
                         <FormLabel>Nombre</FormLabel>
                         <FormControl>
                           <Input placeholder="Ej: Carlos Rodriguez" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="ruta"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Ruta</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Ej: Ruta 15" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -325,53 +342,57 @@ export default function CustomersPage() {
         </div>
       </CardHeader>
       <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Código</TableHead>
-              <TableHead>Nombre</TableHead>
-              <TableHead>Impuesto</TableHead>
-              <TableHead>Térm. Pago</TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {customers.map((customer) => (
-              <TableRow key={customer.code_customer}>
-                <TableCell className="font-medium">{customer.code_customer}</TableCell>
-                <TableCell>{customer.customer_name}</TableCell>
-                <TableCell>{getTaxDescription(customer.id_impuesto)}</TableCell>
-                <TableCell>{getTermDescription(customer.id_term)}</TableCell>
-                <TableCell className="text-right">
-                  <Button variant="ghost" size="icon" onClick={() => handleEdit(customer)}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="icon">
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Esta acción no se puede deshacer. Esto eliminará permanentemente el cliente.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleDelete(customer.code_customer)}>
-                          Eliminar
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </TableCell>
+        <div className="relative w-full overflow-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Código</TableHead>
+                <TableHead>Nombre</TableHead>
+                <TableHead>Ruta</TableHead>
+                <TableHead>Impuesto</TableHead>
+                <TableHead>Térm. Pago</TableHead>
+                <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {customers.map((customer) => (
+                <TableRow key={customer.code_customer}>
+                  <TableCell className="font-medium">{customer.code_customer}</TableCell>
+                  <TableCell>{customer.customer_name}</TableCell>
+                  <TableCell>{customer.ruta}</TableCell>
+                  <TableCell>{getTaxDescription(customer.id_impuesto)}</TableCell>
+                  <TableCell>{getTermDescription(customer.id_term)}</TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="ghost" size="icon" onClick={() => handleEdit(customer)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon">
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Esta acción no se puede deshacer. Esto eliminará permanentemente el cliente.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleDelete(customer.code_customer)}>
+                            Eliminar
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
         <CardFooter className="pt-6">
           <div className="text-xs text-muted-foreground">
             Mostrando <strong>1-{customers.length}</strong> de <strong>{customers.length}</strong> clientes.
@@ -381,3 +402,5 @@ export default function CustomersPage() {
     </Card>
   )
 }
+
+    

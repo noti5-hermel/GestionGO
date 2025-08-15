@@ -73,7 +73,7 @@ export default function ShipmentInvoicingPage() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <CardTitle>Facturación por Despacho</CardTitle>
             <CardDescription>Gestione las facturas asociadas a cada despacho.</CardDescription>
@@ -222,32 +222,34 @@ export default function ShipmentInvoicingPage() {
         </div>
       </CardHeader>
       <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>ID</TableHead>
-              <TableHead>ID Factura</TableHead>
-              <TableHead>ID Despacho</TableHead>
-              <TableHead>Comprobante</TableHead>
-              <TableHead>Forma de Pago</TableHead>
-              <TableHead>Monto</TableHead>
-              <TableHead>Estado</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {invoices.map((invoice) => (
-              <TableRow key={invoice.id}>
-                <TableCell className="font-medium">{invoice.id}</TableCell>
-                <TableCell>{invoice.invoiceId}</TableCell>
-                <TableCell>{invoice.shipmentId}</TableCell>
-                <TableCell>{invoice.voucher}</TableCell>
-                <TableCell>{invoice.paymentMethod}</TableCell>
-                <TableCell>${invoice.amount.toFixed(2)}</TableCell>
-                <TableCell><Badge variant={getBadgeVariant(invoice.status)}>{getStatusLabel(invoice.status)}</Badge></TableCell>
+        <div className="relative w-full overflow-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>ID</TableHead>
+                <TableHead>ID Factura</TableHead>
+                <TableHead>ID Despacho</TableHead>
+                <TableHead>Comprobante</TableHead>
+                <TableHead>Forma de Pago</TableHead>
+                <TableHead>Monto</TableHead>
+                <TableHead>Estado</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {invoices.map((invoice) => (
+                <TableRow key={invoice.id}>
+                  <TableCell className="font-medium">{invoice.id}</TableCell>
+                  <TableCell>{invoice.invoiceId}</TableCell>
+                  <TableCell>{invoice.shipmentId}</TableCell>
+                  <TableCell>{invoice.voucher}</TableCell>
+                  <TableCell>{invoice.paymentMethod}</TableCell>
+                  <TableCell>${invoice.amount.toFixed(2)}</TableCell>
+                  <TableCell><Badge variant={getBadgeVariant(invoice.status)}>{getStatusLabel(invoice.status)}</Badge></TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
         <CardFooter className="pt-6">
           <div className="text-xs text-muted-foreground">
             Mostrando <strong>1-{invoices.length}</strong> de <strong>{invoices.length}</strong> registros.
@@ -257,3 +259,5 @@ export default function ShipmentInvoicingPage() {
     </Card>
   )
 }
+
+    

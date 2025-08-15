@@ -48,7 +48,10 @@ const invoiceSchema = z.object({
   net_to_pay: z.coerce.number().min(0, "Neto a pagar debe ser positivo."),
   term_description: z.string().min(1, "La descripción del término es requerida."),
   fecha: z.string().min(1, "La fecha es requerida."),
-  state: z.string().min(1, "El estado es requerido."),
+  state: z.preprocess(
+      (val) => (String(val).toLowerCase() === 'pagada' || val === true),
+      z.boolean()
+  ),
   ruta: z.preprocess(
     (val) => String(val),
     z.string().min(1, "La ruta es requerida.")
@@ -56,7 +59,12 @@ const invoiceSchema = z.object({
 })
 
 // Tipo inferido del esquema de Zod. 'state' en la BD es booleano.
-type Invoice = Omit<z.infer<typeof invoiceSchema>, 'state'> & { state: boolean }
+type Invoice = Omit<z.infer<typeof invoiceSchema>, 'state' | 'invoice_number' | 'tax_id_number' | 'ruta'> & { 
+  state: boolean,
+  invoice_number: string | number,
+  tax_id_number: string | number,
+  ruta: string | number,
+}
 type Customer = { code_customer: string, customer_name: string, ruta: string, id_term: number }
 type PaymentTerm = { id_term: number, term_desc: string }
 
@@ -87,7 +95,7 @@ export default function InvoicingPage() {
       net_to_pay: 0,
       term_description: "",
       fecha: new Date().toISOString().split('T')[0], // Establece la fecha actual por defecto
-      state: "Pendiente",
+      state: false,
       ruta: "",
     },
   })
@@ -106,7 +114,7 @@ export default function InvoicingPage() {
           tax_id_number: String(editingInvoice.tax_id_number),
           ruta: String(editingInvoice.ruta),
           fecha: editingInvoice.fecha ? new Date(editingInvoice.fecha).toISOString().split('T')[0] : '',
-          state: getStatusLabel(editingInvoice.state)
+          state: editingInvoice.state
       });
     } else {
       form.reset({
@@ -122,7 +130,7 @@ export default function InvoicingPage() {
         net_to_pay: 0,
         term_description: "",
         fecha: new Date().toISOString().split('T')[0],
-        state: "Pendiente",
+        state: false,
         ruta: "",
       });
     }
@@ -160,8 +168,7 @@ export default function InvoicingPage() {
     let error;
 
     const dataToSubmit = {
-        ...values,
-        state: values.state === 'Pagada'
+        ...values
     };
 
     if (editingInvoice) {
@@ -249,7 +256,7 @@ export default function InvoicingPage() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <CardTitle>Facturación</CardTitle>
             <CardDescription>Cree y visualice facturas.</CardDescription>
@@ -458,7 +465,7 @@ export default function InvoicingPage() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Estado</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
+                          <Select onValueChange={(value) => field.onChange(value === 'Pagada')} value={getStatusLabel(field.value)}>
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="Seleccione un estado" />
@@ -567,3 +574,5 @@ export default function InvoicingPage() {
     </Card>
   )
 }
+
+    
