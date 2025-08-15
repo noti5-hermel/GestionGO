@@ -507,5 +507,3 @@ export default function ShipmentsPage() {
     </Card>
   )
 }
-
-    
