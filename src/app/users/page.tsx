@@ -28,7 +28,7 @@ import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 
 const userSchema = z.object({
-  id: z.string().optional(),
+  id_user: z.string().optional(),
   name: z.string().min(1, { message: "El nombre es requerido." }),
   correo: z.string().email({ message: "Debe ser un correo electrónico válido." }),
   contraseña: z.string().min(6, { message: "La contraseña debe tener al menos 6 caracteres." }).optional().or(z.literal('')),
@@ -39,7 +39,7 @@ const userSchema = z.object({
 })
 
 type User = {
-  id: string;
+  id_user: string;
   name: string;
   correo: string;
   id_rol: string | number;
@@ -75,7 +75,7 @@ export default function UsersPage() {
   useEffect(() => {
     if (editingUser) {
       form.reset({
-        id: editingUser.id,
+        id_user: editingUser.id_user,
         name: editingUser.name,
         correo: editingUser.correo,
         id_rol: String(editingUser.id_rol),
@@ -127,8 +127,8 @@ export default function UsersPage() {
         id_rol: parseInt(String(values.id_rol), 10) 
     };
     
-    if (values.id) {
-      userData.id = values.id;
+    if (values.id_user) {
+      userData.id_user = values.id_user;
     }
 
     if (values.contraseña) {
@@ -139,7 +139,7 @@ export default function UsersPage() {
         const { error: updateError } = await supabase
             .from('usuario')
             .update(userData)
-            .eq('id', editingUser.id)
+            .eq('id_user', editingUser.id_user)
             .select()
         error = updateError;
     } else {
@@ -170,7 +170,7 @@ export default function UsersPage() {
     const { error } = await supabase
         .from('usuario')
         .delete()
-        .eq('id', userId)
+        .eq('id_user', userId)
 
     if (error) {
         toast({
@@ -319,7 +319,7 @@ export default function UsersPage() {
           </TableHeader>
           <TableBody>
             {users.map((user, index) => (
-              <TableRow key={user.id || index}>
+              <TableRow key={user.id_user || index}>
                 <TableCell>
                   <span className="font-medium">{user.name}</span>
                 </TableCell>
@@ -344,7 +344,7 @@ export default function UsersPage() {
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleDelete(user.id)}>
+                        <AlertDialogAction onClick={() => handleDelete(user.id_user)}>
                           Eliminar
                         </AlertDialogAction>
                       </AlertDialogFooter>
@@ -364,3 +364,5 @@ export default function UsersPage() {
     </Card>
   )
 }
+
+    
