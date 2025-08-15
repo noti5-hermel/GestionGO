@@ -41,8 +41,8 @@ const invoiceSchema = z.object({
   payment: z.coerce.number().min(0, "El pago debe ser positivo."),
   net_to_pay: z.coerce.number().min(0, "Neto a pagar debe ser positivo."),
   term_description: z.string().min(1, "La descripción del término es requerida."),
-  date: z.string().min(1, "La fecha es requerida."),
-  estado: z.enum(["Pagada", "Pendiente", "Vencida"]),
+  fecha: z.string().min(1, "La fecha es requerida."),
+  state: z.enum(["Pagada", "Pendiente", "Vencida"]),
   ruta: z.string().min(1, "La ruta es requerida."),
 })
 
@@ -51,7 +51,7 @@ type Invoice = z.infer<typeof invoiceSchema>
 type Customer = { code_customer: string, customer_name: string, ruta: string }
 
 // Opciones disponibles para el estado de la factura
-const statusOptions: Invoice['estado'][] = ["Pagada", "Pendiente", "Vencida"]
+const statusOptions: Invoice['state'][] = ["Pagada", "Pendiente", "Vencida"]
 
 export default function InvoicingPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -75,8 +75,8 @@ export default function InvoicingPage() {
       payment: 0,
       net_to_pay: 0,
       term_description: "",
-      date: new Date().toISOString().split('T')[0], // Establece la fecha actual por defecto
-      estado: "Pendiente",
+      fecha: new Date().toISOString().split('T')[0], // Establece la fecha actual por defecto
+      state: "Pendiente",
       ruta: "",
     },
   })
@@ -102,8 +102,8 @@ export default function InvoicingPage() {
         payment: 0,
         net_to_pay: 0,
         term_description: "",
-        date: new Date().toISOString().split('T')[0],
-        estado: "Pendiente",
+        fecha: new Date().toISOString().split('T')[0],
+        state: "Pendiente",
         ruta: "",
       });
     }
@@ -195,7 +195,7 @@ export default function InvoicingPage() {
 
 
   // Función para obtener la variante del Badge según el estado
-  const getBadgeVariant = (status: Invoice['estado']) => {
+  const getBadgeVariant = (status: Invoice['state']) => {
     switch (status) {
       case "Pagada":
         return "default"
@@ -403,7 +403,7 @@ export default function InvoicingPage() {
                     />
                     <FormField
                       control={form.control}
-                      name="date"
+                      name="fecha"
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Fecha</FormLabel>
@@ -416,7 +416,7 @@ export default function InvoicingPage() {
                     />
                     <FormField
                       control={form.control}
-                      name="estado"
+                      name="state"
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Estado</FormLabel>
@@ -484,8 +484,8 @@ export default function InvoicingPage() {
                   <TableCell>${invoice.payment.toFixed(2)}</TableCell>
                   <TableCell>${invoice.net_to_pay.toFixed(2)}</TableCell>
                   <TableCell>{invoice.term_description}</TableCell>
-                  <TableCell>{invoice.date}</TableCell>
-                  <TableCell><Badge variant={getBadgeVariant(invoice.estado)}>{invoice.estado}</Badge></TableCell>
+                  <TableCell>{invoice.fecha}</TableCell>
+                  <TableCell><Badge variant={getBadgeVariant(invoice.state)}>{invoice.state}</Badge></TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="icon" onClick={() => handleEdit(invoice)}>
                       <Pencil className="h-4 w-4" />
