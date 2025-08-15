@@ -1,7 +1,7 @@
 
 'use client'
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -9,11 +9,24 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { PlusCircle } from "lucide-react"
+import { PlusCircle, Pencil, Trash2 } from "lucide-react"
+import { supabase } from "@/lib/supabase"
+import { useToast } from "@/hooks/use-toast"
 
 // Esquema de validación para la factura usando Zod
 const invoiceSchema = z.object({
@@ -34,52 +47,17 @@ const invoiceSchema = z.object({
 
 // Tipo inferido del esquema de Zod
 type Invoice = z.infer<typeof invoiceSchema>
-
-// Datos de facturas iniciales
-const initialInvoices: Invoice[] = [
-  {
-    id_factura: "FACT-001",
-    code_customer: "C001",
-    customer_name: "Juan Pérez",
-    invoice_number: "INV-2024-001",
-    tax_id_number: "JP123",
-    subtotal: 1000,
-    total_sale: 1210,
-    grand_total: 1210,
-    payment: 1210,
-    net_to_pay: 0,
-    term_description: "Pago requerido en 30 días.",
-    date: "2024-07-28",
-    estado: "Pagada",
-  },
-  {
-    id_factura: "FACT-002",
-    code_customer: "C002",
-    customer_name: "Maria García",
-    invoice_number: "INV-2024-002",
-    tax_id_number: "MG456",
-    subtotal: 800,
-    total_sale: 968,
-    grand_total: 968,
-    payment: 0,
-    net_to_pay: 968,
-    term_description: "Pago requerido al momento de la entrega.",
-    date: "2024-07-27",
-    estado: "Pendiente",
-  },
-]
+type Customer = { code_customer: string, customer_name: string }
 
 // Opciones disponibles para el estado de la factura
 const statusOptions: Invoice['estado'][] = ["Pagada", "Pendiente", "Vencida"]
 
-const customers = [
-    { code: "C001", name: "Juan Pérez" },
-    { code: "C002", name: "Maria García" },
-]
-
 export default function InvoicingPage() {
-  const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices)
+  const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [customers, setCustomers] = useState<Customer[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null)
+  const { toast } = useToast()
 
   // Configuración del formulario con react-hook-form y Zod
   const form = useForm<Invoice>({
@@ -100,13 +78,117 @@ export default function InvoicingPage() {
       estado: "Pendiente",
     },
   })
+  
+  useEffect(() => {
+    fetchInvoices()
+    fetchCustomers()
+  }, [])
+  
+  useEffect(() => {
+    if (editingInvoice) {
+      form.reset(editingInvoice);
+    } else {
+      form.reset({
+        id_factura: "",
+        code_customer: "",
+        customer_name: "",
+        invoice_number: "",
+        tax_id_number: "",
+        subtotal: 0,
+        total_sale: 0,
+        grand_total: 0,
+        payment: 0,
+        net_to_pay: 0,
+        term_description: "",
+        date: new Date().toISOString().split('T')[0],
+        estado: "Pendiente",
+      });
+    }
+  }, [editingInvoice, form]);
+
+  const fetchInvoices = async () => {
+    const { data, error } = await supabase.from('factura').select('*')
+    if (error) {
+      toast({ title: "Error", description: "No se pudieron cargar las facturas.", variant: "destructive" })
+    } else {
+      setInvoices(data as Invoice[])
+    }
+  }
+
+  const fetchCustomers = async () => {
+    const { data, error } = await supabase.from('customer').select('code_customer, customer_name')
+    if (error) {
+      toast({ title: "Error", description: "No se pudieron cargar los clientes.", variant: "destructive" })
+    } else {
+      setCustomers(data as Customer[])
+    }
+  }
 
   // Función para manejar el envío del formulario
-  const onSubmit = (values: Invoice) => {
-    setInvoices([...invoices, values]) // Agrega la nueva factura al estado
-    form.reset() // Resetea el formulario
-    setIsDialogOpen(false) // Cierra el diálogo
+  const onSubmit = async (values: Invoice) => {
+    let error;
+
+    if (editingInvoice) {
+      const { error: updateError } = await supabase
+        .from('factura')
+        .update(values)
+        .eq('id_factura', editingInvoice.id_factura)
+      error = updateError;
+    } else {
+      const { error: insertError } = await supabase
+        .from('factura')
+        .insert([values])
+      error = insertError;
+    }
+
+    if (error) {
+      toast({ title: "Error al guardar", description: error.message, variant: "destructive" })
+    } else {
+      toast({ title: "Éxito", description: `Factura ${editingInvoice ? 'actualizada' : 'creada'} correctamente.` })
+      fetchInvoices()
+      handleCloseDialog()
+    }
   }
+  
+  const handleDelete = async (invoiceId: string) => {
+    const { error } = await supabase
+      .from('factura')
+      .delete()
+      .eq('id_factura', invoiceId)
+
+    if (error) {
+      toast({ title: "Error al eliminar", description: error.message, variant: "destructive" })
+    } else {
+      toast({ title: "Éxito", description: "Factura eliminada correctamente." })
+      fetchInvoices()
+    }
+  }
+
+  const handleEdit = (invoice: Invoice) => {
+    setEditingInvoice(invoice);
+    setIsDialogOpen(true);
+  }
+
+  const handleOpenDialog = (open: boolean) => {
+    setIsDialogOpen(open);
+    if (!open) {
+      setEditingInvoice(null);
+    }
+  };
+  
+  const handleCloseDialog = () => {
+    setEditingInvoice(null);
+    form.reset();
+    setIsDialogOpen(false);
+  }
+
+  const handleCustomerChange = (code: string) => {
+    const customer = customers.find(c => c.code_customer === code);
+    if (customer) {
+      form.setValue('customer_name', customer.customer_name);
+    }
+  }
+
 
   // Función para obtener la variante del Badge según el estado
   const getBadgeVariant = (status: Invoice['estado']) => {
@@ -131,17 +213,17 @@ export default function InvoicingPage() {
             <CardDescription>Cree y visualice facturas.</CardDescription>
           </div>
           {/* Diálogo para crear una nueva factura */}
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <Dialog open={isDialogOpen} onOpenChange={handleOpenDialog}>
             <DialogTrigger asChild>
-              <Button>
+              <Button onClick={() => { setEditingInvoice(null); form.reset(); setIsDialogOpen(true); }}>
                 <PlusCircle className="mr-2 h-4 w-4" /> Nueva Factura
               </Button>
             </DialogTrigger>
             <DialogContent className="max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Crear Nueva Factura</DialogTitle>
+                <DialogTitle>{editingInvoice ? 'Editar Factura' : 'Crear Nueva Factura'}</DialogTitle>
                 <DialogDescription>
-                  Complete todos los campos para generar una nueva factura.
+                  {editingInvoice ? 'Modifique los detalles de la factura.' : 'Complete todos los campos para generar una nueva factura.'}
                 </DialogDescription>
               </DialogHeader>
               {/* Formulario de creación de factura */}
@@ -155,7 +237,7 @@ export default function InvoicingPage() {
                         <FormItem>
                           <FormLabel>ID Factura</FormLabel>
                           <FormControl>
-                            <Input placeholder="Ej: FACT-003" {...field} />
+                            <Input placeholder="Ej: FACT-003" {...field} disabled={!!editingInvoice} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -166,8 +248,8 @@ export default function InvoicingPage() {
                       name="code_customer"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Code Customer</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormLabel>Código Cliente</FormLabel>
+                          <Select onValueChange={(value) => { field.onChange(value); handleCustomerChange(value); }} value={field.value}>
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="Seleccione un cliente" />
@@ -175,8 +257,8 @@ export default function InvoicingPage() {
                             </FormControl>
                             <SelectContent>
                               {customers.map((customer) => (
-                                <SelectItem key={customer.code} value={customer.code}>
-                                  {customer.code} - {customer.name}
+                                <SelectItem key={customer.code_customer} value={customer.code_customer}>
+                                  {customer.code_customer} - {customer.customer_name}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -190,9 +272,9 @@ export default function InvoicingPage() {
                       name="customer_name"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Customer Name</FormLabel>
+                          <FormLabel>Nombre Cliente</FormLabel>
                           <FormControl>
-                            <Input placeholder="Ej: Juan Pérez" {...field} />
+                            <Input placeholder="Ej: Juan Pérez" {...field} readOnly />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -203,7 +285,7 @@ export default function InvoicingPage() {
                       name="invoice_number"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Invoice Number</FormLabel>
+                          <FormLabel>Número Factura</FormLabel>
                           <FormControl>
                             <Input placeholder="Ej: INV-2024-003" {...field} />
                           </FormControl>
@@ -216,7 +298,7 @@ export default function InvoicingPage() {
                       name="tax_id_number"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Tax Number</FormLabel>
+                          <FormLabel>NIF</FormLabel>
                           <FormControl>
                             <Input placeholder="Ej: 12345678A" {...field} />
                           </FormControl>
@@ -242,7 +324,7 @@ export default function InvoicingPage() {
                       name="total_sale"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Total Sale</FormLabel>
+                          <FormLabel>Venta Total</FormLabel>
                           <FormControl>
                             <Input type="number" {...field} />
                           </FormControl>
@@ -255,7 +337,7 @@ export default function InvoicingPage() {
                       name="grand_total"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Grand Total</FormLabel>
+                          <FormLabel>Total General</FormLabel>
                           <FormControl>
                             <Input type="number" {...field} />
                           </FormControl>
@@ -268,7 +350,7 @@ export default function InvoicingPage() {
                       name="payment"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Payment</FormLabel>
+                          <FormLabel>Pago</FormLabel>
                           <FormControl>
                             <Input type="number" {...field} />
                           </FormControl>
@@ -281,7 +363,7 @@ export default function InvoicingPage() {
                       name="net_to_pay"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Net to Pay</FormLabel>
+                          <FormLabel>Neto a Pagar</FormLabel>
                           <FormControl>
                             <Input type="number" {...field} />
                           </FormControl>
@@ -294,7 +376,7 @@ export default function InvoicingPage() {
                       name="term_description"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Term Description</FormLabel>
+                          <FormLabel>Descripción Término</FormLabel>
                           <FormControl>
                             <Input placeholder="Ej: Pago a 30 días" {...field} />
                           </FormControl>
@@ -342,9 +424,9 @@ export default function InvoicingPage() {
                   </div>
                   <DialogFooter>
                     <DialogClose asChild>
-                      <Button type="button" variant="secondary">Cancelar</Button>
+                      <Button type="button" variant="secondary" onClick={handleCloseDialog}>Cancelar</Button>
                     </DialogClose>
-                    <Button type="submit">Guardar Factura</Button>
+                    <Button type="submit">{editingInvoice ? 'Guardar Cambios' : 'Guardar Factura'}</Button>
                   </DialogFooter>
                 </form>
               </Form>
@@ -357,16 +439,17 @@ export default function InvoicingPage() {
           <TableHeader>
             <TableRow>
               <TableHead>ID Factura</TableHead>
-              <TableHead>Invoice Number</TableHead>
-              <TableHead>Tax Number</TableHead>
+              <TableHead>No. Factura</TableHead>
+              <TableHead>NIF</TableHead>
               <TableHead>Subtotal</TableHead>
-              <TableHead>Total Sale</TableHead>
-              <TableHead>Grand Total</TableHead>
-              <TableHead>Payment</TableHead>
-              <TableHead>Net to Pay</TableHead>
-              <TableHead>Term Description</TableHead>
+              <TableHead>Venta Total</TableHead>
+              <TableHead>Total General</TableHead>
+              <TableHead>Pago</TableHead>
+              <TableHead>Neto a Pagar</TableHead>
+              <TableHead>Término</TableHead>
               <TableHead>Fecha</TableHead>
               <TableHead>Estado</TableHead>
+              <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -383,6 +466,32 @@ export default function InvoicingPage() {
                 <TableCell>{invoice.term_description}</TableCell>
                 <TableCell>{invoice.date}</TableCell>
                 <TableCell><Badge variant={getBadgeVariant(invoice.estado)}>{invoice.estado}</Badge></TableCell>
+                <TableCell className="text-right">
+                  <Button variant="ghost" size="icon" onClick={() => handleEdit(invoice)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" size="icon">
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Esta acción no se puede deshacer. Esto eliminará permanentemente la factura.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => handleDelete(invoice.id_factura)}>
+                          Eliminar
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -396,3 +505,5 @@ export default function InvoicingPage() {
     </Card>
   )
 }
+
+    
