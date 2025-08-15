@@ -33,8 +33,14 @@ const invoiceSchema = z.object({
   id_factura: z.string().min(1, "ID de factura es requerido."),
   code_customer: z.string().min(1, "El código de cliente es requerido."),
   customer_name: z.string().min(1, "El nombre del cliente es requerido."),
-  invoice_number: z.string().min(1, "El número de factura es requerido."),
-  tax_id_number: z.string().min(1, "El NIF es requerido."),
+  invoice_number: z.preprocess(
+    (val) => String(val),
+    z.string().min(1, "El número de factura es requerido.")
+  ),
+  tax_id_number: z.preprocess(
+    (val) => String(val),
+    z.string().min(1, "El NIF es requerido.")
+  ),
   subtotal: z.coerce.number().min(0, "Subtotal debe ser positivo."),
   total_sale: z.coerce.number().min(0, "Venta total debe ser positivo."),
   grand_total: z.coerce.number().min(0, "Total general debe ser positivo."),
@@ -43,7 +49,10 @@ const invoiceSchema = z.object({
   term_description: z.string().min(1, "La descripción del término es requerida."),
   fecha: z.string().min(1, "La fecha es requerida."),
   state: z.string().min(1, "El estado es requerido."),
-  ruta: z.string().min(1, "La ruta es requerida."),
+  ruta: z.preprocess(
+    (val) => String(val),
+    z.string().min(1, "La ruta es requerida.")
+  ),
 })
 
 // Tipo inferido del esquema de Zod. 'state' en la BD es booleano.
@@ -93,6 +102,9 @@ export default function InvoicingPage() {
     if (editingInvoice) {
       form.reset({
           ...editingInvoice,
+          invoice_number: String(editingInvoice.invoice_number),
+          tax_id_number: String(editingInvoice.tax_id_number),
+          ruta: String(editingInvoice.ruta),
           fecha: editingInvoice.fecha ? new Date(editingInvoice.fecha).toISOString().split('T')[0] : '',
           state: getStatusLabel(editingInvoice.state)
       });
