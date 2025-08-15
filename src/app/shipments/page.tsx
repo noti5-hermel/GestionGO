@@ -113,39 +113,47 @@ export default function ShipmentsPage() {
   };
 
   const fetchUsersByRole = async () => {
-    // Fetch Roles
-    const { data: roles, error: rolesError } = await supabase.from('rol').select('id_rol, rol_desc');
-    if (rolesError) {
-      toast({ title: "Error", description: "No se pudieron cargar los roles.", variant: "destructive" });
-      return;
-    }
-
-    const motoristaRole = roles.find(r => r.rol_desc.toLowerCase() === 'motorista');
-    const auxiliarRole = roles.find(r => r.rol_desc.toLowerCase() === 'auxiliar');
-
     // Fetch Motoristas
-    if (motoristaRole) {
+    const { data: motoristaRoles, error: motoristaRolesError } = await supabase
+      .from('rol')
+      .select('id_rol')
+      .ilike('rol_desc', '%motorista%');
+
+    if (motoristaRolesError) {
+      toast({ title: "Error", description: "No se pudo encontrar el rol de motorista.", variant: "destructive" });
+    } else if (motoristaRoles.length > 0) {
+      const motoristaRoleIds = motoristaRoles.map(r => r.id_rol);
       const { data: motoristasData, error: motoristasError } = await supabase
         .from('usuario')
         .select('id_usuario, name')
-        .eq('id_rol', motoristaRole.id_rol);
+        .in('id_rol', motoristaRoleIds);
+
       if (motoristasError) {
         toast({ title: "Error", description: "No se pudieron cargar los motoristas.", variant: "destructive" });
       } else {
         setMotoristas(motoristasData || []);
       }
     }
-    
+
     // Fetch Auxiliares
-    if (auxiliarRole) {
+    const { data: auxiliarRoles, error: auxiliarRolesError } = await supabase
+      .from('rol')
+      .select('id_rol')
+      .ilike('rol_desc', '%auxiliar%');
+      
+    if (auxiliarRolesError) {
+        toast({ title: "Error", description: "No se pudo encontrar el rol de auxiliar.", variant: "destructive" });
+    } else if (auxiliarRoles.length > 0) {
+        const auxiliarRoleIds = auxiliarRoles.map(r => r.id_rol);
         const { data: auxiliaresData, error: auxiliaresError } = await supabase
         .from('usuario')
         .select('id_usuario, name')
-        .eq('id_rol', auxiliarRole.id_rol);
+        .in('id_rol', auxiliarRoleIds);
+
         if (auxiliaresError) {
-        toast({ title: "Error", description: "No se pudieron cargar los auxiliares.", variant: "destructive" });
+            toast({ title: "Error", description: "No se pudieron cargar los auxiliares.", variant: "destructive" });
         } else {
-        setAuxiliares(auxiliaresData || []);
+            setAuxiliares(auxiliaresData || []);
         }
     }
   }
@@ -491,8 +499,8 @@ export default function ShipmentsPage() {
                   <TableCell><StatusBadge checked={shipment.reparto} /></TableCell>
                   <TableCell><StatusBadge checked={shipment.facturacion} /></TableCell>
                   <TableCell><StatusBadge checked={shipment.asist_admon} /></TableCell>
-                  <TableCell><StatusBadge checked={shipment.cobros} /></TableCell>
-                  <TableCell><StatusBadge checked={shipment.gerente_admon} /></TableCell>
+                  <TableCell><StatusBadge checked={ship.cobros} /></TableCell>
+                  <TableCell><StatusBadge checked={ship.gerente_admon} /></TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -507,3 +515,5 @@ export default function ShipmentsPage() {
     </Card>
   )
 }
+
+    
