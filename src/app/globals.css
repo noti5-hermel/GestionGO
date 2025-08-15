@@ -82,9 +82,3 @@
     @apply bg-background text-foreground;
   }
 }
-
-@layer utilities {
-  .scroll-fade-h {
-    box-shadow: inset -2rem 0 1.5rem -1rem hsl(var(--card));
-  }
-}

@@ -222,7 +222,7 @@ export default function ShipmentInvoicingPage() {
         </div>
       </CardHeader>
       <CardContent>
-        <div className="relative w-full overflow-auto scroll-fade-h">
+        <div className="relative w-full overflow-auto">
           <Table>
             <TableHeader>
               <TableRow>
