@@ -1,3 +1,4 @@
+
 import type {Metadata} from 'next';
 import './globals.css';
 import {
@@ -60,7 +61,7 @@ export default function RootLayout({
           </Sidebar>
           <SidebarInset>
             <header className="flex h-16 items-center gap-4 border-b bg-card px-6 sticky top-0 z-10">
-              <SidebarTrigger className="md:hidden"/>
+              <SidebarTrigger/>
               <div className="flex-1 text-right">
                 
               </div>
