@@ -80,7 +80,7 @@ export default function ShipmentsPage() {
   const fetchAllUsers = async () => {
     const { data, error } = await supabase.from('usuario').select('id_user, name');
     if (error) {
-      toast({ title: "Error", description: "No se pudieron cargar los usuarios.", variant: "destructive" });
+      toast({ title: "Error", description: `No se pudieron cargar los usuarios: ${error.message}`, variant: "destructive" });
     } else {
       setUsers(data || []);
     }
@@ -210,10 +210,12 @@ export default function ShipmentsPage() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Ruta</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
                                 <FormControl>
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Seleccione una ruta" />
+                                        <SelectValue placeholder="Seleccione una ruta">
+                                          {getRouteDescription(field.value)}
+                                        </SelectValue>
                                     </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
@@ -234,10 +236,12 @@ export default function ShipmentsPage() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Motorista</FormLabel>
-                           <Select onValueChange={field.onChange} defaultValue={field.value}>
+                           <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
                                 <FormControl>
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Seleccione un motorista" />
+                                        <SelectValue placeholder="Seleccione un motorista">
+                                          {getUserName(field.value)}
+                                        </SelectValue>
                                     </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
@@ -258,10 +262,12 @@ export default function ShipmentsPage() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Auxiliar</FormLabel>
-                           <Select onValueChange={field.onChange} defaultValue={field.value}>
+                           <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
                                 <FormControl>
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Seleccione un auxiliar" />
+                                        <SelectValue placeholder="Seleccione un auxiliar">
+                                          {getUserName(field.value)}
+                                        </SelectValue>
                                     </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
@@ -506,5 +512,3 @@ export default function ShipmentsPage() {
     </Card>
   )
 }
-
-    
