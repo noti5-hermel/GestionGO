@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -69,7 +70,6 @@ const SidebarProvider = React.forwardRef<
   ) => {
     const isMobile = useIsMobile()
     const [openMobile, setOpenMobile] = React.useState(false)
-    const [isMounted, setIsMounted] = React.useState(false)
 
     // This is the internal state of the sidebar.
     // We use openProp and setOpenProp for control from outside the component.
@@ -112,10 +112,6 @@ const SidebarProvider = React.forwardRef<
       window.addEventListener("keydown", handleKeyDown)
       return () => window.removeEventListener("keydown", handleKeyDown)
     }, [toggleSidebar])
-    
-    React.useEffect(() => {
-      setIsMounted(true)
-    }, [])
 
 
     // We add a state so that we can do data-state="expanded" or "collapsed".
@@ -134,10 +130,6 @@ const SidebarProvider = React.forwardRef<
       }),
       [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar]
     )
-    
-    if (!isMounted) {
-      return null
-    }
 
     return (
       <SidebarContext.Provider value={contextValue}>
@@ -340,8 +332,8 @@ const SidebarInset = React.forwardRef<
         "peer-data-[side=right]:md:mr-[var(--sidebar-width)]",
         "peer-data-[collapsible=icon][data-state=collapsed]:peer-data-[side=left]:md:ml-[var(--sidebar-width-icon)]",
         "peer-data-[collapsible=icon][data-state=collapsed]:peer-data-[side=right]:md:mr-[var(--sidebar-width-icon)]",
-        "peer-data-[variant=sidebar]:peer-data-[side=left]:md:ml-[var(--sidebar-width)]",
-        "peer-data-[variant=sidebar]:peer-data-[side=right]:md:mr-[var(--sidebar-width)]",
+        "peer-data-[variant=inset][data-collapsible=icon]:peer-data-[side=left]:md:ml-[calc(var(--sidebar-width-icon)_+_theme(spacing.4)_+2px)]",
+        "peer-data-[variant=inset][data-collapsible=icon]:peer-data-[side=right]:md:mr-[calc(var(--sidebar-width-icon)_+_theme(spacing.4)_+2px)]",
         className
       )}
       {...props}
