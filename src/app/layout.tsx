@@ -9,6 +9,7 @@ import {
   SidebarContent,
   SidebarInset,
   SidebarFooter,
+  SidebarSeparator,
 } from '@/components/ui/sidebar';
 import { MainNav } from '@/components/main-nav';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -36,13 +37,16 @@ export default function RootLayout({
       <body className="font-body antialiased">
         <SidebarProvider>
           <Sidebar variant="sidebar" collapsible="icon">
-            <SidebarHeader className="p-4 flex justify-between items-center">
+            <SidebarHeader className="p-4">
               <div className="flex items-center gap-2">
                 <h1 className="text-2xl font-bold text-primary group-data-[state=collapsed]:hidden">GestiónGo</h1>
                 <h1 className="text-2xl font-bold text-primary group-data-[state=expanded]:hidden">GG</h1>
               </div>
-              <SidebarTrigger className="md:flex" />
             </SidebarHeader>
+            <div className="flex items-center justify-end p-2 group-data-[state=expanded]:-mt-8">
+                <SidebarTrigger className="md:flex" />
+            </div>
+            <SidebarSeparator />
             <SidebarContent>
               <MainNav />
             </SidebarContent>
