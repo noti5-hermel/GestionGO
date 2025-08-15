@@ -10,7 +10,7 @@ import {
   Shield,
   User,
   Map as MapIcon,
-  CalendarDays,
+  Settings,
   LayoutDashboard,
   Car,
   ClipboardList
@@ -29,7 +29,7 @@ const menuItems = [
   { href: '/shipment-invoicing', label: 'Facturación por Despacho', icon: ClipboardList },
   { href: '/routes', label: 'Rutas', icon: MapIcon },
   { href: '/vehicles', label: 'Vehículos', icon: Car },
-  { href: '/payment-terms', label: 'Términos de Pago', icon: CalendarDays },
+  { href: '/settings', label: 'Configuración', icon: Settings },
   { href: '/users', label: 'Usuarios', icon: User },
   { href: '/user-roles', label: 'Roles de Usuario', icon: Shield },
 ]
@@ -43,7 +43,7 @@ export function MainNav() {
         <SidebarMenuItem key={item.href}>
           <SidebarMenuButton
             asChild
-            isActive={pathname === item.href}
+            isActive={pathname.startsWith(item.href) && (item.href !== '/' || pathname === '/')}
             tooltip={{children: item.label, side: "right", align: "center" }}
           >
             <Link href={item.href}>
