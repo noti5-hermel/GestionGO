@@ -182,6 +182,7 @@ export default function ShipmentsPage() {
   }
 
   const getRouteDescription = (routeId: string) => {
+    if (!routes || routes.length === 0) return routeId;
     return routes.find(route => route.id_ruta === routeId)?.ruta_desc || routeId;
   }
   
@@ -499,7 +500,7 @@ export default function ShipmentsPage() {
                   <TableCell><StatusBadge checked={shipment.reparto} /></TableCell>
                   <TableCell><StatusBadge checked={shipment.facturacion} /></TableCell>
                   <TableCell><StatusBadge checked={shipment.asist_admon} /></TableCell>
-                  <TableCell><StatusBadge checked={shipment.cobros} /></TableCell>
+                  <TableCell><StatusBadge checked={ship.cobros} /></TableCell>
                   <TableCell><StatusBadge checked={shipment.gerente_admon} /></TableCell>
                 </TableRow>
               ))}
@@ -515,3 +516,5 @@ export default function ShipmentsPage() {
     </Card>
   )
 }
+
+    
