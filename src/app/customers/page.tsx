@@ -38,13 +38,10 @@ const customerSchema = z.object({
     (val) => String(val),
     z.string().min(1, { message: "El término de pago es requerido." })
   ),
-  ruta: z.preprocess(
-    (val) => String(val),
-    z.string().min(1, { message: "El número de ruta es requerido." })
-  ),
+  ruta: z.string().min(1, { message: "La ruta es requerida." }),
 })
 
-type Customer = z.infer<typeof customerSchema> & { id_term: string | number, id_impuesto: string | number, ruta: string | number }
+type Customer = z.infer<typeof customerSchema> & { id_term: string | number, id_impuesto: string | number }
 
 
 type PaymentTerm = {
@@ -88,7 +85,6 @@ export default function CustomersPage() {
         ...editingCustomer,
         id_impuesto: String(editingCustomer.id_impuesto),
         id_term: String(editingCustomer.id_term),
-        ruta: String(editingCustomer.ruta),
       });
     } else {
       form.reset({
@@ -403,3 +399,5 @@ export default function CustomersPage() {
     </Card>
   )
 }
+
+    
