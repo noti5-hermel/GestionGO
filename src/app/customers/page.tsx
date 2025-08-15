@@ -217,7 +217,7 @@ export default function CustomersPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Impuesto</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
                             <FormControl>
                                 <SelectTrigger>
                                     <SelectValue placeholder="Seleccione un impuesto" />
@@ -241,7 +241,7 @@ export default function CustomersPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Término de Pago</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Seleccione un término de pago" />
@@ -340,5 +340,7 @@ export default function CustomersPage() {
     </Card>
   )
 }
+
+    
 
     
