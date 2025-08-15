@@ -31,8 +31,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 const shipmentSchema = z.object({
   id_ruta: z.string().min(1, "ID de ruta es requerido."),
-  id_motorista: z.string().min(1, "ID de motorista es requerido."),
-  id_auxiliar: z.string().min(1, "ID de auxiliar es requerido."),
+  id_motorista: z.preprocess(
+    (val) => String(val),
+    z.string().min(1, { message: "ID de motorista es requerido." })
+  ),
+  id_auxiliar: z.preprocess(
+    (val) => String(val),
+    z.string().min(1, { message: "ID de auxiliar es requerido." })
+  ),
   total_contado: z.coerce.number().min(0),
   total_credito: z.coerce.number().min(0),
   total_general: z.coerce.number().min(0),
@@ -91,7 +97,11 @@ export default function ShipmentsPage() {
 
   useEffect(() => {
     if (editingShipment) {
-      form.reset(editingShipment)
+      form.reset({
+        ...editingShipment,
+        id_motorista: String(editingShipment.id_motorista),
+        id_auxiliar: String(editingShipment.id_auxiliar),
+      })
     } else {
       form.reset({
         id_ruta: "",
@@ -638,5 +648,3 @@ export default function ShipmentsPage() {
     </Card>
   )
 }
-
-    
