@@ -36,7 +36,7 @@ const shipmentSchema = z.object({
 
 type Shipment = z.infer<typeof shipmentSchema> & { id_despacho: string }
 type Route = { id_ruta: string; ruta_desc: string }
-type User = { id_usuario: string; name: string }
+type User = { id: string; name: string }
 
 const StatusBadge = ({ checked }: { checked: boolean }) => {
   return <Badge variant={checked ? "default" : "outline"}>{checked ? "OK" : "Pend."}</Badge>
@@ -78,7 +78,7 @@ export default function ShipmentsPage() {
   }, [])
 
   const fetchAllUsers = async () => {
-    const { data, error } = await supabase.from('usuario').select('id_usuario, name');
+    const { data, error } = await supabase.from('usuario').select('id, name');
     if (error) {
       toast({ title: "Error", description: "No se pudieron cargar los usuarios.", variant: "destructive" });
     } else {
@@ -125,7 +125,7 @@ export default function ShipmentsPage() {
       const motoristaRoleIds = motoristaRoles.map(r => r.id_rol);
       const { data: motoristasData, error: motoristasError } = await supabase
         .from('usuario')
-        .select('id_usuario, name')
+        .select('id, name')
         .in('id_rol', motoristaRoleIds);
 
       if (motoristasError) {
@@ -138,7 +138,7 @@ export default function ShipmentsPage() {
     // Fetch Auxiliares
     const { data: auxiliaresData, error: auxiliaresError } = await supabase
         .from('usuario')
-        .select('id_usuario, name')
+        .select('id, name')
         .eq('id_rol', 3);
 
     if (auxiliaresError) {
@@ -177,7 +177,7 @@ export default function ShipmentsPage() {
   }
   
   const getUserName = (userId: string) => {
-    return users.find(user => user.id_usuario === userId)?.name || userId;
+    return users.find(user => user.id === userId)?.name || userId;
   }
 
   return (
@@ -242,7 +242,7 @@ export default function ShipmentsPage() {
                                 </FormControl>
                                 <SelectContent>
                                     {motoristas.map((motorista) => (
-                                        <SelectItem key={motorista.id_usuario} value={motorista.id_usuario}>
+                                        <SelectItem key={motorista.id} value={motorista.id}>
                                             {motorista.name}
                                         </SelectItem>
                                     ))}
@@ -266,7 +266,7 @@ export default function ShipmentsPage() {
                                 </FormControl>
                                 <SelectContent>
                                     {auxiliares.map((auxiliar) => (
-                                        <SelectItem key={auxiliar.id_usuario} value={auxiliar.id_usuario}>
+                                        <SelectItem key={auxiliar.id} value={auxiliar.id}>
                                             {auxiliar.name}
                                         </SelectItem>
                                     ))}
@@ -506,5 +506,3 @@ export default function ShipmentsPage() {
     </Card>
   )
 }
-
-    
