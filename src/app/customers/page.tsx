@@ -9,10 +9,21 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { PlusCircle } from "lucide-react"
+import { PlusCircle, Trash2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 
@@ -119,6 +130,27 @@ export default function CustomersPage() {
       fetchCustomers()
       form.reset()
       setIsDialogOpen(false)
+    }
+  }
+
+  const handleDelete = async (customerId: string) => {
+    const { error } = await supabase
+      .from('customer')
+      .delete()
+      .eq('code_customer', customerId)
+
+    if (error) {
+      toast({
+        title: "Error al eliminar",
+        description: error.message,
+        variant: "destructive",
+      })
+    } else {
+      toast({
+        title: "Éxito",
+        description: "Cliente eliminado correctamente.",
+      })
+      fetchCustomers()
     }
   }
 
@@ -261,6 +293,7 @@ export default function CustomersPage() {
               <TableHead>Impuesto</TableHead>
               <TableHead>Térm. Pago</TableHead>
               <TableHead>Ruta</TableHead>
+              <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -271,6 +304,29 @@ export default function CustomersPage() {
                 <TableCell>{getTaxDescription(customer.id_impuesto)}</TableCell>
                 <TableCell>{getTermDescription(customer.id_term)}</TableCell>
                 <TableCell>{customer.ruta}</TableCell>
+                <TableCell className="text-right">
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" size="icon">
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Esta acción no se puede deshacer. Esto eliminará permanentemente el cliente.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => handleDelete(customer.code_customer)}>
+                          Eliminar
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -284,3 +340,5 @@ export default function CustomersPage() {
     </Card>
   )
 }
+
+    
