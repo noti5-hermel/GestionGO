@@ -201,7 +201,7 @@ export default function InvoicingPage() {
     const customer = customers.find(c => c.code_customer === code);
     if (customer) {
       form.setValue('customer_name', customer.customer_name);
-      form.setValue('ruta', customer.ruta || '');
+      form.setValue('ruta', String(customer.ruta || ''));
       const term = paymentTerms.find(t => t.id_term === customer.id_term);
       if (term) {
         form.setValue('term_description', term.term_desc);
