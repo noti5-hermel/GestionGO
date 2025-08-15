@@ -30,7 +30,10 @@ import { useToast } from "@/hooks/use-toast"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 const shipmentSchema = z.object({
-  id_ruta: z.string().min(1, "ID de ruta es requerido."),
+  id_ruta: z.preprocess(
+    (val) => String(val),
+    z.string().min(1, "ID de ruta es requerido.")
+  ),
   id_motorista: z.preprocess(
     (val) => String(val),
     z.string().min(1, { message: "ID de motorista es requerido." })
@@ -99,6 +102,7 @@ export default function ShipmentsPage() {
     if (editingShipment) {
       form.reset({
         ...editingShipment,
+        id_ruta: String(editingShipment.id_ruta),
         id_motorista: String(editingShipment.id_motorista),
         id_auxiliar: String(editingShipment.id_auxiliar),
       })
@@ -282,11 +286,11 @@ export default function ShipmentsPage() {
 
   const getRouteDescription = (routeId: string) => {
     if (!routes || routes.length === 0) return routeId;
-    return routes.find(route => route.id_ruta === routeId)?.ruta_desc || routeId;
+    return routes.find(route => String(route.id_ruta) === String(routeId))?.ruta_desc || routeId;
   }
   
   const getUserName = (userId: string) => {
-    return users.find(user => user.id_user === userId)?.name || userId;
+    return users.find(user => String(user.id_user) === String(userId))?.name || userId;
   }
 
   return (
@@ -329,7 +333,7 @@ export default function ShipmentsPage() {
                                 </FormControl>
                                 <SelectContent>
                                     {routes.map((route) => (
-                                        <SelectItem key={route.id_ruta} value={route.id_ruta}>
+                                        <SelectItem key={route.id_ruta} value={String(route.id_ruta)}>
                                             {route.ruta_desc}
                                         </SelectItem>
                                     ))}
