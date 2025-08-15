@@ -31,15 +31,22 @@ type PaymentTerm = {
   term_desc: string
 }
 
+type Tax = {
+    id_impuesto: string
+    impt_desc: string
+}
+
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [paymentTerms, setPaymentTerms] = useState<PaymentTerm[]>([])
+  const [taxes, setTaxes] = useState<Tax[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { toast } = useToast()
 
   useEffect(() => {
     fetchCustomers()
     fetchPaymentTerms()
+    fetchTaxes()
   }, [])
 
   const fetchCustomers = async () => {
@@ -65,6 +72,19 @@ export default function CustomersPage() {
       })
     } else {
       setPaymentTerms(data as PaymentTerm[])
+    }
+  }
+
+  const fetchTaxes = async () => {
+    const { data, error } = await supabase.from('tipo_impuesto').select('id_impuesto, impt_desc')
+    if (error) {
+        toast({
+            title: "Error",
+            description: "No se pudieron cargar los impuestos.",
+            variant: "destructive",
+        })
+    } else {
+        setTaxes(data as Tax[])
     }
   }
 
@@ -100,6 +120,14 @@ export default function CustomersPage() {
       form.reset()
       setIsDialogOpen(false)
     }
+  }
+
+  const getTaxDescription = (taxId: string) => {
+    return taxes.find(tax => tax.id_impuesto === taxId)?.impt_desc || taxId;
+  }
+  
+  const getTermDescription = (termId: string) => {
+      return paymentTerms.find(term => term.id_term === termId)?.term_desc || termId;
   }
 
   return (
@@ -156,10 +184,21 @@ export default function CustomersPage() {
                     name="id_impuesto"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>ID de Impuesto</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Ej: IMP-01" {...field} />
-                        </FormControl>
+                        <FormLabel>Impuesto</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Seleccione un impuesto" />
+                                </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                                {taxes.map((tax) => (
+                                    <SelectItem key={tax.id_impuesto} value={tax.id_impuesto}>
+                                        {tax.impt_desc}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -219,7 +258,7 @@ export default function CustomersPage() {
             <TableRow>
               <TableHead>Código</TableHead>
               <TableHead>Nombre</TableHead>
-              <TableHead>ID Impuesto</TableHead>
+              <TableHead>Impuesto</TableHead>
               <TableHead>Térm. Pago</TableHead>
               <TableHead>Ruta</TableHead>
             </TableRow>
@@ -229,8 +268,8 @@ export default function CustomersPage() {
               <TableRow key={customer.code_customer}>
                 <TableCell className="font-medium">{customer.code_customer}</TableCell>
                 <TableCell>{customer.customer_name}</TableCell>
-                <TableCell>{customer.id_impuesto}</TableCell>
-                <TableCell>{customer.id_term}</TableCell>
+                <TableCell>{getTaxDescription(customer.id_impuesto)}</TableCell>
+                <TableCell>{getTermDescription(customer.id_term)}</TableCell>
                 <TableCell>{customer.ruta}</TableCell>
               </TableRow>
             ))}
