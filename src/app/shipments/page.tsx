@@ -120,7 +120,7 @@ export default function ShipmentsPage() {
       .ilike('rol_desc', '%motorista%');
 
     if (motoristaRolesError) {
-      toast({ title: "Error", description: "No se pudo encontrar el rol de motorista.", variant: "destructive" });
+      toast({ title: "Error al buscar rol motorista", description: motoristaRolesError.message, variant: "destructive" });
     } else if (motoristaRoles && motoristaRoles.length > 0) {
       const motoristaRoleIds = motoristaRoles.map(r => r.id_rol);
       const { data: motoristasData, error: motoristasError } = await supabase
@@ -129,7 +129,7 @@ export default function ShipmentsPage() {
         .in('id_rol', motoristaRoleIds);
 
       if (motoristasError) {
-        toast({ title: "Error", description: "No se pudieron cargar los motoristas.", variant: "destructive" });
+        toast({ title: "Error al cargar motoristas", description: motoristasError.message, variant: "destructive" });
       } else {
         setMotoristas(motoristasData || []);
       }
@@ -142,7 +142,7 @@ export default function ShipmentsPage() {
         .eq('id_rol', 3);
 
     if (auxiliaresError) {
-        toast({ title: "Error", description: "No se pudieron cargar los auxiliares.", variant: "destructive" });
+        toast({ title: "Error al cargar auxiliares", description: auxiliaresError.message, variant: "destructive" });
     } else {
         setAuxiliares(auxiliaresData || []);
     }
