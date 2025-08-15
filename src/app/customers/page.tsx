@@ -220,7 +220,9 @@ export default function CustomersPage() {
                         <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
                             <FormControl>
                                 <SelectTrigger>
-                                    <SelectValue placeholder="Seleccione un impuesto" />
+                                    <SelectValue placeholder="Seleccione un impuesto">
+                                        {getTaxDescription(field.value)}
+                                    </SelectValue>
                                 </SelectTrigger>
                             </FormControl>
                             <SelectContent>
@@ -244,7 +246,9 @@ export default function CustomersPage() {
                         <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue placeholder="Seleccione un término de pago" />
+                                <SelectValue placeholder="Seleccione un término de pago">
+                                    {getTermDescription(field.value)}
+                                </SelectValue>
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
@@ -340,7 +344,3 @@ export default function CustomersPage() {
     </Card>
   )
 }
-
-    
-
-    
