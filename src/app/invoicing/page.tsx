@@ -52,7 +52,7 @@ type Customer = { code_customer: string, customer_name: string, ruta: string, id
 type PaymentTerm = { id_term: number, term_desc: string }
 
 // Opciones disponibles para el estado de la factura en el UI
-const statusOptions = ["Pagada", "Pendiente", "Vencida"]
+const statusOptions = ["Pagada", "Pendiente"]
 
 export default function InvoicingPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -94,7 +94,7 @@ export default function InvoicingPage() {
       form.reset({
           ...editingInvoice,
           fecha: editingInvoice.fecha ? new Date(editingInvoice.fecha).toISOString().split('T')[0] : '',
-          state: getStatusLabel(editingInvoice.state, editingInvoice.fecha)
+          state: getStatusLabel(editingInvoice.state)
       });
     } else {
       form.reset({
@@ -218,24 +218,17 @@ export default function InvoicingPage() {
     }
   }
 
-  const getStatusLabel = (status: boolean, date: string): "Pagada" | "Pendiente" | "Vencida" => {
-    if (status) return "Pagada";
-    const dueDate = new Date(date);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // Ignorar la hora para la comparación
-    dueDate.setHours(0,0,0,0);
-    return dueDate < today ? "Vencida" : "Pendiente";
+  const getStatusLabel = (status: boolean): "Pagada" | "Pendiente" => {
+    return status ? "Pagada" : "Pendiente";
   };
 
   // Función para obtener la variante del Badge según el estado
-  const getBadgeVariant = (status: "Pagada" | "Pendiente" | "Vencida") => {
+  const getBadgeVariant = (status: "Pagada" | "Pendiente") => {
     switch (status) {
       case "Pagada":
         return "default"
       case "Pendiente":
         return "secondary"
-      case "Vencida":
-        return "destructive"
       default:
         return "outline"
     }
@@ -506,7 +499,7 @@ export default function InvoicingPage() {
             </TableHeader>
             <TableBody>
               {invoices.map((invoice) => {
-                const statusLabel = getStatusLabel(invoice.state, invoice.fecha);
+                const statusLabel = getStatusLabel(invoice.state);
                 return (
                   <TableRow key={invoice.id_factura}>
                     <TableCell className="font-medium">{invoice.id_factura}</TableCell>
