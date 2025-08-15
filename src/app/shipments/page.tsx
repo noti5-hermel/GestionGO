@@ -69,7 +69,7 @@ const initialShipments: Shipment[] = [
 ]
 
 const StatusBadge = ({ checked }: { checked: boolean }) => {
-  return <Badge variant={checked ? "default" : "secondary"}>{checked ? "OK" : "Pend."}</Badge>
+  return <Badge variant={checked ? "default" : "outline"}>{checked ? "OK" : "Pend."}</Badge>
 }
 
 export default function ShipmentsPage() { // Cambiado a ShipmentsPage
