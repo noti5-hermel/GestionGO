@@ -1,6 +1,7 @@
+
 'use client'
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -10,9 +11,11 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { Checkbox } from "@/components/ui/checkbox" // Importar Checkbox
+import { Checkbox } from "@/components/ui/checkbox"
 import { PlusCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { supabase } from "@/lib/supabase"
+import { useToast } from "@/hooks/use-toast"
 
 const shipmentSchema = z.object({
   id_despacho: z.string().min(1, "ID de despacho es requerido."),
@@ -33,48 +36,14 @@ const shipmentSchema = z.object({
 
 type Shipment = z.infer<typeof shipmentSchema>
 
-const initialShipments: Shipment[] = [
-  {
-    id_despacho: "DS-001",
-    id_ruta: "Ruta-Norte",
-    id_motorista: "MOT-01",
-    id_auxiliar: "AUX-01",
-    total_contado: 500,
-    total_credito: 200,
-    total_general: 700,
-    fecha_despacho: "2024-07-29",
-    bodega: true,
-    reparto: true,
-    facturacion: false,
-    asist_admon: false,
-    cobros: false,
-    gerente_admon: false,
-  },
-  {
-    id_despacho: "DS-002",
-    id_ruta: "Ruta-Sur",
-    id_motorista: "MOT-02",
-    id_auxiliar: "AUX-02",
-    total_contado: 100,
-    total_credito: 800,
-    total_general: 900,
-    fecha_despacho: "2024-07-28",
-    bodega: true,
-    reparto: true,
-    facturacion: true,
-    asist_admon: true,
-    cobros: false,
-    gerente_admon: false,
-  },
-]
-
 const StatusBadge = ({ checked }: { checked: boolean }) => {
   return <Badge variant={checked ? "default" : "outline"}>{checked ? "OK" : "Pend."}</Badge>
 }
 
-export default function ShipmentsPage() { // Cambiado a ShipmentsPage
-  const [shipments, setShipments] = useState<Shipment[]>(initialShipments)
+export default function ShipmentsPage() {
+  const [shipments, setShipments] = useState<Shipment[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const { toast } = useToast()
 
   const form = useForm<Shipment>({
     resolver: zodResolver(shipmentSchema),
@@ -96,10 +65,44 @@ export default function ShipmentsPage() { // Cambiado a ShipmentsPage
     },
   })
 
-  const onSubmit = (values: Shipment) => {
-    setShipments([...shipments, values])
-    form.reset()
-    setIsDialogOpen(false)
+  useEffect(() => {
+    fetchShipments()
+  }, [])
+
+  const fetchShipments = async () => {
+    const { data, error } = await supabase.from('despacho').select('*')
+    if (error) {
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los despachos.",
+        variant: "destructive",
+      })
+    } else {
+      setShipments(data as Shipment[])
+    }
+  }
+
+  const onSubmit = async (values: Shipment) => {
+    const { error } = await supabase
+      .from('despacho')
+      .insert([values])
+      .select()
+
+    if (error) {
+      toast({
+        title: "Error al guardar",
+        description: error.message,
+        variant: "destructive",
+      })
+    } else {
+      toast({
+        title: "Éxito",
+        description: "Despacho guardado correctamente.",
+      })
+      fetchShipments()
+      form.reset()
+      setIsDialogOpen(false)
+    }
   }
 
   return (
@@ -234,7 +237,6 @@ export default function ShipmentsPage() { // Cambiado a ShipmentsPage
                   <Card>
                     <CardHeader><CardTitle>Estados</CardTitle></CardHeader>
                     <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      {/* Campo: Bodega (Checkbox) */}
                       <FormField
                         control={form.control}
                         name="bodega"
@@ -253,7 +255,6 @@ export default function ShipmentsPage() { // Cambiado a ShipmentsPage
                           </FormItem>
                         )}
                       />
-                      {/* Campo: Reparto (Checkbox) */}
                       <FormField
                         control={form.control}
                         name="reparto"
@@ -272,7 +273,6 @@ export default function ShipmentsPage() { // Cambiado a ShipmentsPage
                           </FormItem>
                         )}
                       />
-                      {/* Campo: Facturación (Checkbox) */}
                       <FormField
                         control={form.control}
                         name="facturacion"
@@ -291,7 +291,6 @@ export default function ShipmentsPage() { // Cambiado a ShipmentsPage
                           </FormItem>
                         )}
                       />
-                      {/* Campo: Asist. Admon. (Checkbox) */}
                       <FormField
                         control={form.control}
                         name="asist_admon"
@@ -310,7 +309,6 @@ export default function ShipmentsPage() { // Cambiado a ShipmentsPage
                           </FormItem>
                         )}
                       />
-                      {/* Campo: Cobros (Checkbox) */}
                       <FormField
                         control={form.control}
                         name="cobros"
@@ -329,7 +327,6 @@ export default function ShipmentsPage() { // Cambiado a ShipmentsPage
                           </FormItem>
                         )}
                       />
-                      {/* Campo: Gerente Admon. (Checkbox) */}
                       <FormField
                         control={form.control}
                         name="gerente_admon"
