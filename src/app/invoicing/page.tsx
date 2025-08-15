@@ -107,7 +107,7 @@ export default function InvoicingPage() {
   }, [editingInvoice, form]);
 
   const fetchInvoices = async () => {
-    const { data, error } = await supabase.from('factura').select('*')
+    const { data, error } = await supabase.from('facturacion').select('*')
     if (error) {
       toast({ title: "Error", description: "No se pudieron cargar las facturas.", variant: "destructive" })
     } else {
@@ -130,13 +130,13 @@ export default function InvoicingPage() {
 
     if (editingInvoice) {
       const { error: updateError } = await supabase
-        .from('factura')
+        .from('facturacion')
         .update(values)
         .eq('id_factura', editingInvoice.id_factura)
       error = updateError;
     } else {
       const { error: insertError } = await supabase
-        .from('factura')
+        .from('facturacion')
         .insert([values])
       error = insertError;
     }
@@ -152,7 +152,7 @@ export default function InvoicingPage() {
   
   const handleDelete = async (invoiceId: string) => {
     const { error } = await supabase
-      .from('factura')
+      .from('facturacion')
       .delete()
       .eq('id_factura', invoiceId)
 
@@ -505,5 +505,3 @@ export default function InvoicingPage() {
     </Card>
   )
 }
-
-    
