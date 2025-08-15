@@ -38,7 +38,6 @@ const customerSchema = z.object({
     (val) => String(val),
     z.string().min(1, { message: "El término de pago es requerido." })
   ),
-  ruta: z.string().min(1, { message: "La ruta es requerida." }),
 })
 
 type Customer = z.infer<typeof customerSchema> & { id_term: string | number, id_impuesto: string | number }
@@ -69,7 +68,6 @@ export default function CustomersPage() {
       customer_name: "",
       id_impuesto: "",
       id_term: "",
-      ruta: "",
     },
   })
 
@@ -92,14 +90,13 @@ export default function CustomersPage() {
         customer_name: "",
         id_impuesto: "",
         id_term: "",
-        ruta: "",
       });
     }
   }, [editingCustomer, form]);
 
 
   const fetchCustomers = async () => {
-    const { data, error } = await supabase.from('customer').select('code_customer,customer_name,id_impuesto,id_term,ruta')
+    const { data, error } = await supabase.from('customer').select('code_customer,customer_name,id_impuesto,id_term')
     if (error) {
       toast({
         title: "Error",
@@ -315,19 +312,6 @@ export default function CustomersPage() {
                       </FormItem>
                     )}
                   />
-                  <FormField
-                    control={form.control}
-                    name="ruta"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Ruta</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Ej: Ruta-Local" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
                   <DialogFooter>
                     <DialogClose asChild>
                       <Button type="button" variant="secondary">Cancelar</Button>
@@ -348,7 +332,6 @@ export default function CustomersPage() {
               <TableHead>Nombre</TableHead>
               <TableHead>Impuesto</TableHead>
               <TableHead>Térm. Pago</TableHead>
-              <TableHead>Ruta</TableHead>
               <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
@@ -359,7 +342,6 @@ export default function CustomersPage() {
                 <TableCell>{customer.customer_name}</TableCell>
                 <TableCell>{getTaxDescription(customer.id_impuesto)}</TableCell>
                 <TableCell>{getTermDescription(customer.id_term)}</TableCell>
-                <TableCell>{customer.ruta}</TableCell>
                 <TableCell className="text-right">
                   <Button variant="ghost" size="icon" onClick={() => handleEdit(customer)}>
                     <Pencil className="h-4 w-4" />
@@ -399,5 +381,3 @@ export default function CustomersPage() {
     </Card>
   )
 }
-
-    

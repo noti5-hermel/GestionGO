@@ -43,6 +43,7 @@ const invoiceSchema = z.object({
   term_description: z.string().min(1, "La descripción del término es requerida."),
   date: z.string().min(1, "La fecha es requerida."),
   estado: z.enum(["Pagada", "Pendiente", "Vencida"]),
+  ruta: z.string().min(1, "La ruta es requerida."),
 })
 
 // Tipo inferido del esquema de Zod
@@ -76,6 +77,7 @@ export default function InvoicingPage() {
       term_description: "",
       date: new Date().toISOString().split('T')[0], // Establece la fecha actual por defecto
       estado: "Pendiente",
+      ruta: "",
     },
   })
   
@@ -102,6 +104,7 @@ export default function InvoicingPage() {
         term_description: "",
         date: new Date().toISOString().split('T')[0],
         estado: "Pendiente",
+        ruta: "",
       });
     }
   }, [editingInvoice, form]);
@@ -306,6 +309,19 @@ export default function InvoicingPage() {
                         </FormItem>
                       )}
                     />
+                     <FormField
+                      control={form.control}
+                      name="ruta"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Ruta</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Ej: Ruta 5" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                     <FormField
                       control={form.control}
                       name="subtotal"
@@ -435,67 +451,71 @@ export default function InvoicingPage() {
         </div>
       </CardHeader>
       <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>ID Factura</TableHead>
-              <TableHead>No. Factura</TableHead>
-              <TableHead>NIF</TableHead>
-              <TableHead>Subtotal</TableHead>
-              <TableHead>Venta Total</TableHead>
-              <TableHead>Total General</TableHead>
-              <TableHead>Pago</TableHead>
-              <TableHead>Neto a Pagar</TableHead>
-              <TableHead>Término</TableHead>
-              <TableHead>Fecha</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {invoices.map((invoice) => (
-              <TableRow key={invoice.id_factura}>
-                <TableCell className="font-medium">{invoice.id_factura}</TableCell>
-                <TableCell>{invoice.invoice_number}</TableCell>
-                <TableCell>{invoice.tax_id_number}</TableCell>
-                <TableCell>${invoice.subtotal.toFixed(2)}</TableCell>
-                <TableCell>${invoice.total_sale.toFixed(2)}</TableCell>
-                <TableCell>${invoice.grand_total.toFixed(2)}</TableCell>
-                <TableCell>${invoice.payment.toFixed(2)}</TableCell>
-                <TableCell>${invoice.net_to_pay.toFixed(2)}</TableCell>
-                <TableCell>{invoice.term_description}</TableCell>
-                <TableCell>{invoice.date}</TableCell>
-                <TableCell><Badge variant={getBadgeVariant(invoice.estado)}>{invoice.estado}</Badge></TableCell>
-                <TableCell className="text-right">
-                  <Button variant="ghost" size="icon" onClick={() => handleEdit(invoice)}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="icon">
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Esta acción no se puede deshacer. Esto eliminará permanentemente la factura.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleDelete(invoice.id_factura)}>
-                          Eliminar
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </TableCell>
+        <div className="relative w-full overflow-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>ID Factura</TableHead>
+                <TableHead>No. Factura</TableHead>
+                <TableHead>NIF</TableHead>
+                <TableHead>Ruta</TableHead>
+                <TableHead>Subtotal</TableHead>
+                <TableHead>Venta Total</TableHead>
+                <TableHead>Total General</TableHead>
+                <TableHead>Pago</TableHead>
+                <TableHead>Neto a Pagar</TableHead>
+                <TableHead>Término</TableHead>
+                <TableHead>Fecha</TableHead>
+                <TableHead>Estado</TableHead>
+                <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {invoices.map((invoice) => (
+                <TableRow key={invoice.id_factura}>
+                  <TableCell className="font-medium">{invoice.id_factura}</TableCell>
+                  <TableCell>{invoice.invoice_number}</TableCell>
+                  <TableCell>{invoice.tax_id_number}</TableCell>
+                  <TableCell>{invoice.ruta}</TableCell>
+                  <TableCell>${invoice.subtotal.toFixed(2)}</TableCell>
+                  <TableCell>${invoice.total_sale.toFixed(2)}</TableCell>
+                  <TableCell>${invoice.grand_total.toFixed(2)}</TableCell>
+                  <TableCell>${invoice.payment.toFixed(2)}</TableCell>
+                  <TableCell>${invoice.net_to_pay.toFixed(2)}</TableCell>
+                  <TableCell>{invoice.term_description}</TableCell>
+                  <TableCell>{invoice.date}</TableCell>
+                  <TableCell><Badge variant={getBadgeVariant(invoice.estado)}>{invoice.estado}</Badge></TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="ghost" size="icon" onClick={() => handleEdit(invoice)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon">
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Esta acción no se puede deshacer. Esto eliminará permanentemente la factura.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleDelete(invoice.id_factura)}>
+                            Eliminar
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
         <CardFooter className="pt-6">
           <div className="text-xs text-muted-foreground">
             Mostrando <strong>1-{invoices.length}</strong> de <strong>{invoices.length}</strong> facturas.
