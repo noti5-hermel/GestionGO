@@ -94,7 +94,7 @@ export default function UsersPage() {
   const fetchUsers = async () => {
     let { data: usuario, error } = await supabase
       .from('usuario')
-      .select('id_usuario, name, correo, id_rol')
+      .select('*')
     if (error) {
       toast({
         title: "Error",
@@ -308,55 +308,53 @@ export default function UsersPage() {
         </div>
       </CardHeader>
       <CardContent>
-        <div className="relative w-full overflow-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nombre</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Rol</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Nombre</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>Rol</TableHead>
+              <TableHead className="text-right">Acciones</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {users.map((user, index) => (
+              <TableRow key={user.id_usuario || index}>
+                <TableCell>
+                  <span className="font-medium">{user.name}</span>
+                </TableCell>
+                <TableCell>{user.correo}</TableCell>
+                <TableCell>{getRoleName(user.id_rol)}</TableCell>
+                <TableCell className="text-right">
+                  <Button variant="ghost" size="icon" onClick={() => handleEdit(user)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" size="icon">
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Esta acción no se puede deshacer. Esto eliminará permanentemente el usuario.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => handleDelete(user.id_usuario)}>
+                          Eliminar
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {users.map((user, index) => (
-                <TableRow key={user.id_usuario || index}>
-                  <TableCell>
-                    <span className="font-medium">{user.name}</span>
-                  </TableCell>
-                  <TableCell>{user.correo}</TableCell>
-                  <TableCell>{getRoleName(user.id_rol)}</TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => handleEdit(user)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Esta acción no se puede deshacer. Esto eliminará permanentemente el usuario.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDelete(user.id_usuario)}>
-                            Eliminar
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+            ))}
+          </TableBody>
+        </Table>
         <CardFooter className="pt-6">
           <div className="text-xs text-muted-foreground">
             Mostrando <strong>1-{users.length}</strong> de <strong>{users.length}</strong> usuarios.
@@ -366,3 +364,5 @@ export default function UsersPage() {
     </Card>
   )
 }
+
+    
