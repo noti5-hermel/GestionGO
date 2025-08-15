@@ -30,20 +30,30 @@ import { useToast } from "@/hooks/use-toast"
 const customerSchema = z.object({
   code_customer: z.string().min(1, { message: "El código es requerido." }),
   customer_name: z.string().min(1, { message: "El nombre es requerido." }),
-  id_impuesto: z.string().min(1, { message: "El ID de impuesto es requerido." }),
-  id_term: z.string().min(1, { message: "El término de pago es requerido." }),
-  ruta: z.string().min(1, { message: "El número de ruta es requerido." }),
+  id_impuesto: z.preprocess(
+    (val) => String(val),
+    z.string().min(1, { message: "El ID de impuesto es requerido." })
+  ),
+  id_term: z.preprocess(
+    (val) => String(val),
+    z.string().min(1, { message: "El término de pago es requerido." })
+  ),
+  ruta: z.preprocess(
+    (val) => String(val),
+    z.string().min(1, { message: "El número de ruta es requerido." })
+  ),
 })
 
-type Customer = z.infer<typeof customerSchema>
+type Customer = z.infer<typeof customerSchema> & { id_term: string | number, id_impuesto: string | number, ruta: string | number }
+
 
 type PaymentTerm = {
-  id_term: string
+  id_term: string | number
   term_desc: string
 }
 
 type Tax = {
-    id_impuesto: string
+    id_impuesto: string | number
     impt_desc: string
 }
 
@@ -74,7 +84,12 @@ export default function CustomersPage() {
   
   useEffect(() => {
     if (editingCustomer) {
-      form.reset(editingCustomer);
+      form.reset({
+        ...editingCustomer,
+        id_impuesto: String(editingCustomer.id_impuesto),
+        id_term: String(editingCustomer.id_term),
+        ruta: String(editingCustomer.ruta),
+      });
     } else {
       form.reset({
         code_customer: "",
@@ -195,12 +210,12 @@ export default function CustomersPage() {
     }
   };
 
-  const getTaxDescription = (taxId: string) => {
-    return taxes.find(tax => tax.id_impuesto === taxId)?.impt_desc || taxId;
+  const getTaxDescription = (taxId: string | number) => {
+    return taxes.find(tax => String(tax.id_impuesto) === String(taxId))?.impt_desc || taxId;
   }
   
-  const getTermDescription = (termId: string) => {
-      return paymentTerms.find(term => term.id_term === termId)?.term_desc || termId;
+  const getTermDescription = (termId: string | number) => {
+      return paymentTerms.find(term => String(term.id_term) === String(termId))?.term_desc || termId;
   }
 
   return (
@@ -258,7 +273,7 @@ export default function CustomersPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Impuesto</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value} defaultValue={String(field.value)}>
                             <FormControl>
                                 <SelectTrigger>
                                     <SelectValue placeholder="Seleccione un impuesto">
@@ -268,7 +283,7 @@ export default function CustomersPage() {
                             </FormControl>
                             <SelectContent>
                                 {taxes.map((tax) => (
-                                    <SelectItem key={tax.id_impuesto} value={tax.id_impuesto}>
+                                    <SelectItem key={String(tax.id_impuesto)} value={String(tax.id_impuesto)}>
                                         {tax.impt_desc}
                                     </SelectItem>
                                 ))}
@@ -284,7 +299,7 @@ export default function CustomersPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Término de Pago</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value} defaultValue={String(field.value)}>
                           <FormControl>
                             <SelectTrigger>
                                 <SelectValue placeholder="Seleccione un término de pago">
@@ -294,7 +309,7 @@ export default function CustomersPage() {
                           </FormControl>
                           <SelectContent>
                             {paymentTerms.map((term) => (
-                              <SelectItem key={term.id_term} value={term.id_term}>
+                              <SelectItem key={String(term.id_term)} value={String(term.id_term)}>
                                 {term.term_desc}
                               </SelectItem>
                             ))}
