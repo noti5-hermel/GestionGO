@@ -48,7 +48,7 @@ const invoiceSchema = z.object({
 
 // Tipo inferido del esquema de Zod
 type Invoice = z.infer<typeof invoiceSchema>
-type Customer = { code_customer: string, customer_name: string }
+type Customer = { code_customer: string, customer_name: string, ruta: string }
 
 // Opciones disponibles para el estado de la factura
 const statusOptions: Invoice['estado'][] = ["Pagada", "Pendiente", "Vencida"]
@@ -119,7 +119,7 @@ export default function InvoicingPage() {
   }
 
   const fetchCustomers = async () => {
-    const { data, error } = await supabase.from('customer').select('code_customer, customer_name')
+    const { data, error } = await supabase.from('customer').select('code_customer, customer_name, ruta')
     if (error) {
       toast({ title: "Error", description: "No se pudieron cargar los clientes.", variant: "destructive" })
     } else {
@@ -189,6 +189,7 @@ export default function InvoicingPage() {
     const customer = customers.find(c => c.code_customer === code);
     if (customer) {
       form.setValue('customer_name', customer.customer_name);
+      form.setValue('ruta', customer.ruta || '');
     }
   }
 
@@ -316,7 +317,7 @@ export default function InvoicingPage() {
                         <FormItem>
                           <FormLabel>Ruta</FormLabel>
                           <FormControl>
-                            <Input placeholder="Ej: Ruta 5" {...field} />
+                            <Input placeholder="Ej: Ruta 5" {...field} readOnly />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -525,3 +526,5 @@ export default function InvoicingPage() {
     </Card>
   )
 }
+
+    
