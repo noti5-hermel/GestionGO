@@ -136,25 +136,15 @@ export default function ShipmentsPage() {
     }
 
     // Fetch Auxiliares
-    const { data: auxiliarRoles, error: auxiliarRolesError } = await supabase
-      .from('rol')
-      .select('id_rol')
-      .ilike('rol_desc', '%auxiliar%');
-      
-    if (auxiliarRolesError) {
-        toast({ title: "Error", description: "No se pudo encontrar el rol de auxiliar.", variant: "destructive" });
-    } else if (auxiliarRoles && auxiliarRoles.length > 0) {
-        const auxiliarRoleIds = auxiliarRoles.map(r => r.id_rol);
-        const { data: auxiliaresData, error: auxiliaresError } = await supabase
+    const { data: auxiliaresData, error: auxiliaresError } = await supabase
         .from('usuario')
         .select('id_usuario, name')
-        .in('id_rol', auxiliarRoleIds);
+        .eq('id_rol', 3);
 
-        if (auxiliaresError) {
-            toast({ title: "Error", description: "No se pudieron cargar los auxiliares.", variant: "destructive" });
-        } else {
-            setAuxiliares(auxiliaresData || []);
-        }
+    if (auxiliaresError) {
+        toast({ title: "Error", description: "No se pudieron cargar los auxiliares.", variant: "destructive" });
+    } else {
+        setAuxiliares(auxiliaresData || []);
     }
   }
 
@@ -516,3 +506,5 @@ export default function ShipmentsPage() {
     </Card>
   )
 }
+
+    
