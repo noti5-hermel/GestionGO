@@ -69,6 +69,7 @@ const SidebarProvider = React.forwardRef<
   ) => {
     const isMobile = useIsMobile()
     const [openMobile, setOpenMobile] = React.useState(false)
+    const [isMounted, setIsMounted] = React.useState(false)
 
     // This is the internal state of the sidebar.
     // We use openProp and setOpenProp for control from outside the component.
@@ -111,6 +112,11 @@ const SidebarProvider = React.forwardRef<
       window.addEventListener("keydown", handleKeyDown)
       return () => window.removeEventListener("keydown", handleKeyDown)
     }, [toggleSidebar])
+    
+    React.useEffect(() => {
+      setIsMounted(true)
+    }, [])
+
 
     // We add a state so that we can do data-state="expanded" or "collapsed".
     // This makes it easier to style the sidebar with Tailwind classes.
@@ -128,6 +134,10 @@ const SidebarProvider = React.forwardRef<
       }),
       [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar]
     )
+    
+    if (!isMounted) {
+      return null
+    }
 
     return (
       <SidebarContext.Provider value={contextValue}>
@@ -273,7 +283,7 @@ const SidebarTrigger = React.forwardRef<
       data-sidebar="trigger"
       variant="ghost"
       size="icon"
-      className={cn("h-7 w-7", className)}
+      className={cn("h-7 w-7 md:flex", className)}
       onClick={(event) => {
         onClick?.(event)
         toggleSidebar()
@@ -330,6 +340,8 @@ const SidebarInset = React.forwardRef<
         "peer-data-[side=right]:md:mr-[var(--sidebar-width)]",
         "peer-data-[collapsible=icon][data-state=collapsed]:peer-data-[side=left]:md:ml-[var(--sidebar-width-icon)]",
         "peer-data-[collapsible=icon][data-state=collapsed]:peer-data-[side=right]:md:mr-[var(--sidebar-width-icon)]",
+        "peer-data-[variant=sidebar]:peer-data-[side=left]:md:ml-[var(--sidebar-width)]",
+        "peer-data-[variant=sidebar]:peer-data-[side=right]:md:mr-[var(--sidebar-width)]",
         className
       )}
       {...props}
