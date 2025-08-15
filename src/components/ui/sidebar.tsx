@@ -328,12 +328,14 @@ const SidebarInset = React.forwardRef<
       className={cn(
         "relative flex min-h-svh flex-1 flex-col bg-background",
         "duration-200 transition-[margin-left,margin-right] ease-linear",
-        "peer-data-[side=left]:md:ml-[var(--sidebar-width)]",
-        "peer-data-[side=right]:md:mr-[var(--sidebar-width)]",
-        "peer-data-[collapsible=icon][data-state=collapsed]:peer-data-[side=left]:md:ml-[var(--sidebar-width-icon)]",
-        "peer-data-[collapsible=icon][data-state=collapsed]:peer-data-[side=right]:md:mr-[var(--sidebar-width-icon)]",
-        "peer-data-[variant=inset][data-collapsible=icon]:peer-data-[side=left]:md:ml-[calc(var(--sidebar-width-icon)_+_theme(spacing.4)_+2px)]",
-        "peer-data-[variant=inset][data-collapsible=icon]:peer-data-[side=right]:md:mr-[calc(var(--sidebar-width-icon)_+_theme(spacing.4)_+2px)]",
+        "peer-data-[variant=sidebar][data-side=left]:md:ml-[var(--sidebar-width)]",
+        "peer-data-[variant=sidebar][data-side=right]:md:mr-[var(--sidebar-width)]",
+        "peer-data-[variant=sidebar][data-collapsible=icon][data-state=collapsed]:peer-data-[side=left]:md:ml-[var(--sidebar-width-icon)]",
+        "peer-data-[variant=sidebar][data-collapsible=icon][data-state=collapsed]:peer-data-[side=right]:md:mr-[var(--sidebar-width-icon)]",
+        "peer-data-[variant=inset][data-side=left]:md:ml-[var(--sidebar-width)]",
+        "peer-data-[variant=inset][data-side=right]:md:mr-[var(--sidebar-width)]",
+        "peer-data-[variant=inset][data-collapsible=icon][data-state=collapsed]:peer-data-[side=left]:md:ml-[calc(var(--sidebar-width-icon)_+_theme(spacing.4)_+2px)]",
+        "peer-data-[variant=inset][data-collapsible=icon][data-state=collapsed]:peer-data-[side=right]:md:mr-[calc(var(--sidebar-width-icon)_+_theme(spacing.4)_+2px)]",
         className
       )}
       {...props}
