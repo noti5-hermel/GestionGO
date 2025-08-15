@@ -9,10 +9,21 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
-import { PlusCircle } from "lucide-react"
+import { PlusCircle, Pencil, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
@@ -49,6 +60,7 @@ export default function ShipmentsPage() {
   const [auxiliares, setAuxiliares] = useState<User[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingShipment, setEditingShipment] = useState<Shipment | null>(null)
   const { toast } = useToast()
 
   const form = useForm<z.infer<typeof shipmentSchema>>({
@@ -76,6 +88,28 @@ export default function ShipmentsPage() {
     fetchUsersByRole()
     fetchAllUsers()
   }, [])
+
+  useEffect(() => {
+    if (editingShipment) {
+      form.reset(editingShipment)
+    } else {
+      form.reset({
+        id_ruta: "",
+        id_motorista: "",
+        id_auxiliar: "",
+        total_contado: 0,
+        total_credito: 0,
+        total_general: 0,
+        fecha_despacho: new Date().toISOString().split('T')[0],
+        bodega: false,
+        reparto: false,
+        facturacion: false,
+        asist_admon: false,
+        cobros: false,
+        gerente_admon: false,
+      })
+    }
+  }, [editingShipment, form])
 
   const fetchAllUsers = async () => {
     const { data, error } = await supabase.from('usuario').select('id_user, name');
@@ -107,8 +141,8 @@ export default function ShipmentsPage() {
             description: "No se pudieron cargar las rutas.",
             variant: "destructive",
         });
-    } else {
-        setRoutes(data || []);
+    } else if (data) {
+        setRoutes(data);
     }
   };
 
@@ -142,17 +176,30 @@ export default function ShipmentsPage() {
         .eq('id_rol', 3);
 
     if (auxiliaresError) {
-        toast({ title: "Error al cargar auxiliares", description: auxiliaresError.message, variant: "destructive" });
+        toast({ title: "Error al cargar auxiliares", description: `No se pudieron cargar los auxiliares: ${auxiliaresError.message}`, variant: "destructive" });
     } else {
         setAuxiliares(auxiliaresData || []);
     }
   }
 
   const onSubmit = async (values: z.infer<typeof shipmentSchema>) => {
-    const { error } = await supabase
-      .from('despacho')
-      .insert([values])
-      .select()
+    let error;
+
+    if (editingShipment) {
+      const { error: updateError } = await supabase
+        .from('despacho')
+        .update(values)
+        .eq('id_despacho', editingShipment.id_despacho)
+        .select()
+      error = updateError;
+    } else {
+       const { error: insertError } = await supabase
+        .from('despacho')
+        .insert([values])
+        .select()
+      error = insertError;
+    }
+
 
     if (error) {
       toast({
@@ -163,12 +210,64 @@ export default function ShipmentsPage() {
     } else {
       toast({
         title: "Éxito",
-        description: "Despacho guardado correctamente.",
+        description: `Despacho ${editingShipment ? 'actualizado' : 'guardado'} correctamente.`,
       })
       fetchShipments()
-      form.reset()
-      setIsDialogOpen(false)
+      handleCloseDialog()
     }
+  }
+
+  const handleDelete = async (shipmentId: string) => {
+    const { error } = await supabase
+      .from('despacho')
+      .delete()
+      .eq('id_despacho', shipmentId)
+
+    if (error) {
+      toast({
+        title: "Error al eliminar",
+        description: error.message,
+        variant: "destructive",
+      })
+    } else {
+      toast({
+        title: "Éxito",
+        description: "Despacho eliminado correctamente.",
+      })
+      fetchShipments()
+    }
+  }
+  
+  const handleEdit = (shipment: Shipment) => {
+    setEditingShipment(shipment);
+    setIsDialogOpen(true);
+  }
+
+  const handleOpenDialog = (open: boolean) => {
+    setIsDialogOpen(open);
+    if (!open) {
+      setEditingShipment(null);
+    }
+  };
+
+  const handleCloseDialog = () => {
+    setEditingShipment(null);
+    form.reset({
+        id_ruta: "",
+        id_motorista: "",
+        id_auxiliar: "",
+        total_contado: 0,
+        total_credito: 0,
+        total_general: 0,
+        fecha_despacho: new Date().toISOString().split('T')[0],
+        bodega: false,
+        reparto: false,
+        facturacion: false,
+        asist_admon: false,
+        cobros: false,
+        gerente_admon: false,
+    });
+    setIsDialogOpen(false);
   }
 
   const getRouteDescription = (routeId: string) => {
@@ -188,17 +287,17 @@ export default function ShipmentsPage() {
             <CardTitle>Despachos</CardTitle>
             <CardDescription>Gestione la información de sus envíos y estados.</CardDescription>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <Dialog open={isDialogOpen} onOpenChange={handleOpenDialog}>
             <DialogTrigger asChild>
-              <Button>
+              <Button onClick={() => { setEditingShipment(null); form.reset(); setIsDialogOpen(true); }}>
                 <PlusCircle className="mr-2 h-4 w-4" /> Nuevo Despacho
               </Button>
             </DialogTrigger>
             <DialogContent className="max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Crear Nuevo Despacho</DialogTitle>
+                <DialogTitle>{editingShipment ? 'Editar Despacho' : 'Crear Nuevo Despacho'}</DialogTitle>
                 <DialogDescription>
-                  Complete todos los campos para registrar un nuevo despacho.
+                  {editingShipment ? 'Modifique los detalles del despacho.' : 'Complete todos los campos para registrar un nuevo despacho.'}
                 </DialogDescription>
               </DialogHeader>
               <Form {...form}>
@@ -450,9 +549,9 @@ export default function ShipmentsPage() {
                   </Card>
                   <DialogFooter>
                     <DialogClose asChild>
-                      <Button type="button" variant="secondary">Cancelar</Button>
+                      <Button type="button" variant="secondary" onClick={handleCloseDialog}>Cancelar</Button>
                     </DialogClose>
-                    <Button type="submit">Guardar Despacho</Button>
+                    <Button type="submit">{editingShipment ? 'Guardar Cambios' : 'Guardar Despacho'}</Button>
                   </DialogFooter>
                 </form>
               </Form>
@@ -479,6 +578,7 @@ export default function ShipmentsPage() {
                 <TableHead>Asist. Admon.</TableHead>
                 <TableHead>Cobros</TableHead>
                 <TableHead>Gerente Admon.</TableHead>
+                <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -498,6 +598,32 @@ export default function ShipmentsPage() {
                   <TableCell><StatusBadge checked={shipment.asist_admon} /></TableCell>
                   <TableCell><StatusBadge checked={shipment.cobros} /></TableCell>
                   <TableCell><StatusBadge checked={shipment.gerente_admon} /></TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="ghost" size="icon" onClick={() => handleEdit(shipment)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon">
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Esta acción no se puede deshacer. Esto eliminará permanentemente el despacho.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleDelete(shipment.id_despacho)}>
+                            Eliminar
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -512,3 +638,5 @@ export default function ShipmentsPage() {
     </Card>
   )
 }
+
+    
