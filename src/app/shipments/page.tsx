@@ -16,9 +16,9 @@ import { PlusCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 const shipmentSchema = z.object({
-  id_despacho: z.string().min(1, "ID de despacho es requerido."),
   id_ruta: z.string().min(1, "ID de ruta es requerido."),
   id_motorista: z.string().min(1, "ID de motorista es requerido."),
   id_auxiliar: z.string().min(1, "ID de auxiliar es requerido."),
@@ -34,7 +34,8 @@ const shipmentSchema = z.object({
   gerente_admon: z.boolean().default(false),
 })
 
-type Shipment = z.infer<typeof shipmentSchema>
+type Shipment = z.infer<typeof shipmentSchema> & { id_despacho: string }
+type Route = { id_ruta: string; ruta_desc: string }
 
 const StatusBadge = ({ checked }: { checked: boolean }) => {
   return <Badge variant={checked ? "default" : "outline"}>{checked ? "OK" : "Pend."}</Badge>
@@ -42,13 +43,13 @@ const StatusBadge = ({ checked }: { checked: boolean }) => {
 
 export default function ShipmentsPage() {
   const [shipments, setShipments] = useState<Shipment[]>([])
+  const [routes, setRoutes] = useState<Route[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const { toast } = useToast()
 
-  const form = useForm<Shipment>({
+  const form = useForm<z.infer<typeof shipmentSchema>>({
     resolver: zodResolver(shipmentSchema),
     defaultValues: {
-      id_despacho: "",
       id_ruta: "",
       id_motorista: "",
       id_auxiliar: "",
@@ -67,6 +68,7 @@ export default function ShipmentsPage() {
 
   useEffect(() => {
     fetchShipments()
+    fetchRoutes()
   }, [])
 
   const fetchShipments = async () => {
@@ -82,7 +84,20 @@ export default function ShipmentsPage() {
     }
   }
 
-  const onSubmit = async (values: Shipment) => {
+  const fetchRoutes = async () => {
+    const { data, error } = await supabase.from('rutas').select('id_ruta, ruta_desc');
+    if (error) {
+        toast({
+            title: "Error",
+            description: "No se pudieron cargar las rutas.",
+            variant: "destructive",
+        });
+    } else {
+        setRoutes(data || []);
+    }
+  };
+
+  const onSubmit = async (values: z.infer<typeof shipmentSchema>) => {
     const { error } = await supabase
       .from('despacho')
       .insert([values])
@@ -103,6 +118,10 @@ export default function ShipmentsPage() {
       form.reset()
       setIsDialogOpen(false)
     }
+  }
+
+  const getRouteDescription = (routeId: string) => {
+    return routes.find(route => route.id_ruta === routeId)?.ruta_desc || routeId;
   }
 
   return (
@@ -131,26 +150,24 @@ export default function ShipmentsPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
-                      name="id_despacho"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>ID Despacho</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Ej: DS-003" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
                       name="id_ruta"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>ID Ruta</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Ej: Ruta-Central" {...field} />
-                          </FormControl>
+                          <FormLabel>Ruta</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <FormControl>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Seleccione una ruta" />
+                                    </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                    {routes.map((route) => (
+                                        <SelectItem key={route.id_ruta} value={route.id_ruta}>
+                                            {route.ruta_desc}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -360,42 +377,44 @@ export default function ShipmentsPage() {
         </div>
       </CardHeader>
       <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>ID Despacho</TableHead>
-              <TableHead>Ruta</TableHead>
-              <TableHead>Fecha</TableHead>
-              <TableHead>T. Contado</TableHead>
-              <TableHead>T. Crédito</TableHead>
-              <TableHead>T. General</TableHead>
-              <TableHead>Bodega</TableHead>
-              <TableHead>Reparto</TableHead>
-              <TableHead>Facturación</TableHead>
-              <TableHead>Asist. Admon.</TableHead>
-              <TableHead>Cobros</TableHead>
-              <TableHead>Gerente Admon.</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {shipments.map((shipment) => (
-              <TableRow key={shipment.id_despacho}>
-                <TableCell className="font-medium">{shipment.id_despacho}</TableCell>
-                <TableCell>{shipment.id_ruta}</TableCell>
-                <TableCell>{shipment.fecha_despacho}</TableCell>
-                <TableCell>${shipment.total_contado.toFixed(2)}</TableCell>
-                <TableCell>${shipment.total_credito.toFixed(2)}</TableCell>
-                <TableCell>${shipment.total_general.toFixed(2)}</TableCell>
-                <TableCell><StatusBadge checked={shipment.bodega} /></TableCell>
-                <TableCell><StatusBadge checked={shipment.reparto} /></TableCell>
-                <TableCell><StatusBadge checked={shipment.facturacion} /></TableCell>
-                <TableCell><StatusBadge checked={shipment.asist_admon} /></TableCell>
-                <TableCell><StatusBadge checked={shipment.cobros} /></TableCell>
-                <TableCell><StatusBadge checked={shipment.gerente_admon} /></TableCell>
+        <div className="relative w-full overflow-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>ID Despacho</TableHead>
+                <TableHead>Ruta</TableHead>
+                <TableHead>Fecha</TableHead>
+                <TableHead>T. Contado</TableHead>
+                <TableHead>T. Crédito</TableHead>
+                <TableHead>T. General</TableHead>
+                <TableHead>Bodega</TableHead>
+                <TableHead>Reparto</TableHead>
+                <TableHead>Facturación</TableHead>
+                <TableHead>Asist. Admon.</TableHead>
+                <TableHead>Cobros</TableHead>
+                <TableHead>Gerente Admon.</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {shipments.map((shipment) => (
+                <TableRow key={shipment.id_despacho}>
+                  <TableCell className="font-medium">{shipment.id_despacho}</TableCell>
+                  <TableCell>{getRouteDescription(shipment.id_ruta)}</TableCell>
+                  <TableCell>{shipment.fecha_despacho}</TableCell>
+                  <TableCell>${shipment.total_contado.toFixed(2)}</TableCell>
+                  <TableCell>${shipment.total_credito.toFixed(2)}</TableCell>
+                  <TableCell>${shipment.total_general.toFixed(2)}</TableCell>
+                  <TableCell><StatusBadge checked={shipment.bodega} /></TableCell>
+                  <TableCell><StatusBadge checked={shipment.reparto} /></TableCell>
+                  <TableCell><StatusBadge checked={shipment.facturacion} /></TableCell>
+                  <TableCell><StatusBadge checked={shipment.asist_admon} /></TableCell>
+                  <TableCell><StatusBadge checked={ship.cobros} /></TableCell>
+                  <TableCell><StatusBadge checked={shipment.gerente_admon} /></TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
         <CardFooter className="pt-6">
           <div className="text-xs text-muted-foreground">
             Mostrando <strong>1-{shipments.length}</strong> de <strong>{shipments.length}</strong> despachos.
@@ -405,3 +424,5 @@ export default function ShipmentsPage() {
     </Card>
   )
 }
+
+    
