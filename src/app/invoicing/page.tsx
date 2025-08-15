@@ -42,17 +42,17 @@ const invoiceSchema = z.object({
   net_to_pay: z.coerce.number().min(0, "Neto a pagar debe ser positivo."),
   term_description: z.string().min(1, "La descripción del término es requerida."),
   fecha: z.string().min(1, "La fecha es requerida."),
-  state: z.enum(["Pagada", "Pendiente", "Vencida"]),
+  state: z.string().min(1, "El estado es requerido."),
   ruta: z.string().min(1, "La ruta es requerida."),
 })
 
-// Tipo inferido del esquema de Zod
-type Invoice = z.infer<typeof invoiceSchema>
+// Tipo inferido del esquema de Zod. 'state' en la BD es booleano.
+type Invoice = Omit<z.infer<typeof invoiceSchema>, 'state'> & { state: boolean }
 type Customer = { code_customer: string, customer_name: string, ruta: string, id_term: number }
 type PaymentTerm = { id_term: number, term_desc: string }
 
-// Opciones disponibles para el estado de la factura
-const statusOptions: Invoice['state'][] = ["Pagada", "Pendiente", "Vencida"]
+// Opciones disponibles para el estado de la factura en el UI
+const statusOptions = ["Pagada", "Pendiente", "Vencida"]
 
 export default function InvoicingPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -63,7 +63,7 @@ export default function InvoicingPage() {
   const { toast } = useToast()
 
   // Configuración del formulario con react-hook-form y Zod
-  const form = useForm<Invoice>({
+  const form = useForm<z.infer<typeof invoiceSchema>>({
     resolver: zodResolver(invoiceSchema),
     defaultValues: {
       id_factura: "",
@@ -91,7 +91,11 @@ export default function InvoicingPage() {
   
   useEffect(() => {
     if (editingInvoice) {
-      form.reset(editingInvoice);
+      form.reset({
+          ...editingInvoice,
+          fecha: editingInvoice.fecha ? new Date(editingInvoice.fecha).toISOString().split('T')[0] : '',
+          state: getStatusLabel(editingInvoice.state, editingInvoice.fecha)
+      });
     } else {
       form.reset({
         id_factura: "",
@@ -140,19 +144,24 @@ export default function InvoicingPage() {
   }
 
   // Función para manejar el envío del formulario
-  const onSubmit = async (values: Invoice) => {
+  const onSubmit = async (values: z.infer<typeof invoiceSchema>) => {
     let error;
+
+    const dataToSubmit = {
+        ...values,
+        state: values.state === 'Pagada'
+    };
 
     if (editingInvoice) {
       const { error: updateError } = await supabase
         .from('facturacion')
-        .update(values)
+        .update(dataToSubmit)
         .eq('id_factura', editingInvoice.id_factura)
       error = updateError;
     } else {
       const { error: insertError } = await supabase
         .from('facturacion')
-        .insert([values])
+        .insert([dataToSubmit])
       error = insertError;
     }
 
@@ -209,9 +218,17 @@ export default function InvoicingPage() {
     }
   }
 
+  const getStatusLabel = (status: boolean, date: string): "Pagada" | "Pendiente" | "Vencida" => {
+    if (status) return "Pagada";
+    const dueDate = new Date(date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Ignorar la hora para la comparación
+    dueDate.setHours(0,0,0,0);
+    return dueDate < today ? "Vencida" : "Pendiente";
+  };
 
   // Función para obtener la variante del Badge según el estado
-  const getBadgeVariant = (status: Invoice['state']) => {
+  const getBadgeVariant = (status: "Pagada" | "Pendiente" | "Vencida") => {
     switch (status) {
       case "Pagada":
         return "default"
@@ -436,7 +453,7 @@ export default function InvoicingPage() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Estado</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="Seleccione un estado" />
@@ -488,48 +505,51 @@ export default function InvoicingPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {invoices.map((invoice) => (
-                <TableRow key={invoice.id_factura}>
-                  <TableCell className="font-medium">{invoice.id_factura}</TableCell>
-                  <TableCell>{invoice.invoice_number}</TableCell>
-                  <TableCell>{invoice.tax_id_number}</TableCell>
-                  <TableCell>{invoice.ruta}</TableCell>
-                  <TableCell>${invoice.subtotal.toFixed(2)}</TableCell>
-                  <TableCell>${invoice.total_sale.toFixed(2)}</TableCell>
-                  <TableCell>${invoice.grand_total.toFixed(2)}</TableCell>
-                  <TableCell>${invoice.payment.toFixed(2)}</TableCell>
-                  <TableCell>${invoice.net_to_pay.toFixed(2)}</TableCell>
-                  <TableCell>{invoice.term_description}</TableCell>
-                  <TableCell>{invoice.fecha}</TableCell>
-                  <TableCell><Badge variant={getBadgeVariant(invoice.state)}>{invoice.state}</Badge></TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => handleEdit(invoice)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Esta acción no se puede deshacer. Esto eliminará permanentemente la factura.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDelete(invoice.id_factura)}>
-                            Eliminar
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {invoices.map((invoice) => {
+                const statusLabel = getStatusLabel(invoice.state, invoice.fecha);
+                return (
+                  <TableRow key={invoice.id_factura}>
+                    <TableCell className="font-medium">{invoice.id_factura}</TableCell>
+                    <TableCell>{invoice.invoice_number}</TableCell>
+                    <TableCell>{invoice.tax_id_number}</TableCell>
+                    <TableCell>{invoice.ruta}</TableCell>
+                    <TableCell>${invoice.subtotal.toFixed(2)}</TableCell>
+                    <TableCell>${invoice.total_sale.toFixed(2)}</TableCell>
+                    <TableCell>${invoice.grand_total.toFixed(2)}</TableCell>
+                    <TableCell>${invoice.payment.toFixed(2)}</TableCell>
+                    <TableCell>${invoice.net_to_pay.toFixed(2)}</TableCell>
+                    <TableCell>{invoice.term_description}</TableCell>
+                    <TableCell>{new Date(invoice.fecha).toLocaleDateString()}</TableCell>
+                    <TableCell><Badge variant={getBadgeVariant(statusLabel)}>{statusLabel}</Badge></TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="icon" onClick={() => handleEdit(invoice)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Esta acción no se puede deshacer. Esto eliminará permanentemente la factura.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDelete(invoice.id_factura)}>
+                              Eliminar
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
             </TableBody>
           </Table>
         </div>
