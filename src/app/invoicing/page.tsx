@@ -48,7 +48,8 @@ const invoiceSchema = z.object({
 
 // Tipo inferido del esquema de Zod
 type Invoice = z.infer<typeof invoiceSchema>
-type Customer = { code_customer: string, customer_name: string, ruta: string }
+type Customer = { code_customer: string, customer_name: string, ruta: string, id_term: number }
+type PaymentTerm = { id_term: number, term_desc: string }
 
 // Opciones disponibles para el estado de la factura
 const statusOptions: Invoice['state'][] = ["Pagada", "Pendiente", "Vencida"]
@@ -56,6 +57,7 @@ const statusOptions: Invoice['state'][] = ["Pagada", "Pendiente", "Vencida"]
 export default function InvoicingPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
+  const [paymentTerms, setPaymentTerms] = useState<PaymentTerm[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null)
   const { toast } = useToast()
@@ -84,6 +86,7 @@ export default function InvoicingPage() {
   useEffect(() => {
     fetchInvoices()
     fetchCustomers()
+    fetchPaymentTerms()
   }, [])
   
   useEffect(() => {
@@ -119,11 +122,20 @@ export default function InvoicingPage() {
   }
 
   const fetchCustomers = async () => {
-    const { data, error } = await supabase.from('customer').select('code_customer, customer_name, ruta')
+    const { data, error } = await supabase.from('customer').select('code_customer, customer_name, ruta, id_term')
     if (error) {
       toast({ title: "Error", description: "No se pudieron cargar los clientes.", variant: "destructive" })
     } else {
       setCustomers(data as Customer[])
+    }
+  }
+  
+  const fetchPaymentTerms = async () => {
+    const { data, error } = await supabase.from('terminos_pago').select('id_term, term_desc')
+    if (error) {
+      toast({ title: "Error", description: "No se pudieron cargar los términos de pago.", variant: "destructive" })
+    } else {
+      setPaymentTerms(data as PaymentTerm[])
     }
   }
 
@@ -190,6 +202,10 @@ export default function InvoicingPage() {
     if (customer) {
       form.setValue('customer_name', customer.customer_name);
       form.setValue('ruta', customer.ruta || '');
+      const term = paymentTerms.find(t => t.id_term === customer.id_term);
+      if (term) {
+        form.setValue('term_description', term.term_desc);
+      }
     }
   }
 
@@ -395,7 +411,7 @@ export default function InvoicingPage() {
                         <FormItem>
                           <FormLabel>Descripción Término</FormLabel>
                           <FormControl>
-                            <Input placeholder="Ej: Pago a 30 días" {...field} />
+                            <Input placeholder="Ej: Pago a 30 días" {...field} readOnly/>
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -526,5 +542,3 @@ export default function InvoicingPage() {
     </Card>
   )
 }
-
-    
