@@ -121,7 +121,7 @@ export default function ShipmentsPage() {
 
     if (motoristaRolesError) {
       toast({ title: "Error", description: "No se pudo encontrar el rol de motorista.", variant: "destructive" });
-    } else if (motoristaRoles.length > 0) {
+    } else if (motoristaRoles && motoristaRoles.length > 0) {
       const motoristaRoleIds = motoristaRoles.map(r => r.id_rol);
       const { data: motoristasData, error: motoristasError } = await supabase
         .from('usuario')
@@ -139,11 +139,11 @@ export default function ShipmentsPage() {
     const { data: auxiliarRoles, error: auxiliarRolesError } = await supabase
       .from('rol')
       .select('id_rol')
-      .ilike('rol_desc', '%auxiliar%');
+      .ilike('rol_desc', '%Auxiliar%');
       
     if (auxiliarRolesError) {
         toast({ title: "Error", description: "No se pudo encontrar el rol de auxiliar.", variant: "destructive" });
-    } else if (auxiliarRoles.length > 0) {
+    } else if (auxiliarRoles && auxiliarRoles.length > 0) {
         const auxiliarRoleIds = auxiliarRoles.map(r => r.id_rol);
         const { data: auxiliaresData, error: auxiliaresError } = await supabase
         .from('usuario')
@@ -499,8 +499,8 @@ export default function ShipmentsPage() {
                   <TableCell><StatusBadge checked={shipment.reparto} /></TableCell>
                   <TableCell><StatusBadge checked={shipment.facturacion} /></TableCell>
                   <TableCell><StatusBadge checked={shipment.asist_admon} /></TableCell>
-                  <TableCell><StatusBadge checked={ship.cobros} /></TableCell>
-                  <TableCell><StatusBadge checked={ship.gerente_admon} /></TableCell>
+                  <TableCell><StatusBadge checked={shipment.cobros} /></TableCell>
+                  <TableCell><StatusBadge checked={shipment.gerente_admon} /></TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -515,5 +515,3 @@ export default function ShipmentsPage() {
     </Card>
   )
 }
-
-    
