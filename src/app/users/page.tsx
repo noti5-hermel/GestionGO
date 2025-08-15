@@ -28,6 +28,7 @@ import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 
 const userSchema = z.object({
+  id_usuario: z.string().optional(),
   name: z.string().min(1, { message: "El nombre es requerido." }),
   correo: z.string().email({ message: "Debe ser un correo electrónico válido." }),
   contraseña: z.string().min(6, { message: "La contraseña debe tener al menos 6 caracteres." }).optional().or(z.literal('')),
@@ -74,6 +75,7 @@ export default function UsersPage() {
   useEffect(() => {
     if (editingUser) {
       form.reset({
+        id_usuario: editingUser.id_usuario,
         name: editingUser.name,
         correo: editingUser.correo,
         id_rol: String(editingUser.id_rol),
@@ -124,6 +126,10 @@ export default function UsersPage() {
         correo: values.correo, 
         id_rol: parseInt(String(values.id_rol), 10) 
     };
+    
+    if (values.id_usuario) {
+      userData.id_usuario = values.id_usuario;
+    }
 
     if (values.contraseña) {
         userData.contraseña = values.contraseña;
@@ -302,53 +308,55 @@ export default function UsersPage() {
         </div>
       </CardHeader>
       <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nombre</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Rol</TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {users.map((user, index) => (
-              <TableRow key={user.id_usuario || index}>
-                <TableCell>
-                  <span className="font-medium">{user.name}</span>
-                </TableCell>
-                <TableCell>{user.correo}</TableCell>
-                <TableCell>{getRoleName(user.id_rol)}</TableCell>
-                <TableCell className="text-right">
-                  <Button variant="ghost" size="icon" onClick={() => handleEdit(user)}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="icon">
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Esta acción no se puede deshacer. Esto eliminará permanentemente el usuario.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleDelete(user.id_usuario)}>
-                          Eliminar
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </TableCell>
+        <div className="relative w-full overflow-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nombre</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Rol</TableHead>
+                <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {users.map((user, index) => (
+                <TableRow key={user.id_usuario || index}>
+                  <TableCell>
+                    <span className="font-medium">{user.name}</span>
+                  </TableCell>
+                  <TableCell>{user.correo}</TableCell>
+                  <TableCell>{getRoleName(user.id_rol)}</TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="ghost" size="icon" onClick={() => handleEdit(user)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon">
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Esta acción no se puede deshacer. Esto eliminará permanentemente el usuario.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleDelete(user.id_usuario)}>
+                            Eliminar
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
         <CardFooter className="pt-6">
           <div className="text-xs text-muted-foreground">
             Mostrando <strong>1-{users.length}</strong> de <strong>{users.length}</strong> usuarios.
