@@ -357,14 +357,12 @@ export default function UsersPage() {
             </TableBody>
           </Table>
         </div>
-        <CardFooter className="pt-6">
-          <div className="text-xs text-muted-foreground">
-            Mostrando <strong>1-{users.length}</strong> de <strong>{users.length}</strong> usuarios.
-          </div>
-        </CardFooter>
       </CardContent>
+      <CardFooter className="pt-6">
+        <div className="text-xs text-muted-foreground">
+          Mostrando <strong>1-{users.length}</strong> de <strong>{users.length}</strong> usuarios.
+        </div>
+      </CardFooter>
     </Card>
   )
 }
-
-    

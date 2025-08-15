@@ -260,14 +260,12 @@ export default function RoutesPage() {
             </TableBody>
           </Table>
         </div>
-        <CardFooter className="pt-6">
-          <div className="text-xs text-muted-foreground">
-            Mostrando <strong>1-{routes.length}</strong> de <strong>{routes.length}</strong> rutas.
-          </div>
-        </CardFooter>
       </CardContent>
+      <CardFooter className="pt-6">
+        <div className="text-xs text-muted-foreground">
+          Mostrando <strong>1-{routes.length}</strong> de <strong>{routes.length}</strong> rutas.
+        </div>
+      </CardFooter>
     </Card>
   )
 }
-
-    

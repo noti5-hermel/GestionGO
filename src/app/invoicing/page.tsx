@@ -565,14 +565,12 @@ export default function InvoicingPage() {
             </TableBody>
           </Table>
         </div>
-        <CardFooter className="pt-6">
-          <div className="text-xs text-muted-foreground">
-            Mostrando <strong>1-{invoices.length}</strong> de <strong>{invoices.length}</strong> facturas.
-          </div>
-        </CardFooter>
       </CardContent>
+      <CardFooter className="pt-6">
+        <div className="text-xs text-muted-foreground">
+          Mostrando <strong>1-{invoices.length}</strong> de <strong>{invoices.length}</strong> facturas.
+        </div>
+      </CardFooter>
     </Card>
   )
 }
-
-    

@@ -260,14 +260,12 @@ export default function VehiclesPage() {
             </TableBody>
           </Table>
         </div>
-        <CardFooter className="pt-6">
-          <div className="text-xs text-muted-foreground">
-            Mostrando <strong>1-{vehicles.length}</strong> de <strong>{vehicles.length}</strong> vehículos.
-          </div>
-        </CardFooter>
       </CardContent>
+      <CardFooter className="pt-6">
+        <div className="text-xs text-muted-foreground">
+          Mostrando <strong>1-{vehicles.length}</strong> de <strong>{vehicles.length}</strong> vehículos.
+        </div>
+      </CardFooter>
     </Card>
   )
 }
-
-    

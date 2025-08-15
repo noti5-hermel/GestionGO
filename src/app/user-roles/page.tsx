@@ -273,14 +273,12 @@ export default function UserRolesPage() {
             </TableBody>
           </Table>
         </div>
-        <CardFooter className="pt-6">
-          <div className="text-xs text-muted-foreground">
-            Mostrando <strong>1-{roles.length}</strong> de <strong>{roles.length}</strong> roles.
-          </div>
-        </CardFooter>
       </CardContent>
+      <CardFooter className="pt-6">
+        <div className="text-xs text-muted-foreground">
+          Mostrando <strong>1-{roles.length}</strong> de <strong>{roles.length}</strong> roles.
+        </div>
+      </CardFooter>
     </Card>
   )
 }
-
-    
