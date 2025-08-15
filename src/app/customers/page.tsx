@@ -1,7 +1,7 @@
 
 'use client'
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -13,49 +13,93 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PlusCircle } from "lucide-react"
+import { supabase } from "@/lib/supabase"
+import { useToast } from "@/hooks/use-toast"
 
 const customerSchema = z.object({
-  code: z.string().min(1, { message: "El código es requerido." }),
-  name: z.string().min(1, { message: "El nombre es requerido." }),
-  taxCode: z.string().min(1, { message: "El código de impuesto es requerido." }),
-  paymentTermId: z.string().min(1, { message: "El término de pago es requerido." }),
-  routeNumber: z.string().min(1, { message: "El número de ruta es requerido." }),
-  geofence: z.string().min(1, { message: "La geocerca es requerida." }),
+  code_customer: z.string().min(1, { message: "El código es requerido." }),
+  customer_name: z.string().min(1, { message: "El nombre es requerido." }),
+  codigo_impuesto: z.string().min(1, { message: "El código de impuesto es requerido." }),
+  id_term: z.string().min(1, { message: "El término de pago es requerido." }),
+  ruta: z.string().min(1, { message: "El número de ruta es requerido." }),
 })
 
 type Customer = z.infer<typeof customerSchema>
 
-const initialCustomers: Customer[] = [
-  { code: "C001", name: "Juan Pérez", taxCode: "JP123", paymentTermId: "Neto-30", routeNumber: "Ruta-Norte", geofence: "Zona A" },
-  { code: "C002", name: "Maria García", taxCode: "MG456", paymentTermId: "Pago-Inmediato", routeNumber: "Ruta-Sur", geofence: "Zona B" },
-]
-
-const paymentTerms = [
-  { id: "Neto-30", description: "Pago requerido en 30 días." },
-  { id: "Neto-60", description: "Pago requerido en 60 días." },
-  { id: "Pago-Inmediato", description: "Pago requerido al momento de la entrega." },
-]
+type PaymentTerm = {
+  id_term: string
+  term_desc: string
+}
 
 export default function CustomersPage() {
-  const [customers, setCustomers] = useState<Customer[]>(initialCustomers)
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [paymentTerms, setPaymentTerms] = useState<PaymentTerm[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const { toast } = useToast()
+
+  useEffect(() => {
+    fetchCustomers()
+    fetchPaymentTerms()
+  }, [])
+
+  const fetchCustomers = async () => {
+    const { data, error } = await supabase.from('customer').select('code_customer,customer_name,codigo_impuesto,id_term,ruta')
+    if (error) {
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los clientes.",
+        variant: "destructive",
+      })
+    } else {
+      setCustomers(data as Customer[])
+    }
+  }
+
+  const fetchPaymentTerms = async () => {
+    const { data, error } = await supabase.from('terminos_pago').select('id_term, term_desc')
+    if (error) {
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los términos de pago.",
+        variant: "destructive",
+      })
+    } else {
+      setPaymentTerms(data as PaymentTerm[])
+    }
+  }
 
   const form = useForm<Customer>({
     resolver: zodResolver(customerSchema),
     defaultValues: {
-      code: "",
-      name: "",
-      taxCode: "",
-      paymentTermId: "",
-      routeNumber: "",
-      geofence: "",
+      code_customer: "",
+      customer_name: "",
+      codigo_impuesto: "",
+      id_term: "",
+      ruta: "",
     },
   })
 
-  const onSubmit = (values: Customer) => {
-    setCustomers([...customers, values])
-    form.reset()
-    setIsDialogOpen(false)
+  const onSubmit = async (values: Customer) => {
+    const { error } = await supabase
+      .from('customer')
+      .insert([values])
+      .select()
+
+    if (error) {
+      toast({
+        title: "Error al guardar",
+        description: error.message,
+        variant: "destructive",
+      })
+    } else {
+      toast({
+        title: "Éxito",
+        description: "Cliente guardado correctamente.",
+      })
+      fetchCustomers()
+      form.reset()
+      setIsDialogOpen(false)
+    }
   }
 
   return (
@@ -83,7 +127,7 @@ export default function CustomersPage() {
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                   <FormField
                     control={form.control}
-                    name="code"
+                    name="code_customer"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Código Cliente</FormLabel>
@@ -96,7 +140,7 @@ export default function CustomersPage() {
                   />
                   <FormField
                     control={form.control}
-                    name="name"
+                    name="customer_name"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Nombre</FormLabel>
@@ -109,7 +153,7 @@ export default function CustomersPage() {
                   />
                   <FormField
                     control={form.control}
-                    name="taxCode"
+                    name="codigo_impuesto"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Código de Impuesto</FormLabel>
@@ -122,10 +166,10 @@ export default function CustomersPage() {
                   />
                   <FormField
                     control={form.control}
-                    name="paymentTermId"
+                    name="id_term"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>ID Término de Pago</FormLabel>
+                        <FormLabel>Término de Pago</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
                             <SelectTrigger>
@@ -134,8 +178,8 @@ export default function CustomersPage() {
                           </FormControl>
                           <SelectContent>
                             {paymentTerms.map((term) => (
-                              <SelectItem key={term.id} value={term.id}>
-                                {term.id}
+                              <SelectItem key={term.id_term} value={term.id_term}>
+                                {term.term_desc}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -146,25 +190,12 @@ export default function CustomersPage() {
                   />
                   <FormField
                     control={form.control}
-                    name="routeNumber"
+                    name="ruta"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Número de Ruta</FormLabel>
+                        <FormLabel>Ruta</FormLabel>
                         <FormControl>
                           <Input placeholder="Ej: Ruta-Local" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="geofence"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Geocerca</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Ej: Zona C" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -190,19 +221,17 @@ export default function CustomersPage() {
               <TableHead>Nombre</TableHead>
               <TableHead>Cód. Impuesto</TableHead>
               <TableHead>Térm. Pago</TableHead>
-              <TableHead>Nro. Ruta</TableHead>
-              <TableHead>Geocerca</TableHead>
+              <TableHead>Ruta</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {customers.map((customer) => (
-              <TableRow key={customer.code}>
-                <TableCell className="font-medium">{customer.code}</TableCell>
-                <TableCell>{customer.name}</TableCell>
-                <TableCell>{customer.taxCode}</TableCell>
-                <TableCell>{customer.paymentTermId}</TableCell>
-                <TableCell>{customer.routeNumber}</TableCell>
-                <TableCell>{customer.geofence}</TableCell>
+              <TableRow key={customer.code_customer}>
+                <TableCell className="font-medium">{customer.code_customer}</TableCell>
+                <TableCell>{customer.customer_name}</TableCell>
+                <TableCell>{customer.codigo_impuesto}</TableCell>
+                <TableCell>{customer.id_term}</TableCell>
+                <TableCell>{customer.ruta}</TableCell>
               </TableRow>
             ))}
           </TableBody>
