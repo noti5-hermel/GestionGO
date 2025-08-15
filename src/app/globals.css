@@ -85,6 +85,6 @@
 
 @layer utilities {
   .scroll-fade-h {
-    mask-image: linear-gradient(to right, hsl(var(--card)) 85%, transparent);
+    box-shadow: inset -2rem 0 1.5rem -1rem hsl(var(--card));
   }
 }
