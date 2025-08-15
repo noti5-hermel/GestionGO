@@ -82,3 +82,9 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  .scroll-fade-h {
+    mask-image: linear-gradient(to right, hsl(var(--card)) 85%, transparent);
+  }
+}

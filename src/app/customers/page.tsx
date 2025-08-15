@@ -342,7 +342,7 @@ export default function CustomersPage() {
         </div>
       </CardHeader>
       <CardContent>
-        <div className="relative w-full overflow-auto">
+        <div className="relative w-full overflow-auto scroll-fade-h">
           <Table>
             <TableHeader>
               <TableRow>

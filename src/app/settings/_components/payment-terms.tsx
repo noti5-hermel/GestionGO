@@ -209,7 +209,7 @@ export default function PaymentTerms() {
             </DialogContent>
           </Dialog>
         </div>
-        <div className="relative w-full overflow-auto">
+        <div className="relative w-full overflow-auto scroll-fade-h">
           <Table>
             <TableHeader>
               <TableRow>
