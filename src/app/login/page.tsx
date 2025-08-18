@@ -1,7 +1,7 @@
 
 'use client'
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -33,8 +33,28 @@ function hashPassword(password: string): string {
 export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [name, setName] = useState("")
+  const [showFirstUserForm, setShowFirstUserForm] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
+
+  useEffect(() => {
+    const checkUsers = async () => {
+      const { count, error } = await supabase
+        .from('usuario')
+        .select('*', { count: 'exact', head: true })
+
+      if (error) {
+        console.error("Error al verificar usuarios:", error)
+        return;
+      }
+      
+      if (count === 0) {
+        setShowFirstUserForm(true);
+      }
+    }
+    checkUsers()
+  }, [])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -63,8 +83,7 @@ export default function LoginPage() {
         title: "¡Éxito!",
         description: "Coincidencia encontrada. ¡Bienvenido!",
       })
-      // Opcional: Redirigir al usuario después de un inicio de sesión exitoso
-      // router.push("/") 
+       router.push("/") 
     } else {
       toast({
         title: "Error de autenticación",
@@ -72,6 +91,95 @@ export default function LoginPage() {
         variant: "destructive",
       })
     }
+  }
+
+  const handleFirstUserSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || !email || !password) {
+        toast({ title: "Error", description: "Todos los campos son requeridos.", variant: "destructive" });
+        return;
+    }
+    
+    const hashedPassword = hashPassword(password);
+    
+    // Asumimos que el rol de Admin tiene id_rol = 1
+    const { data, error } = await supabase
+        .from('usuario')
+        .insert([{ name, correo: email, contraseña: hashedPassword, id_rol: 1 }])
+        .select()
+        .single();
+        
+    if (error) {
+        toast({ title: "Error al crear usuario", description: error.message, variant: "destructive" });
+    } else {
+        toast({ title: "¡Bienvenido!", description: "Primer usuario administrador creado. Ahora puede iniciar sesión." });
+        setShowFirstUserForm(false);
+        // Reset de los campos
+        setName("");
+        setEmail("");
+        setPassword("");
+    }
+  }
+
+  if (showFirstUserForm) {
+    return (
+        <div className="flex flex-col items-center justify-center h-full">
+            <Card className="w-full max-w-sm">
+            <CardHeader className="text-center">
+                <Image
+                    src="/gestion-go.120Z.png"
+                    alt="GestiónGo Logo"
+                    width={80}
+                    height={80}
+                    className="h-20 w-20 mx-auto mb-4"
+                />
+                <CardTitle className="text-2xl">Crear Primer Usuario</CardTitle>
+                <CardDescription>
+                    No hay usuarios en el sistema. Cree el primer usuario administrador.
+                </CardDescription>
+            </CardHeader>
+            <form onSubmit={handleFirstUserSubmit}>
+                <CardContent className="grid gap-4">
+                <div className="grid gap-2">
+                    <Label htmlFor="name">Nombre Completo</Label>
+                    <Input
+                        id="name"
+                        type="text"
+                        placeholder="Su nombre"
+                        required
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                    />
+                </div>
+                <div className="grid gap-2">
+                    <Label htmlFor="email">Correo Electrónico</Label>
+                    <Input
+                        id="email"
+                        type="email"
+                        placeholder="nombre@ejemplo.com"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                    />
+                </div>
+                <div className="grid gap-2">
+                    <Label htmlFor="password">Contraseña</Label>
+                    <Input 
+                        id="password" 
+                        type="password" 
+                        required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                    />
+                </div>
+                <Button type="submit" className="w-full">
+                    Crear Usuario Administrador
+                </Button>
+                </CardContent>
+            </form>
+            </Card>
+        </div>
+    )
   }
 
   return (
