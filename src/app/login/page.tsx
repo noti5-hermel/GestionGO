@@ -21,7 +21,7 @@ import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 
 // Leemos la clave secreta desde las variables de entorno
-const HMAC_SECRET_KEY = process.env.NEXT_PUBLIC_HMAC_SECRET_KEY || "fallback-secret-key-if-not-set";
+const HMAC_SECRET_KEY = process.env.NEXT_PUBLIC_HMAC_SECRET_KEY;
 
 function hashPassword(password: string): string {
   if (!HMAC_SECRET_KEY) {
