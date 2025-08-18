@@ -147,7 +147,7 @@ export default function UsersPage() {
         const { error: updateError } = await supabase
             .from('usuario')
             .update(userData)
-            .eq('id_user', editingUser.id_user)
+            .eq('id_user', parseInt(editingUser.id_user, 10))
             .select();
         error = updateError;
     } else {
