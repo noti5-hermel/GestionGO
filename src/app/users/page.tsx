@@ -129,57 +129,84 @@ export default function UsersPage() {
     }
   }
 
-  const onSubmit = async (values: z.infer<typeof userSchema>) => {
-    let error;
-    
-    const userData: any = { 
-      name: values.name, 
-      correo: values.correo, 
-      id_rol: parseInt(String(values.id_rol), 10) 
+  const handleCreateUser = async (values: z.infer<typeof userSchema>) => {
+    if (!values.contraseña) {
+      toast({
+        title: "Error de validación",
+        description: "La contraseña es requerida para nuevos usuarios.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const userData = {
+      name: values.name,
+      correo: values.correo,
+      id_rol: parseInt(String(values.id_rol), 10),
+      contraseña: hashPassword(values.contraseña),
     };
-    
+
+    const { error } = await supabase.from('usuario').insert([userData]).select();
+
+    if (error) {
+      toast({
+        title: "Error al crear usuario",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Éxito",
+        description: "Usuario creado correctamente.",
+      });
+      fetchUsers();
+      handleCloseDialog();
+    }
+  };
+
+  const handleUpdateUser = async (values: z.infer<typeof userSchema>) => {
+    if (!editingUser) return;
+
+    const userData: any = {
+      name: values.name,
+      correo: values.correo,
+      id_rol: parseInt(String(values.id_rol), 10),
+    };
+
     if (values.contraseña) {
       userData.contraseña = hashPassword(values.contraseña);
     }
 
-    if (editingUser) {
-        const { error: updateError } = await supabase
-            .from('usuario')
-            .update(userData)
-            .eq('id_user', parseInt(editingUser.id_user, 10))
-            .select();
-        error = updateError;
-    } else {
-        if (!values.contraseña) {
-          toast({
-            title: "Error de validación",
-            description: "La contraseña es requerida para nuevos usuarios.",
-            variant: "destructive",
-          })
-          return;
-        }
-        const { data, error: insertError } = await supabase
-            .from('usuario')
-            .insert([userData])
-            .select()
-        error = insertError;
-    }
+    const { error } = await supabase
+      .from('usuario')
+      .update(userData)
+      .eq('id_user', parseInt(editingUser.id_user, 10))
+      .select();
 
     if (error) {
       toast({
-        title: "Error al guardar usuario",
+        title: "Error al actualizar usuario",
         description: error.message,
         variant: "destructive",
-      })
+      });
     } else {
       toast({
         title: "Éxito",
-        description: `Usuario ${editingUser ? 'actualizado' : 'creado'} correctamente.`,
-      })
-      fetchUsers()
+        description: "Usuario actualizado correctamente.",
+      });
+      fetchUsers();
       handleCloseDialog();
     }
-  }
+  };
+
+  const onSubmit = (values: z.infer<typeof userSchema>) => {
+    if (editingUser) {
+      handleUpdateUser(values);
+    } else {
+      handleCreateUser(values);
+    }
+  };
+
 
   const handleDelete = async (userId: string) => {
     const { error } = await supabase
