@@ -5,6 +5,7 @@ import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import crypto from "crypto"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -19,6 +20,13 @@ import { Label } from "@/components/ui/label"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 
+// En una aplicación real, esta clave debe estar en una variable de entorno y no en el código.
+const HMAC_SECRET_KEY = "tu-clave-secreta-debe-ser-muy-segura";
+
+function hashPassword(password: string): string {
+  return crypto.createHmac('sha256', HMAC_SECRET_KEY).update(password).digest('hex');
+}
+
 export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -28,11 +36,13 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    const hashedPassword = hashPassword(password);
+
     const { data, error } = await supabase
       .from('usuario')
       .select('*')
       .eq('correo', email)
-      .eq('contraseña', password)
+      .eq('contraseña', hashedPassword)
       .single()
 
     if (error && error.code !== 'PGRST116') { // PGRST116: no rows returned
@@ -64,13 +74,13 @@ export default function LoginPage() {
   return (
     <div className="flex flex-col items-center justify-center h-full">
       <Card className="w-full max-w-sm">
-        <CardHeader className="text-center space-y-4">
+        <CardHeader className="text-center">
             <Image
                 src="/gestion-go.120Z.png"
                 alt="GestiónGo Logo"
                 width={80}
                 height={80}
-                className="h-20 w-20 mx-auto"
+                className="h-20 w-20 mx-auto mb-4"
             />
           <CardTitle className="text-2xl">Iniciar Sesión</CardTitle>
           <CardDescription>
@@ -125,3 +135,5 @@ export default function LoginPage() {
     </div>
   )
 }
+
+    

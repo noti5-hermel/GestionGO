@@ -5,6 +5,7 @@ import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
+import crypto from "crypto"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
@@ -48,6 +49,13 @@ type User = {
 type Role = {
   id_rol: string | number
   rol_desc: string
+}
+
+// En una aplicación real, esta clave debe estar en una variable de entorno y no en el código.
+const HMAC_SECRET_KEY = "tu-clave-secreta-debe-ser-muy-segura";
+
+function hashPassword(password: string): string {
+  return crypto.createHmac('sha256', HMAC_SECRET_KEY).update(password).digest('hex');
 }
 
 export default function UsersPage() {
@@ -127,12 +135,8 @@ export default function UsersPage() {
         id_rol: parseInt(String(values.id_rol), 10) 
     };
     
-    if (values.id_user) {
-      userData.id_user = values.id_user;
-    }
-
     if (values.contraseña) {
-        userData.contraseña = values.contraseña;
+        userData.contraseña = hashPassword(values.contraseña);
     }
 
     if (editingUser) {
@@ -143,6 +147,14 @@ export default function UsersPage() {
             .select()
         error = updateError;
     } else {
+        if (!values.contraseña) {
+          toast({
+            title: "Error de validación",
+            description: "La contraseña es requerida para nuevos usuarios.",
+            variant: "destructive",
+          })
+          return;
+        }
         const { error: insertError } = await supabase
             .from('usuario')
             .insert([userData])
@@ -366,3 +378,5 @@ export default function UsersPage() {
     </Card>
   )
 }
+
+    
