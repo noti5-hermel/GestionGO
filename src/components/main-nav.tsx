@@ -13,7 +13,8 @@ import {
   Settings,
   LayoutDashboard,
   Car,
-  ClipboardList
+  ClipboardList,
+  LogIn
 } from 'lucide-react'
 import {
   SidebarMenu,
@@ -30,8 +31,12 @@ const menuItems = [
   { href: '/routes', label: 'Rutas', icon: MapIcon },
   { href: '/vehicles', label: 'Vehículos', icon: Car },
   { href: '/settings', label: 'Configuración', icon: Settings },
-  { href: '/users', label: 'Usuarios', icon: User },
-  { href: '/user-roles', label: 'Roles de Usuario', icon: Shield },
+]
+
+const adminMenuItems = [
+    { href: '/users', label: 'Usuarios', icon: User },
+    { href: '/user-roles', label: 'Roles de Usuario', icon: Shield },
+    { href: '/login', label: 'Login', icon: LogIn },
 ]
 
 export function MainNav() {
@@ -40,6 +45,23 @@ export function MainNav() {
   return (
     <SidebarMenu className="p-2">
       {menuItems.map((item) => (
+        <SidebarMenuItem key={item.href}>
+          <SidebarMenuButton
+            asChild
+            isActive={pathname.startsWith(item.href) && (item.href !== '/' || pathname === '/')}
+            tooltip={{children: item.label, side: "right", align: "center" }}
+          >
+            <Link href={item.href}>
+              <item.icon className="size-4 shrink-0" />
+              <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
+            </Link>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      ))}
+       <SidebarMenuItem>
+        <div className="my-2 border-t border-sidebar-border" />
+      </SidebarMenuItem>
+      {adminMenuItems.map((item) => (
         <SidebarMenuItem key={item.href}>
           <SidebarMenuButton
             asChild
