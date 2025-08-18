@@ -22,9 +22,8 @@ export default function LoginPage() {
             alt="GestiónGo Logo"
             width={80}
             height={80}
-            className="h-20 w-20 mb-4"
+            className="h-20 w-20"
         />
-        <h1 className="text-4xl font-bold">GestiónGo</h1>
       </div>
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
