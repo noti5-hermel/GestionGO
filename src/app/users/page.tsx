@@ -85,7 +85,7 @@ export default function UsersPage() {
   useEffect(() => {
     if (editingUser) {
       form.reset({
-        id_user: editingUser.id_user,
+        id_user: String(editingUser.id_user),
         name: editingUser.name,
         correo: editingUser.correo,
         id_rol: String(editingUser.id_rol),
