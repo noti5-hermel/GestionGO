@@ -40,7 +40,7 @@ const shipmentInvoiceSchema = z.object({
   state: z.boolean(),
 })
 
-type ShipmentInvoice = z.infer<typeof shipmentInvoiceSchema> & { id_facturacion_despacho: number }
+type ShipmentInvoice = z.infer<typeof shipmentInvoiceSchema> & { id_fac_desp: number }
 type Invoice = { id_factura: string, invoice_number: string | number }
 type Shipment = { id_despacho: number, fecha_despacho: string }
 
@@ -134,7 +134,7 @@ export default function ShipmentInvoicingPage() {
       const { error: updateError } = await supabase
         .from('facturacion_x_despacho')
         .update(dataToSubmit)
-        .eq('id_facturacion_despacho', editingShipmentInvoice.id_facturacion_despacho)
+        .eq('id_fac_desp', editingShipmentInvoice.id_fac_desp)
         .select()
       error = updateError;
     } else {
@@ -158,7 +158,7 @@ export default function ShipmentInvoicingPage() {
     const { error } = await supabase
       .from('facturacion_x_despacho')
       .delete()
-      .eq('id_facturacion_despacho', id)
+      .eq('id_fac_desp', id)
 
     if (error) {
       toast({ title: "Error al eliminar", description: error.message, variant: "destructive" })
@@ -381,7 +381,7 @@ export default function ShipmentInvoicingPage() {
             </TableHeader>
             <TableBody>
               {shipmentInvoices.map((shipmentInvoice) => (
-                <TableRow key={`${shipmentInvoice.id_factura}-${shipmentInvoice.id_despacho}`}>
+                <TableRow key={shipmentInvoice.id_fac_desp}>
                   <TableCell className="font-medium">{getInvoiceNumber(shipmentInvoice.id_factura)}</TableCell>
                   <TableCell>{getShipmentDate(shipmentInvoice.id_despacho)}</TableCell>
                   <TableCell>{shipmentInvoice.comprobante}</TableCell>
@@ -407,7 +407,7 @@ export default function ShipmentInvoicingPage() {
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDelete(shipmentInvoice.id_facturacion_despacho)}>
+                          <AlertDialogAction onClick={() => handleDelete(shipmentInvoice.id_fac_desp)}>
                             Eliminar
                           </AlertDialogAction>
                         </AlertDialogFooter>
@@ -428,3 +428,5 @@ export default function ShipmentInvoicingPage() {
     </Card>
   )
 }
+
+    
