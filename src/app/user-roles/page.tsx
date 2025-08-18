@@ -134,11 +134,19 @@ export default function UserRolesPage() {
       .eq('id_rol', roleId)
 
     if (error) {
-      toast({
-        title: "Error al eliminar",
-        description: error.message,
-        variant: "destructive",
-      })
+      if (error.code === '23503') {
+        toast({
+          title: "Error al eliminar",
+          description: "No se puede eliminar el rol porque está asociado a otros registros.",
+          variant: "destructive",
+        })
+      } else {
+        toast({
+          title: "Error al eliminar",
+          description: error.message,
+          variant: "destructive",
+        })
+      }
     } else {
       toast({
         title: "Éxito",

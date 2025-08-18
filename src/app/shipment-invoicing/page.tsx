@@ -161,7 +161,19 @@ export default function ShipmentInvoicingPage() {
       .eq('id_fac_desp', id)
 
     if (error) {
-      toast({ title: "Error al eliminar", description: error.message, variant: "destructive" })
+      if (error.code === '23503') {
+        toast({
+          title: "Error al eliminar",
+          description: "No se puede eliminar el registro porque está asociado a otros registros.",
+          variant: "destructive",
+        })
+      } else {
+        toast({
+          title: "Error al eliminar",
+          description: error.message,
+          variant: "destructive",
+        })
+      }
     } else {
       toast({ title: "Éxito", description: "Registro eliminado correctamente." })
       fetchShipmentInvoices()
@@ -428,5 +440,3 @@ export default function ShipmentInvoicingPage() {
     </Card>
   )
 }
-
-    

@@ -121,11 +121,19 @@ export default function VehiclesPage() {
       .eq('placa_vehiculo', plate)
 
     if (error) {
-      toast({
-        title: "Error al eliminar",
-        description: error.message,
-        variant: "destructive",
-      })
+      if (error.code === '23503') {
+        toast({
+          title: "Error al eliminar",
+          description: "No se puede eliminar el vehículo porque está asociado a otros registros.",
+          variant: "destructive",
+        })
+      } else {
+        toast({
+          title: "Error al eliminar",
+          description: error.message,
+          variant: "destructive",
+        })
+      }
     } else {
       toast({
         title: "Éxito",

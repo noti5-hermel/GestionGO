@@ -200,7 +200,19 @@ export default function InvoicingPage() {
       .eq('id_factura', invoiceId)
 
     if (error) {
-      toast({ title: "Error al eliminar", description: error.message, variant: "destructive" })
+      if (error.code === '23503') {
+        toast({
+          title: "Error al eliminar",
+          description: "No se puede eliminar la factura porque está asociada a otros registros.",
+          variant: "destructive",
+        })
+      } else {
+        toast({
+          title: "Error al eliminar",
+          description: error.message,
+          variant: "destructive",
+        })
+      }
     } else {
       toast({ title: "Éxito", description: "Factura eliminada correctamente." })
       fetchInvoices()

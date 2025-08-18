@@ -121,11 +121,19 @@ export default function PaymentTerms() {
       .eq('id_term', termId)
 
     if (error) {
-      toast({
-        title: "Error al eliminar",
-        description: error.message,
-        variant: "destructive",
-      })
+      if (error.code === '23503') {
+        toast({
+          title: "Error al eliminar",
+          description: "No se puede eliminar el término de pago porque está asociado a otros registros.",
+          variant: "destructive",
+        })
+      } else {
+        toast({
+          title: "Error al eliminar",
+          description: error.message,
+          variant: "destructive",
+        })
+      }
     } else {
       toast({
         title: "Éxito",

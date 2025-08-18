@@ -215,11 +215,19 @@ export default function UsersPage() {
         .eq('id_user', userId)
 
     if (error) {
-        toast({
-            title: "Error al eliminar",
-            description: error.message,
-            variant: "destructive",
-        })
+        if (error.code === '23503') {
+            toast({
+                title: "Error al eliminar",
+                description: "No se puede eliminar el usuario porque está asociado a otros registros.",
+                variant: "destructive",
+            })
+        } else {
+            toast({
+                title: "Error al eliminar",
+                description: error.message,
+                variant: "destructive",
+            })
+        }
     } else {
         toast({
             title: "Éxito",
