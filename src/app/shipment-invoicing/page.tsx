@@ -125,17 +125,22 @@ export default function ShipmentInvoicingPage() {
   const onSubmit = async (values: z.infer<typeof shipmentInvoiceSchema>) => {
     let error;
 
+    const dataToSubmit = {
+      ...values,
+      id_despacho: parseInt(String(values.id_despacho), 10)
+    };
+
     if (editingShipmentInvoice) {
       const { error: updateError } = await supabase
         .from('facturacion_x_despacho')
-        .update(values)
+        .update(dataToSubmit)
         .eq('id_facturacion_despacho', editingShipmentInvoice.id_facturacion_despacho)
         .select()
       error = updateError;
     } else {
       const { error: insertError } = await supabase
         .from('facturacion_x_despacho')
-        .insert([values])
+        .insert([dataToSubmit])
         .select()
       error = insertError;
     }
@@ -195,7 +200,8 @@ export default function ShipmentInvoicingPage() {
 
   const getShipmentDate = (shipmentId: string | number) => {
       const id = typeof shipmentId === 'string' ? parseInt(shipmentId, 10) : shipmentId;
-      return shipments.find(ship => ship.id_despacho === id)?.fecha_despacho || shipmentId;
+      const shipment = shipments.find(ship => ship.id_despacho === id);
+      return shipment ? new Date(shipment.fecha_despacho).toLocaleDateString() : shipmentId;
   }
 
 
@@ -261,7 +267,7 @@ export default function ShipmentInvoicingPage() {
                             <SelectContent>
                                 {shipments.map((shipment) => (
                                     <SelectItem key={shipment.id_despacho} value={String(shipment.id_despacho)}>
-                                        ID: {shipment.id_despacho} - Fecha: {shipment.fecha_despacho}
+                                        ID: {shipment.id_despacho} - Fecha: {new Date(shipment.fecha_despacho).toLocaleDateString()}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
