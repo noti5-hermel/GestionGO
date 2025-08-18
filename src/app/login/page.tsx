@@ -1,8 +1,10 @@
 
 'use client'
 
+import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -14,8 +16,51 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { supabase } from "@/lib/supabase"
+import { useToast } from "@/hooks/use-toast"
 
 export default function LoginPage() {
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const router = useRouter()
+  const { toast } = useToast()
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    const { data, error } = await supabase
+      .from('usuario')
+      .select('*')
+      .eq('correo', email)
+      .eq('contraseña', password)
+      .single()
+
+    if (error && error.code !== 'PGRST116') { // PGRST116: no rows returned
+      toast({
+        title: "Error",
+        description: "Ocurrió un error al intentar iniciar sesión.",
+        variant: "destructive",
+      })
+      console.error("Error de Supabase:", error)
+      return;
+    }
+
+    if (data) {
+      toast({
+        title: "¡Éxito!",
+        description: "Coincidencia encontrada. ¡Bienvenido!",
+      })
+      // Opcional: Redirigir al usuario después de un inicio de sesión exitoso
+      // router.push("/") 
+    } else {
+      toast({
+        title: "Error de autenticación",
+        description: "Correo o contraseña incorrectos.",
+        variant: "destructive",
+      })
+    }
+  }
+
   return (
     <div className="flex flex-col items-center justify-center h-full">
       <Card className="w-full max-w-sm">
@@ -32,32 +77,42 @@ export default function LoginPage() {
             Ingresa tu correo electrónico y contraseña para acceder a tu cuenta.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="email">Correo Electrónico</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="nombre@ejemplo.com"
-              required
-            />
-          </div>
-          <div className="grid gap-2">
-            <div className="flex items-center">
-              <Label htmlFor="password">Contraseña</Label>
-              <Link
-                href="#"
-                className="ml-auto inline-block text-sm underline"
-              >
-                ¿Olvidaste tu contraseña?
-              </Link>
+        <form onSubmit={handleLogin}>
+          <CardContent className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="email">Correo Electrónico</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="nombre@ejemplo.com"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
             </div>
-            <Input id="password" type="password" required />
-          </div>
-          <Button type="submit" className="w-full">
-            Iniciar Sesión
-          </Button>
-        </CardContent>
+            <div className="grid gap-2">
+              <div className="flex items-center">
+                <Label htmlFor="password">Contraseña</Label>
+                <Link
+                  href="#"
+                  className="ml-auto inline-block text-sm underline"
+                >
+                  ¿Olvidaste tu contraseña?
+                </Link>
+              </div>
+              <Input 
+                id="password" 
+                type="password" 
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+            <Button type="submit" className="w-full">
+              Iniciar Sesión
+            </Button>
+          </CardContent>
+        </form>
         <CardFooter className="text-center text-sm">
           <div className="w-full">
             ¿No tienes una cuenta?{" "}
