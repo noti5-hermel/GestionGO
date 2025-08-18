@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useState, useEffect } from "react"
@@ -134,13 +133,13 @@ export default function UsersPage() {
     let error;
     
     const userData: any = { 
-        name: values.name, 
-        correo: values.correo, 
-        id_rol: parseInt(String(values.id_rol), 10) 
+      name: values.name, 
+      correo: values.correo, 
+      id_rol: parseInt(String(values.id_rol), 10) 
     };
     
     if (values.contraseña) {
-        userData.contraseña = hashPassword(values.contraseña);
+      userData.contraseña = hashPassword(values.contraseña);
     }
 
     if (editingUser) {
@@ -313,9 +312,14 @@ export default function UsersPage() {
                   />
                   <DialogFooter>
                     <DialogClose asChild>
-                      <Button type="button" variant="secondary" onClick={handleCloseDialog}>Cancelar</Button>
+                        <Button type="button" variant="secondary" onClick={handleCloseDialog}>Cancelar</Button>
                     </DialogClose>
-                    <Button type="submit">{editingUser ? 'Guardar Cambios' : 'Guardar Usuario'}</Button>
+                    <Button 
+                        type="button" 
+                        onClick={form.handleSubmit(onSubmit)}
+                    >
+                        {editingUser ? 'Guardar Cambios' : 'Guardar Usuario'}
+                    </Button>
                   </DialogFooter>
                 </form>
               </Form>
