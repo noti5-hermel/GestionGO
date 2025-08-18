@@ -37,7 +37,7 @@ const shipmentInvoiceSchema = z.object({
   comprobante: z.string().min(1, "El comprobante es requerido."),
   forma_pago: z.enum(["Efectivo", "Tarjeta", "Transferencia"]),
   monto: z.coerce.number().min(0, "El monto debe ser un número positivo."),
-  estado: z.boolean(),
+  state: z.boolean(),
 })
 
 type ShipmentInvoice = z.infer<typeof shipmentInvoiceSchema> & { id_facturacion_despacho: number }
@@ -67,7 +67,7 @@ export default function ShipmentInvoicingPage() {
       comprobante: "",
       forma_pago: "Efectivo",
       monto: 0,
-      estado: false,
+      state: false,
     },
   })
   
@@ -90,7 +90,7 @@ export default function ShipmentInvoicingPage() {
         comprobante: "",
         forma_pago: "Efectivo",
         monto: 0,
-        estado: false,
+        state: false,
       })
     }
   }, [editingShipmentInvoice, form])
@@ -328,7 +328,7 @@ export default function ShipmentInvoicingPage() {
                   />
                   <FormField
                     control={form.control}
-                    name="estado"
+                    name="state"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Estado</FormLabel>
@@ -387,7 +387,7 @@ export default function ShipmentInvoicingPage() {
                   <TableCell>{shipmentInvoice.comprobante}</TableCell>
                   <TableCell>{shipmentInvoice.forma_pago}</TableCell>
                   <TableCell>${shipmentInvoice.monto.toFixed(2)}</TableCell>
-                  <TableCell><Badge variant={getBadgeVariant(shipmentInvoice.estado)}>{getStatusLabel(shipmentInvoice.estado)}</Badge></TableCell>
+                  <TableCell><Badge variant={getBadgeVariant(shipmentInvoice.state)}>{getStatusLabel(shipmentInvoice.state)}</Badge></TableCell>
                    <TableCell className="text-right">
                     <Button variant="ghost" size="icon" onClick={() => handleEdit(shipmentInvoice)}>
                       <Pencil className="h-4 w-4" />
