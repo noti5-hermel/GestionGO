@@ -274,6 +274,21 @@ export default function UsersPage() {
               </DialogHeader>
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                  {editingUser && (
+                    <FormField
+                      control={form.control}
+                      name="id_user"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>ID Usuario</FormLabel>
+                          <FormControl>
+                            <Input {...field} disabled />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
                   <FormField
                     control={form.control}
                     name="name"
