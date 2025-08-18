@@ -381,7 +381,7 @@ export default function ShipmentInvoicingPage() {
             </TableHeader>
             <TableBody>
               {shipmentInvoices.map((shipmentInvoice) => (
-                <TableRow key={shipmentInvoice.id_facturacion_despacho}>
+                <TableRow key={`${shipmentInvoice.id_factura}-${shipmentInvoice.id_despacho}`}>
                   <TableCell className="font-medium">{getInvoiceNumber(shipmentInvoice.id_factura)}</TableCell>
                   <TableCell>{getShipmentDate(shipmentInvoice.id_despacho)}</TableCell>
                   <TableCell>{shipmentInvoice.comprobante}</TableCell>
@@ -428,5 +428,3 @@ export default function ShipmentInvoicingPage() {
     </Card>
   )
 }
-
-    
