@@ -132,6 +132,7 @@ export default function UsersPage() {
 
   const onSubmit = async (values: z.infer<typeof userSchema>) => {
     let error;
+    
     const userData: any = { 
         name: values.name, 
         correo: values.correo, 
@@ -147,7 +148,7 @@ export default function UsersPage() {
             .from('usuario')
             .update(userData)
             .eq('id_user', editingUser.id_user)
-            .select()
+            .select();
         error = updateError;
     } else {
         if (!values.contraseña) {
@@ -327,6 +328,7 @@ export default function UsersPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>ID Usuario</TableHead>
                 <TableHead>Nombre</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Rol</TableHead>
@@ -336,6 +338,7 @@ export default function UsersPage() {
             <TableBody>
               {users.map((user, index) => (
                 <TableRow key={user.id_user || index}>
+                  <TableCell>{user.id_user}</TableCell>
                   <TableCell>
                     <span className="font-medium">{user.name}</span>
                   </TableCell>
@@ -381,3 +384,5 @@ export default function UsersPage() {
     </Card>
   )
 }
+
+    
