@@ -190,7 +190,7 @@ export default function CustomersPage() {
       } else {
         toast({
           title: "Error al eliminar",
-          description: error.message,
+          description: "Ocurrió un error inesperado al eliminar el cliente.",
           variant: "destructive",
         })
       }

@@ -180,8 +180,7 @@ export default function UsersPage() {
     const { error } = await supabase
       .from('usuario')
       .update(userData)
-      .eq('id_user', parseInt(editingUser.id_user, 10))
-      .select();
+      .eq('id_user', parseInt(editingUser.id_user, 10));
 
     if (error) {
       toast({
@@ -224,7 +223,7 @@ export default function UsersPage() {
         } else {
             toast({
                 title: "Error al eliminar",
-                description: error.message,
+                description: "Ocurrió un error inesperado al eliminar el usuario.",
                 variant: "destructive",
             })
         }

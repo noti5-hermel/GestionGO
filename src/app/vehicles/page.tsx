@@ -130,7 +130,7 @@ export default function VehiclesPage() {
       } else {
         toast({
           title: "Error al eliminar",
-          description: error.message,
+          description: "Ocurrió un error inesperado al eliminar el vehículo.",
           variant: "destructive",
         })
       }

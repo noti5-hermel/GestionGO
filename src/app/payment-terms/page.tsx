@@ -111,7 +111,7 @@ export default function PaymentTermsPage() {
       } else {
         toast({
           title: "Error al eliminar",
-          description: error.message,
+          description: "Ocurrió un error inesperado al eliminar el término.",
           variant: "destructive",
         })
       }

@@ -209,7 +209,7 @@ export default function InvoicingPage() {
       } else {
         toast({
           title: "Error al eliminar",
-          description: error.message,
+          description: "Ocurrió un error inesperado al eliminar la factura.",
           variant: "destructive",
         })
       }

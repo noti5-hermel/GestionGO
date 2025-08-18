@@ -130,7 +130,7 @@ export default function RoutesPage() {
       } else {
         toast({
           title: "Error al eliminar",
-          description: error.message,
+          description: "Ocurrió un error inesperado al eliminar la ruta.",
           variant: "destructive",
         })
       }
