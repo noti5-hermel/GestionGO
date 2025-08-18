@@ -1,6 +1,7 @@
 
 'use client'
 
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -14,12 +15,22 @@ import { Label } from "@/components/ui/label"
 
 export default function LoginPage() {
   return (
-    <div className="flex items-center justify-center h-full">
+    <div className="flex flex-col items-center justify-center h-full">
+       <div className="flex flex-col items-center justify-center mb-8">
+        <Image
+            src="/gestion-go.120Z.png"
+            alt="GestiónGo Logo"
+            width={80}
+            height={80}
+            className="h-20 w-20 mb-4"
+        />
+        <h1 className="text-4xl font-bold">GestiónGo</h1>
+      </div>
       <Card className="w-full max-w-sm">
-        <CardHeader>
+        <CardHeader className="text-center">
           <CardTitle className="text-2xl">Iniciar Sesión</CardTitle>
           <CardDescription>
-            Ingrese su correo electrónico a continuación para iniciar sesión en su cuenta.
+            Ingrese sus credenciales para acceder a su cuenta.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
