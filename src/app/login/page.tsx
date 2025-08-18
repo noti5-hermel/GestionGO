@@ -20,10 +20,13 @@ import { Label } from "@/components/ui/label"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 
-// En una aplicación real, esta clave debe estar en una variable de entorno y no en el código.
-const HMAC_SECRET_KEY = "tu-clave-secreta-debe-ser-muy-segura";
+// Leemos la clave secreta desde las variables de entorno
+const HMAC_SECRET_KEY = process.env.NEXT_PUBLIC_HMAC_SECRET_KEY || "fallback-secret-key-if-not-set";
 
 function hashPassword(password: string): string {
+  if (!HMAC_SECRET_KEY) {
+    throw new Error("La clave secreta HMAC no está configurada en las variables de entorno.");
+  }
   return crypto.createHmac('sha256', HMAC_SECRET_KEY).update(password).digest('hex');
 }
 
@@ -135,5 +138,3 @@ export default function LoginPage() {
     </div>
   )
 }
-
-    
