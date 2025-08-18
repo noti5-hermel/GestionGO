@@ -159,7 +159,7 @@ export default function UsersPage() {
           })
           return;
         }
-        const { error: insertError } = await supabase
+        const { data, error: insertError } = await supabase
             .from('usuario')
             .insert([userData])
             .select()
@@ -384,5 +384,3 @@ export default function UsersPage() {
     </Card>
   )
 }
-
-    
