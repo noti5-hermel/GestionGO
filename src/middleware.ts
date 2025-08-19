@@ -6,16 +6,23 @@ export function middleware(request: NextRequest) {
   const sessionCookie = request.cookies.get('user-session');
   const { pathname } = request.nextUrl;
 
-  // Si no hay cookie de sesión y no se está en la página de login, redirigir a login
-  if (!sessionCookie && pathname !== '/login') {
-    return NextResponse.redirect(new URL('/login', request.url));
-  }
+  const isTryingToAccessApp = pathname !== '/login';
+  const hasSession = !!sessionCookie;
 
-  // Si hay una cookie de sesión y se está en la página de login, redirigir a la página de usuarios
-  if (sessionCookie && pathname === '/login') {
+  // Si el usuario tiene una sesión e intenta acceder a la página de login,
+  // lo redirigimos a la página principal de la aplicación (usuarios).
+  if (hasSession && pathname === '/login') {
     return NextResponse.redirect(new URL('/users', request.url));
   }
 
+  // Si el usuario NO tiene sesión e intenta acceder a cualquier página
+  // que no sea el login, lo redirigimos al login.
+  if (!hasSession && isTryingToAccessApp) {
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
+
+  // En cualquier otro caso (usuario con sesión accediendo a la app, o
+  // usuario sin sesión accediendo al login), permitimos que continúe.
   return NextResponse.next();
 }
 
