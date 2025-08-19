@@ -1,3 +1,4 @@
+
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
@@ -10,9 +11,9 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // Si hay una cookie de sesión y se está en la página de login, redirigir a la página principal
+  // Si hay una cookie de sesión y se está en la página de login, redirigir a la página de usuarios
   if (sessionCookie && pathname === '/login') {
-    return NextResponse.redirect(new URL('/', request.url));
+    return NextResponse.redirect(new URL('/users', request.url));
   }
 
   return NextResponse.next();
