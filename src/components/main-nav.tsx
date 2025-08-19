@@ -13,8 +13,7 @@ import {
   Settings,
   LayoutDashboard,
   Car,
-  ClipboardList,
-  LogIn
+  ClipboardList
 } from 'lucide-react'
 import {
   SidebarMenu,
@@ -36,7 +35,6 @@ const menuItems = [
 const adminMenuItems = [
     { href: '/users', label: 'Usuarios', icon: User },
     { href: '/user-roles', label: 'Roles de Usuario', icon: Shield },
-    { href: '/login', label: 'Login', icon: LogIn },
 ]
 
 export function MainNav() {
@@ -48,7 +46,7 @@ export function MainNav() {
         <SidebarMenuItem key={item.href}>
           <SidebarMenuButton
             asChild
-            isActive={pathname.startsWith(item.href) && (item.href !== '/' || pathname === '/')}
+            isActive={pathname === item.href}
             tooltip={{children: item.label, side: "right", align: "center" }}
           >
             <Link href={item.href}>
@@ -65,7 +63,7 @@ export function MainNav() {
         <SidebarMenuItem key={item.href}>
           <SidebarMenuButton
             asChild
-            isActive={pathname.startsWith(item.href) && (item.href !== '/' || pathname === '/')}
+            isActive={pathname.startsWith(item.href)}
             tooltip={{children: item.label, side: "right", align: "center" }}
           >
             <Link href={item.href}>

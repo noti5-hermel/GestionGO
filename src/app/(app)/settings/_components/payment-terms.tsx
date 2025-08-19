@@ -1,11 +1,11 @@
 
+
 'use client'
 
 import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import {
@@ -31,9 +31,10 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { PlusCircle, Trash2 } from "lucide-react"
+import { PlusCircle, Trash2, Pencil } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
+import { Card, CardFooter, CardContent } from "@/components/ui/card"
 
 const paymentTermSchema = z.object({
   id_term: z.string().min(1, { message: "El ID del término es requerido." }),
@@ -42,14 +43,31 @@ const paymentTermSchema = z.object({
 
 type PaymentTerm = z.infer<typeof paymentTermSchema>
 
-export default function PaymentTermsPage() {
+export default function PaymentTerms() {
   const [terms, setTerms] = useState<PaymentTerm[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingTerm, setEditingTerm] = useState<PaymentTerm | null>(null);
   const { toast } = useToast()
+
+  const form = useForm<PaymentTerm>({
+    resolver: zodResolver(paymentTermSchema),
+    defaultValues: {
+      id_term: "",
+      term_desc: "",
+    },
+  })
 
   useEffect(() => {
     fetchTerms()
   }, [])
+
+  useEffect(() => {
+    if (editingTerm) {
+      form.reset(editingTerm);
+    } else {
+      form.reset({ id_term: "", term_desc: "" });
+    }
+  }, [editingTerm, form]);
 
   const fetchTerms = async () => {
     const { data, error } = await supabase.from('terminos_pago').select('id_term, term_desc')
@@ -64,19 +82,22 @@ export default function PaymentTermsPage() {
     }
   }
 
-  const form = useForm<PaymentTerm>({
-    resolver: zodResolver(paymentTermSchema),
-    defaultValues: {
-      id_term: "",
-      term_desc: "",
-    },
-  })
-
   const onSubmit = async (values: PaymentTerm) => {
-    const { error } = await supabase
-      .from('terminos_pago')
-      .insert([values])
-      .select()
+    let error;
+    if (editingTerm) {
+      const { error: updateError } = await supabase
+        .from('terminos_pago')
+        .update(values)
+        .eq('id_term', editingTerm.id_term)
+        .select()
+      error = updateError;
+    } else {
+      const { error: insertError } = await supabase
+        .from('terminos_pago')
+        .insert([values])
+        .select()
+      error = insertError;
+    }
 
     if (error) {
       toast({
@@ -87,11 +108,10 @@ export default function PaymentTermsPage() {
     } else {
       toast({
         title: "Éxito",
-        description: "Término de pago guardado correctamente.",
+        description: `Término de pago ${editingTerm ? 'actualizado' : 'guardado'} correctamente.`,
       })
       fetchTerms()
-      form.reset()
-      setIsDialogOpen(false)
+      handleCloseDialog();
     }
   }
 
@@ -123,26 +143,40 @@ export default function PaymentTermsPage() {
       fetchTerms()
     }
   }
+  
+  const handleEdit = (term: PaymentTerm) => {
+    setEditingTerm(term);
+    setIsDialogOpen(true);
+  }
+
+  const handleOpenDialog = (open: boolean) => {
+    setIsDialogOpen(open);
+    if (!open) {
+      setEditingTerm(null);
+    }
+  };
+  
+  const handleCloseDialog = () => {
+    setEditingTerm(null);
+    form.reset({ id_term: "", term_desc: "" });
+    setIsDialogOpen(false);
+  }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex justify-between items-center">
-          <div>
-            <CardTitle>Términos de Pago</CardTitle>
-            <CardDescription>Gestione los términos de pago para facturas.</CardDescription>
-          </div>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+    <Card className="h-full flex flex-col p-0 border-0 shadow-none">
+      <CardContent className="space-y-2 p-0 flex-1 overflow-hidden">
+        <div className="flex justify-end items-center mb-4">
+          <Dialog open={isDialogOpen} onOpenChange={handleOpenDialog}>
             <DialogTrigger asChild>
-              <Button>
+              <Button onClick={() => { setEditingTerm(null); form.reset(); setIsDialogOpen(true); }}>
                 <PlusCircle className="mr-2 h-4 w-4" /> Añadir Término
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Añadir Nuevo Término de Pago</DialogTitle>
+                <DialogTitle>{editingTerm ? 'Editar Término de Pago' : 'Añadir Nuevo Término de Pago'}</DialogTitle>
                 <DialogDescription>
-                  Complete los detalles para crear un nuevo término de pago.
+                  {editingTerm ? 'Modifique los detalles del término.' : 'Complete los detalles para crear un nuevo término de pago.'}
                 </DialogDescription>
               </DialogHeader>
               <Form {...form}>
@@ -154,7 +188,7 @@ export default function PaymentTermsPage() {
                       <FormItem>
                         <FormLabel>ID Término</FormLabel>
                         <FormControl>
-                          <Input placeholder="Ej: Neto-15" {...field} />
+                          <Input placeholder="Ej: Neto-15" {...field} disabled={!!editingTerm} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -175,18 +209,16 @@ export default function PaymentTermsPage() {
                   />
                   <DialogFooter>
                     <DialogClose asChild>
-                      <Button type="button" variant="secondary">Cancelar</Button>
+                      <Button type="button" variant="secondary" onClick={handleCloseDialog}>Cancelar</Button>
                     </DialogClose>
-                    <Button type="submit">Guardar Término</Button>
+                    <Button type="submit">{editingTerm ? 'Guardar Cambios' : 'Guardar Término'}</Button>
                   </DialogFooter>
                 </form>
               </Form>
             </DialogContent>
           </Dialog>
         </div>
-      </CardHeader>
-      <CardContent>
-        <div className="relative w-full overflow-auto">
+        <div className="relative w-full overflow-auto h-full">
           <Table>
             <TableHeader>
               <TableRow>
@@ -201,6 +233,9 @@ export default function PaymentTermsPage() {
                   <TableCell className="font-medium">{term.id_term}</TableCell>
                   <TableCell>{term.term_desc}</TableCell>
                   <TableCell className="text-right">
+                    <Button variant="ghost" size="icon" onClick={() => handleEdit(term)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button variant="ghost" size="icon">

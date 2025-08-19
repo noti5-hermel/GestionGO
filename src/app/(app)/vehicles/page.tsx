@@ -1,10 +1,12 @@
 
+
 'use client'
 
 import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import {
@@ -33,66 +35,65 @@ import { Input } from "@/components/ui/input"
 import { PlusCircle, Trash2, Pencil } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
-import { Card, CardFooter, CardContent } from "@/components/ui/card"
 
-const taxSchema = z.object({
-  id_impuesto: z.string().min(1, { message: "El ID del impuesto es requerido." }),
-  impt_desc: z.string().min(1, { message: "La descripción es requerida." }),
+const vehicleSchema = z.object({
+  placa_vehiculo: z.string().min(1, { message: "La placa del vehículo es requerida." }),
+  vehiculo_desc: z.string().min(1, { message: "La descripción es requerida." }),
 })
 
-type Tax = z.infer<typeof taxSchema>
+type Vehicle = z.infer<typeof vehicleSchema>
 
-export default function Taxes() {
-  const [taxes, setTaxes] = useState<Tax[]>([])
+export default function VehiclesPage() {
+  const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingTax, setEditingTax] = useState<Tax | null>(null);
+  const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
   const { toast } = useToast()
 
-  const form = useForm<Tax>({
-    resolver: zodResolver(taxSchema),
+  const form = useForm<Vehicle>({
+    resolver: zodResolver(vehicleSchema),
     defaultValues: {
-      id_impuesto: "",
-      impt_desc: "",
+      placa_vehiculo: "",
+      vehiculo_desc: "",
     },
   })
 
   useEffect(() => {
-    fetchTaxes()
+    fetchVehicles()
   }, [])
 
   useEffect(() => {
-    if (editingTax) {
-      form.reset(editingTax);
+    if (editingVehicle) {
+      form.reset(editingVehicle);
     } else {
-      form.reset({ id_impuesto: "", impt_desc: "" });
+      form.reset({ placa_vehiculo: "", vehiculo_desc: "" });
     }
-  }, [editingTax, form]);
+  }, [editingVehicle, form]);
 
-  const fetchTaxes = async () => {
-    const { data, error } = await supabase.from('tipo_impuesto').select('id_impuesto, impt_desc')
+  const fetchVehicles = async () => {
+    const { data, error } = await supabase.from('vehiculos').select('placa_vehiculo, vehiculo_desc')
     if (error) {
       toast({
         title: "Error",
-        description: "No se pudieron cargar los impuestos.",
+        description: "No se pudieron cargar los vehículos.",
         variant: "destructive",
       })
     } else {
-      setTaxes(data as Tax[])
+      setVehicles(data as Vehicle[])
     }
   }
 
-  const onSubmit = async (values: Tax) => {
+  const onSubmit = async (values: Vehicle) => {
     let error;
-    if (editingTax) {
+    if (editingVehicle) {
       const { error: updateError } = await supabase
-        .from('tipo_impuesto')
+        .from('vehiculos')
         .update(values)
-        .eq('id_impuesto', editingTax.id_impuesto)
+        .eq('placa_vehiculo', editingVehicle.placa_vehiculo)
         .select()
       error = updateError;
     } else {
       const { error: insertError } = await supabase
-        .from('tipo_impuesto')
+        .from('vehiculos')
         .insert([values])
         .select()
       error = insertError;
@@ -107,87 +108,91 @@ export default function Taxes() {
     } else {
       toast({
         title: "Éxito",
-        description: `Impuesto ${editingTax ? 'actualizado' : 'guardado'} correctamente.`,
+        description: `Vehículo ${editingVehicle ? 'actualizado' : 'guardado'} correctamente.`,
       })
-      fetchTaxes()
+      fetchVehicles()
       handleCloseDialog();
     }
   }
 
-  const handleDelete = async (taxId: string) => {
+  const handleDelete = async (plate: string) => {
     const { error } = await supabase
-      .from('tipo_impuesto')
+      .from('vehiculos')
       .delete()
-      .eq('id_impuesto', taxId)
+      .eq('placa_vehiculo', plate)
 
     if (error) {
       if (error.code === '23503') {
         toast({
           title: "Error al eliminar",
-          description: "No se puede eliminar el impuesto porque está asociado a otros registros.",
+          description: "No se puede eliminar el vehículo porque está asociado a otros registros.",
           variant: "destructive",
         })
       } else {
         toast({
           title: "Error al eliminar",
-          description: "Ocurrió un error inesperado al eliminar el impuesto.",
+          description: "Ocurrió un error inesperado al eliminar el vehículo.",
           variant: "destructive",
         })
       }
     } else {
       toast({
         title: "Éxito",
-        description: "Impuesto eliminado correctamente.",
+        description: "Vehículo eliminado correctamente.",
       })
-      fetchTaxes()
+      fetchVehicles()
     }
   }
-  
-  const handleEdit = (tax: Tax) => {
-    setEditingTax(tax);
+
+  const handleEdit = (vehicle: Vehicle) => {
+    setEditingVehicle(vehicle);
     setIsDialogOpen(true);
   }
 
   const handleOpenDialog = (open: boolean) => {
     setIsDialogOpen(open);
     if (!open) {
-      setEditingTax(null);
+      setEditingVehicle(null);
     }
   };
-  
+
   const handleCloseDialog = () => {
-    setEditingTax(null);
-    form.reset({ id_impuesto: "", impt_desc: "" });
+    setEditingVehicle(null);
+    form.reset({ placa_vehiculo: "", vehiculo_desc: "" });
     setIsDialogOpen(false);
   }
 
   return (
-    <Card className="h-full flex flex-col p-0 border-0 shadow-none">
-      <CardContent className="space-y-2 p-0 flex-1 overflow-hidden">
-        <div className="flex justify-end items-center mb-4">
+    <Card className="h-full flex flex-col">
+      <CardHeader>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <CardTitle>Vehículos</CardTitle>
+            <CardDescription>Gestione la flota de vehículos.</CardDescription>
+          </div>
           <Dialog open={isDialogOpen} onOpenChange={handleOpenDialog}>
             <DialogTrigger asChild>
-              <Button onClick={() => { setEditingTax(null); form.reset(); setIsDialogOpen(true); }}>
-                <PlusCircle className="mr-2 h-4 w-4" /> Añadir Impuesto
+              <Button onClick={() => { setEditingVehicle(null); form.reset(); setIsDialogOpen(true); }}>
+                <PlusCircle className="mr-2 h-4 w-4" /> Añadir Vehículo
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>{editingTax ? 'Editar Impuesto' : 'Añadir Nuevo Impuesto'}</DialogTitle>
+                <DialogTitle>{editingVehicle ? 'Editar Vehículo' : 'Añadir Nuevo Vehículo'}</DialogTitle>
                 <DialogDescription>
-                  {editingTax ? 'Modifique los detalles del impuesto.' : 'Complete los detalles para crear un nuevo impuesto.'}
+                  {editingVehicle ? 'Modifique los detalles del vehículo.' : 'Complete los detalles para registrar un nuevo vehículo.'}
                 </DialogDescription>
               </DialogHeader>
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                   <FormField
                     control={form.control}
-                    name="id_impuesto"
+                    name="placa_vehiculo"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>ID Impuesto</FormLabel>
+                        <FormLabel>Placa Vehículo</FormLabel>
                         <FormControl>
-                          <Input placeholder="Ej: IVA-15" {...field} disabled={!!editingTax} />
+                          <Input placeholder="Ej: JKL-012" {...field} disabled={!!editingVehicle} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -195,12 +200,12 @@ export default function Taxes() {
                   />
                   <FormField
                     control={form.control}
-                    name="impt_desc"
+                    name="vehiculo_desc"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Descripción</FormLabel>
                         <FormControl>
-                          <Input placeholder="Ej: Impuesto al Valor Agregado 15%" {...field} />
+                          <Input placeholder="Ej: Camioneta para despachos urgentes." {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -210,29 +215,31 @@ export default function Taxes() {
                     <DialogClose asChild>
                       <Button type="button" variant="secondary" onClick={handleCloseDialog}>Cancelar</Button>
                     </DialogClose>
-                    <Button type="submit">{editingTax ? 'Guardar Cambios' : 'Guardar Impuesto'}</Button>
+                    <Button type="submit">{editingVehicle ? 'Guardar Cambios' : 'Guardar Vehículo'}</Button>
                   </DialogFooter>
                 </form>
               </Form>
             </DialogContent>
           </Dialog>
         </div>
-        <div className="relative w-full overflow-auto h-full">
+      </CardHeader>
+      <CardContent className="flex-1 overflow-auto">
+        <div className="relative w-full overflow-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>ID Impuesto</TableHead>
+                <TableHead>Placa Vehículo</TableHead>
                 <TableHead>Descripción</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {taxes.map((tax) => (
-                <TableRow key={tax.id_impuesto}>
-                  <TableCell className="font-medium">{tax.id_impuesto}</TableCell>
-                  <TableCell>{tax.impt_desc}</TableCell>
+              {vehicles.map((vehicle) => (
+                <TableRow key={vehicle.placa_vehiculo}>
+                  <TableCell className="font-medium">{vehicle.placa_vehiculo}</TableCell>
+                  <TableCell>{vehicle.vehiculo_desc}</TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => handleEdit(tax)}>
+                    <Button variant="ghost" size="icon" onClick={() => handleEdit(vehicle)}>
                       <Pencil className="h-4 w-4" />
                     </Button>
                     <AlertDialog>
@@ -245,12 +252,12 @@ export default function Taxes() {
                         <AlertDialogHeader>
                           <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            Esta acción no se puede deshacer. Esto eliminará permanentemente el impuesto.
+                            Esta acción no se puede deshacer. Esto eliminará permanentemente el vehículo.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDelete(tax.id_impuesto)}>
+                          <AlertDialogAction onClick={() => handleDelete(vehicle.placa_vehiculo)}>
                             Eliminar
                           </AlertDialogAction>
                         </AlertDialogFooter>
@@ -265,7 +272,7 @@ export default function Taxes() {
       </CardContent>
       <CardFooter className="pt-6">
         <div className="text-xs text-muted-foreground">
-          Mostrando <strong>1-{taxes.length}</strong> de <strong>{taxes.length}</strong> impuestos.
+          Mostrando <strong>1-{vehicles.length}</strong> de <strong>{vehicles.length}</strong> vehículos.
         </div>
       </CardFooter>
     </Card>

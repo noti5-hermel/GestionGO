@@ -4,7 +4,6 @@
 import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import crypto from "crypto"
 import { Button } from "@/components/ui/button"
 import {
@@ -20,7 +19,6 @@ import { Label } from "@/components/ui/label"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 
-// Leemos la clave secreta desde las variables de entorno
 const HMAC_SECRET_KEY = process.env.NEXT_PUBLIC_HMAC_SECRET_KEY;
 
 function hashPassword(password: string): string {
@@ -35,7 +33,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const [name, setName] = useState("")
   const [showFirstUserForm, setShowFirstUserForm] = useState(false)
-  const router = useRouter()
   const { toast } = useToast()
 
   useEffect(() => {
@@ -56,19 +53,14 @@ export default function LoginPage() {
     checkUsers()
   }, [])
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-
-    const hashedPassword = hashPassword(password);
-
+  const handleLogin = async () => {
     const { data, error } = await supabase
       .from('usuario')
-      .select('*')
+      .select('contraseña')
       .eq('correo', email)
-      .eq('contraseña', hashedPassword)
       .single()
 
-    if (error && error.code !== 'PGRST116') { // PGRST116: no rows returned
+    if (error && error.code !== 'PGRST116') { // PGRST116: No rows found
       toast({
         title: "Error",
         description: "Ocurrió un error al intentar iniciar sesión.",
@@ -79,11 +71,21 @@ export default function LoginPage() {
     }
 
     if (data) {
-      toast({
-        title: "¡Éxito!",
-        description: "Coincidencia encontrada. ¡Bienvenido!",
-      })
-       router.push("/") 
+      const hashedPassword = hashPassword(password);
+      if (hashedPassword === data.contraseña) {
+        document.cookie = `user-session=true; path=/; max-age=3600`; // 1 hour session
+        toast({
+          title: "¡Éxito!",
+          description: "¡Bienvenido!",
+        })
+        window.location.href = "/";
+      } else {
+        toast({
+          title: "Error de autenticación",
+          description: "Correo o contraseña incorrectos.",
+          variant: "destructive",
+        })
+      }
     } else {
       toast({
         title: "Error de autenticación",
@@ -102,8 +104,16 @@ export default function LoginPage() {
     
     const hashedPassword = hashPassword(password);
     
-    // Asumimos que el rol de Admin tiene id_rol = 1
-    const { data, error } = await supabase
+    const { error: roleError } = await supabase
+      .from('rol')
+      .upsert({ id_rol: 1, rol_desc: 'Administrador' }, { onConflict: 'id_rol' });
+
+    if (roleError) {
+        toast({ title: "Error al asegurar el rol", description: roleError.message, variant: "destructive" });
+        return;
+    }
+
+    const { error } = await supabase
         .from('usuario')
         .insert([{ name, correo: email, contraseña: hashedPassword, id_rol: 1 }])
         .select()
@@ -114,7 +124,6 @@ export default function LoginPage() {
     } else {
         toast({ title: "¡Bienvenido!", description: "Primer usuario administrador creado. Ahora puede iniciar sesión." });
         setShowFirstUserForm(false);
-        // Reset de los campos
         setName("");
         setEmail("");
         setPassword("");
@@ -132,6 +141,7 @@ export default function LoginPage() {
                     width={80}
                     height={80}
                     className="h-20 w-20 mx-auto mb-4"
+                    data-ai-hint="logo"
                 />
                 <CardTitle className="text-2xl">Crear Primer Usuario</CardTitle>
                 <CardDescription>
@@ -192,14 +202,15 @@ export default function LoginPage() {
                 width={80}
                 height={80}
                 className="h-20 w-20 mx-auto mb-4"
+                data-ai-hint="logo"
             />
           <CardTitle className="text-2xl">Iniciar Sesión</CardTitle>
           <CardDescription>
             Ingresa tu correo electrónico y contraseña para acceder a tu cuenta.
           </CardDescription>
         </CardHeader>
-        <form onSubmit={handleLogin}>
-          <CardContent className="grid gap-4">
+        <div className="p-6">
+          <div className="grid gap-4">
             <div className="grid gap-2">
               <Label htmlFor="email">Correo Electrónico</Label>
               <Input
@@ -227,13 +238,14 @@ export default function LoginPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleLogin() }}
               />
             </div>
-            <Button type="submit" className="w-full">
+            <Button onClick={handleLogin} className="w-full">
               Iniciar Sesión
             </Button>
-          </CardContent>
-        </form>
+          </div>
+        </div>
         <CardFooter className="text-center text-sm">
           <div className="w-full">
             ¿No tienes una cuenta?{" "}
