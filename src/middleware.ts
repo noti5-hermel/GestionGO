@@ -5,21 +5,20 @@ export function middleware(request: NextRequest) {
   const sessionCookie = request.cookies.get('user-session');
   const { pathname } = request.nextUrl;
 
-  // If no session cookie and not on the login page, redirect to login
+  // Si no hay cookie de sesión y no se está en la página de login, redirigir a login
   if (!sessionCookie && pathname !== '/login') {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // If there is a session cookie and the user is on the login page, redirect to the dashboard
+  // Si hay una cookie de sesión y se está en la página de login, redirigir a la página principal
   if (sessionCookie && pathname === '/login') {
     return NextResponse.redirect(new URL('/', request.url));
   }
 
-  // Allow access if the user is on the login page or has a session
   return NextResponse.next();
 }
 
-// Middleware configuration
+// La configuración del matcher protege todas las rutas excepto las especificadas.
 export const config = {
   matcher: [
     /*
