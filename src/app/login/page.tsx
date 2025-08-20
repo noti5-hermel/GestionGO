@@ -73,7 +73,7 @@ export default function LoginPage() {
     if (data) {
       const hashedPassword = hashPassword(password);
       if (hashedPassword === data.contraseña) {
-        document.cookie = `user-session=true; path=/; max-age=3600`; // 1 hour session
+        document.cookie = `user-session=true; path=/;`; // Session cookie
         toast({
           title: "¡Éxito!",
           description: "¡Bienvenido!",
