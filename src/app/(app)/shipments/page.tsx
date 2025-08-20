@@ -64,15 +64,20 @@ const StatusBadge = ({ checked }: { checked: boolean }) => {
   return <Badge variant={checked ? "default" : "outline"}>{checked ? "OK" : "Pend."}</Badge>
 }
 
+const ITEMS_PER_PAGE = 10;
+
 export default function ShipmentsPage() {
   const [shipments, setShipments] = useState<Shipment[]>([])
+  const [filteredShipments, setFilteredShipments] = useState<Shipment[]>([])
   const [routes, setRoutes] = useState<Route[]>([])
   const [motoristas, setMotoristas] = useState<User[]>([])
   const [auxiliares, setAuxiliares] = useState<User[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingShipment, setEditingShipment] = useState<Shipment | null>(null)
-  const [filterDate, setFilterDate] = useState<string>("")
+  const [filterType, setFilterType] = useState<'all' | 'today' | 'date'>('all');
+  const [customDate, setCustomDate] = useState<string>("")
+  const [currentPage, setCurrentPage] = useState(1);
   const { toast } = useToast()
 
   const form = useForm<z.infer<typeof shipmentSchema>>({
@@ -93,16 +98,30 @@ export default function ShipmentsPage() {
       gerente_admon: false,
     },
   })
+  
+  const applyFilters = () => {
+    let newFilteredShipments = [...shipments];
+    if (filterType === 'today') {
+        const today = new Date().toISOString().split('T')[0];
+        newFilteredShipments = shipments.filter(s => s.fecha_despacho === today);
+    } else if (filterType === 'date' && customDate) {
+        newFilteredShipments = shipments.filter(s => s.fecha_despacho === customDate);
+    }
+    setFilteredShipments(newFilteredShipments);
+    setCurrentPage(1); // Reset to first page on filter change
+  };
+
 
   useEffect(() => {
+    fetchShipments()
     fetchRoutes()
     fetchUsersByRole()
     fetchAllUsers()
   }, [])
   
   useEffect(() => {
-    fetchShipments()
-  }, [filterDate])
+    applyFilters();
+  }, [shipments, filterType, customDate]);
 
 
   useEffect(() => {
@@ -143,13 +162,7 @@ export default function ShipmentsPage() {
   }
 
   const fetchShipments = async () => {
-    let query = supabase.from('despacho').select('*');
-
-    if (filterDate) {
-      query = query.eq('fecha_despacho', filterDate)
-    }
-    
-    const { data, error } = await query;
+    const { data, error } = await supabase.from('despacho').select('*').order('fecha_despacho', { ascending: false });
 
     if (error) {
       toast({
@@ -176,7 +189,6 @@ export default function ShipmentsPage() {
   };
 
   const fetchUsersByRole = async () => {
-    // Fetch Motoristas
     const { data: motoristaRoles, error: motoristaRolesError } = await supabase
       .from('rol')
       .select('id_rol')
@@ -198,7 +210,6 @@ export default function ShipmentsPage() {
       }
     }
 
-    // Fetch Auxiliares
     const { data: auxiliaresData, error: auxiliaresError } = await supabase
         .from('usuario')
         .select('id_user, name')
@@ -315,6 +326,17 @@ export default function ShipmentsPage() {
   const getUserName = (userId: string) => {
     return users.find(user => String(user.id_user) === String(userId))?.name || userId;
   }
+  
+  const totalPages = Math.ceil(filteredShipments.length / ITEMS_PER_PAGE);
+  const paginatedShipments = filteredShipments.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+  
+  const handleCustomDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFilterType('date');
+    setCustomDate(e.target.value);
+  }
 
   return (
     <Card className="h-full flex flex-col">
@@ -324,15 +346,16 @@ export default function ShipmentsPage() {
             <CardTitle>Despachos</CardTitle>
             <CardDescription>Gestione la información de sus envíos y estados.</CardDescription>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="filter-date">Filtrar por Fecha</Label>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2">
+              <Label>Filtrar:</Label>
+              <Button variant={filterType === 'all' ? 'default' : 'outline'} onClick={() => setFilterType('all')}>Todos</Button>
+              <Button variant={filterType === 'today' ? 'default' : 'outline'} onClick={() => setFilterType('today')}>Hoy</Button>
               <Input
-                id="filter-date"
                 type="date"
-                value={filterDate}
-                onChange={(e) => setFilterDate(e.target.value)}
-                className="w-full md:w-auto"
+                value={customDate}
+                onChange={handleCustomDateChange}
+                className="w-auto"
               />
             </div>
             <Dialog open={isDialogOpen} onOpenChange={handleOpenDialog}>
@@ -631,7 +654,7 @@ export default function ShipmentsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {shipments.map((shipment) => (
+              {paginatedShipments.map((shipment) => (
                 <TableRow key={shipment.id_despacho}>
                   <TableCell className="font-medium">{shipment.id_despacho}</TableCell>
                   <TableCell>{getRouteDescription(shipment.id_ruta)}</TableCell>
@@ -684,13 +707,32 @@ export default function ShipmentsPage() {
           </Table>
         </div>
       </CardContent>
-      <CardFooter className="pt-6">
+      <CardFooter className="pt-6 flex justify-between items-center">
         <div className="text-xs text-muted-foreground">
-          Mostrando <strong>{shipments.length}</strong> de <strong>{shipments.length}</strong> despachos.
+          Página <strong>{currentPage}</strong> de <strong>{totalPages}</strong>
+        </div>
+        <div className="flex items-center gap-2">
+            <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+            >
+                Anterior
+            </Button>
+            <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+            >
+                Siguiente
+            </Button>
+        </div>
+        <div className="text-xs text-muted-foreground">
+          Mostrando <strong>{paginatedShipments.length}</strong> de <strong>{filteredShipments.length}</strong> despachos.
         </div>
       </CardFooter>
     </Card>
   )
 }
-
-    
