@@ -73,7 +73,7 @@ export default function LoginPage() {
     if (data) {
       const hashedPassword = hashPassword(password);
       if (hashedPassword === data.contraseña) {
-        document.cookie = `user-session=true; path=/;`; // Session cookie
+        document.cookie = `user-session=true; path=/; SameSite=None; Secure`;
         toast({
           title: "¡Éxito!",
           description: "¡Bienvenido!",
