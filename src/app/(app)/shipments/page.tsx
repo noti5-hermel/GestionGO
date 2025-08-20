@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import { useState, useEffect } from "react"
@@ -623,11 +622,11 @@ export default function ShipmentsPage() {
                   <TableCell><StatusBadge checked={shipment.cobros} /></TableCell>
                   <TableCell><StatusBadge checked={shipment.gerente_admon} /></TableCell>
                   <TableCell className="text-right">
-                    <Link href={`/shipments/${shipment.id_despacho}`} passHref>
-                      <Button variant="ghost" size="icon" asChild>
-                        <a><Eye className="h-4 w-4" /></a>
-                      </Button>
-                    </Link>
+                    <Button variant="ghost" size="icon" asChild>
+                      <Link href={`/shipments/${shipment.id_despacho}`}>
+                        <Eye className="h-4 w-4" />
+                      </Link>
+                    </Button>
                     <Button variant="ghost" size="icon" onClick={() => handleEdit(shipment)}>
                       <Pencil className="h-4 w-4" />
                     </Button>
