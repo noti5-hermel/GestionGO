@@ -1,6 +1,8 @@
 
 'use client'
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   SidebarProvider,
   Sidebar,
@@ -21,6 +23,15 @@ export default function AppLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const router = useRouter();
+
+  useEffect(() => {
+    const sessionCookie = document.cookie.split('; ').find(row => row.startsWith('user-session='));
+    if (!sessionCookie) {
+      router.push('/login');
+    }
+  }, [router]);
+
 
   const handleLogout = () => {
     document.cookie = 'user-session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
