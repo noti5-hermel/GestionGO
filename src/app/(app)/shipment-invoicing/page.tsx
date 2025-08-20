@@ -73,23 +73,30 @@ export default function ShipmentInvoicingPage() {
   })
   
   const selectedShipmentId = form.watch("id_despacho");
-  const selectedInvoiceId = form.watch("id_factura");
 
-  const filteredInvoices = useMemo(() => {
-    if (!selectedShipmentId) return allInvoices;
+  const availableInvoices = useMemo(() => {
+    if (!selectedShipmentId) return [];
+    
+    // Find the selected shipment to get its date
     const selectedShipment = allShipments.find(s => String(s.id_despacho) === selectedShipmentId);
-    if (!selectedShipment) return allInvoices;
+    if (!selectedShipment) return [];
     const selectedDate = new Date(selectedShipment.fecha_despacho).toISOString().split('T')[0];
-    return allInvoices.filter(inv => new Date(inv.fecha).toISOString().split('T')[0] === selectedDate);
-  }, [selectedShipmentId, allInvoices, allShipments]);
 
-  const filteredShipments = useMemo(() => {
-    if (!selectedInvoiceId) return allShipments;
-    const selectedInvoice = allInvoices.find(inv => inv.id_factura === selectedInvoiceId);
-    if (!selectedInvoice) return allShipments;
-    const selectedDate = new Date(selectedInvoice.fecha).toISOString().split('T')[0];
-    return allShipments.filter(ship => new Date(ship.fecha_despacho).toISOString().split('T')[0] === selectedDate);
-  }, [selectedInvoiceId, allInvoices, allShipments]);
+    // Get a list of invoice IDs that are already used
+    const usedInvoiceIds = new Set(shipmentInvoices.map(si => si.id_factura));
+
+    // Filter invoices that match the date and are not already used
+    return allInvoices.filter(inv => {
+        const invoiceDate = new Date(inv.fecha).toISOString().split('T')[0];
+        const isDateMatch = invoiceDate === selectedDate;
+        const isNotUsed = !usedInvoiceIds.has(inv.id_factura);
+        // An invoice being edited should still appear in the list
+        const isCurrentlyEditing = editingShipmentInvoice?.id_factura === inv.id_factura;
+
+        return isDateMatch && (isNotUsed || isCurrentlyEditing);
+    });
+  }, [selectedShipmentId, allInvoices, allShipments, shipmentInvoices, editingShipmentInvoice]);
+
   
   useEffect(() => {
     fetchShipmentInvoices()
@@ -115,17 +122,12 @@ export default function ShipmentInvoicingPage() {
     }
   }, [editingShipmentInvoice, form])
   
+  // When shipment changes, reset the selected invoice
   useEffect(() => {
     if (!editingShipmentInvoice) {
       form.setValue("id_factura", "");
     }
   }, [selectedShipmentId, editingShipmentInvoice, form]);
-
-  useEffect(() => {
-    if (!editingShipmentInvoice) {
-      form.setValue("id_despacho", "");
-    }
-  }, [selectedInvoiceId, editingShipmentInvoice, form]);
 
   const fetchShipmentInvoices = async () => {
     const { data, error } = await supabase.from('facturacion_x_despacho').select('*')
@@ -285,7 +287,7 @@ export default function ShipmentInvoicingPage() {
                                 </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                                {filteredShipments.map((shipment) => (
+                                {allShipments.map((shipment) => (
                                     <SelectItem key={shipment.id_despacho} value={String(shipment.id_despacho)}>
                                         ID: {shipment.id_despacho} - Fecha: {new Date(shipment.fecha_despacho).toLocaleDateString()}
                                     </SelectItem>
@@ -304,12 +306,12 @@ export default function ShipmentInvoicingPage() {
                         <FormLabel>Factura</FormLabel>
                         <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
                             <FormControl>
-                                <SelectTrigger disabled={!selectedShipmentId && !editingShipmentInvoice}>
-                                    <SelectValue placeholder="Seleccione una factura" />
+                                <SelectTrigger disabled={!selectedShipmentId}>
+                                    <SelectValue placeholder="Seleccione una factura disponible" />
                                 </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                                {filteredInvoices.map((invoice) => (
+                                {availableInvoices.map((invoice) => (
                                     <SelectItem key={invoice.id_factura} value={invoice.id_factura}>
                                         {String(invoice.invoice_number)}
                                     </SelectItem>
@@ -472,3 +474,5 @@ export default function ShipmentInvoicingPage() {
     </Card>
   )
 }
+
+    
