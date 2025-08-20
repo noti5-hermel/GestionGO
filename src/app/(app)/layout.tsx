@@ -1,8 +1,6 @@
 
 'use client'
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   SidebarProvider,
   Sidebar,
@@ -23,17 +21,6 @@ export default function AppLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const router = useRouter();
-
-  useEffect(() => {
-    // This effect runs once on the client to check for the session cookie.
-    // If the cookie is not present, it redirects to the login page.
-    const sessionCookie = document.cookie.split('; ').find(row => row.startsWith('user-session='));
-    if (!sessionCookie) {
-      router.push('/login');
-    }
-  }, [router]);
-
 
   const handleLogout = () => {
     // Clear the session cookie and redirect to the login page.
