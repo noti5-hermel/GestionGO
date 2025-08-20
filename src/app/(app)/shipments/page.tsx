@@ -3,6 +3,7 @@
 'use client'
 
 import { useState, useEffect } from "react"
+import Link from "next/link"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -24,7 +25,7 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
-import { PlusCircle, Pencil, Trash2 } from "lucide-react"
+import { PlusCircle, Pencil, Trash2, Eye } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
@@ -622,6 +623,11 @@ export default function ShipmentsPage() {
                   <TableCell><StatusBadge checked={shipment.cobros} /></TableCell>
                   <TableCell><StatusBadge checked={shipment.gerente_admon} /></TableCell>
                   <TableCell className="text-right">
+                    <Link href={`/shipments/${shipment.id_despacho}`} passHref>
+                      <Button variant="ghost" size="icon" asChild>
+                        <a><Eye className="h-4 w-4" /></a>
+                      </Button>
+                    </Link>
                     <Button variant="ghost" size="icon" onClick={() => handleEdit(shipment)}>
                       <Pencil className="h-4 w-4" />
                     </Button>
