@@ -78,7 +78,7 @@ export default function LoginPage() {
           title: "¡Éxito!",
           description: "¡Bienvenido!",
         })
-        window.location.href = "/";
+        window.location.href = "/users";
       } else {
         toast({
           title: "Error de autenticación",
