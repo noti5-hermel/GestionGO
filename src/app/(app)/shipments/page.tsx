@@ -29,6 +29,7 @@ import { Badge } from "@/components/ui/badge"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
 
 const shipmentSchema = z.object({
   id_ruta: z.preprocess(
@@ -71,6 +72,7 @@ export default function ShipmentsPage() {
   const [users, setUsers] = useState<User[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingShipment, setEditingShipment] = useState<Shipment | null>(null)
+  const [filterDate, setFilterDate] = useState<string>("")
   const { toast } = useToast()
 
   const form = useForm<z.infer<typeof shipmentSchema>>({
@@ -93,11 +95,15 @@ export default function ShipmentsPage() {
   })
 
   useEffect(() => {
-    fetchShipments()
     fetchRoutes()
     fetchUsersByRole()
     fetchAllUsers()
   }, [])
+  
+  useEffect(() => {
+    fetchShipments()
+  }, [filterDate])
+
 
   useEffect(() => {
     if (editingShipment) {
@@ -106,6 +112,7 @@ export default function ShipmentsPage() {
         id_ruta: String(editingShipment.id_ruta),
         id_motorista: String(editingShipment.id_motorista),
         id_auxiliar: String(editingShipment.id_auxiliar),
+        fecha_despacho: editingShipment.fecha_despacho ? new Date(editingShipment.fecha_despacho).toISOString().split('T')[0] : '',
       })
     } else {
       form.reset({
@@ -136,7 +143,14 @@ export default function ShipmentsPage() {
   }
 
   const fetchShipments = async () => {
-    const { data, error } = await supabase.from('despacho').select('*')
+    let query = supabase.from('despacho').select('*');
+
+    if (filterDate) {
+      query = query.eq('fecha_despacho', filterDate)
+    }
+    
+    const { data, error } = await query;
+
     if (error) {
       toast({
         title: "Error",
@@ -310,276 +324,288 @@ export default function ShipmentsPage() {
             <CardTitle>Despachos</CardTitle>
             <CardDescription>Gestione la información de sus envíos y estados.</CardDescription>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={handleOpenDialog}>
-            <DialogTrigger asChild>
-              <Button onClick={() => { setEditingShipment(null); form.reset(); setIsDialogOpen(true); }}>
-                <PlusCircle className="mr-2 h-4 w-4" /> Nuevo Despacho
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>{editingShipment ? 'Editar Despacho' : 'Crear Nuevo Despacho'}</DialogTitle>
-                <DialogDescription>
-                  {editingShipment ? 'Modifique los detalles del despacho.' : 'Complete todos los campos para registrar un nuevo despacho.'}
-                </DialogDescription>
-              </DialogHeader>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="id_ruta"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Ruta</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
-                                <FormControl>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Seleccione una ruta">
-                                          {getRouteDescription(field.value)}
-                                        </SelectValue>
-                                    </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                    {routes.map((route) => (
-                                        <SelectItem key={route.id_ruta} value={String(route.id_ruta)}>
-                                            {route.ruta_desc}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="id_motorista"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Motorista</FormLabel>
-                           <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
-                                <FormControl>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Seleccione un motorista">
-                                          {getUserName(field.value)}
-                                        </SelectValue>
-                                    </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                    {motoristas.map((motorista) => (
-                                        <SelectItem key={motorista.id_user} value={motorista.id_user}>
-                                            {motorista.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="id_auxiliar"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Auxiliar</FormLabel>
-                           <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
-                                <FormControl>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Seleccione un auxiliar">
-                                          {getUserName(field.value)}
-                                        </SelectValue>
-                                    </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                    {auxiliares.map((auxiliar) => (
-                                        <SelectItem key={auxiliar.id_user} value={auxiliar.id_user}>
-                                            {auxiliar.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="total_contado"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Total Contado</FormLabel>
-                          <FormControl>
-                            <Input type="number" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="total_credito"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Total Crédito</FormLabel>
-                          <FormControl>
-                            <Input type="number" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="total_general"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Total General</FormLabel>
-                          <FormControl>
-                            <Input type="number" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="fecha_despacho"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Fecha Despacho</FormLabel>
-                          <FormControl>
-                            <Input type="date" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <Card>
-                    <CardHeader><CardTitle>Estados</CardTitle></CardHeader>
-                    <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="flex items-center gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="filter-date">Filtrar por Fecha</Label>
+              <Input
+                id="filter-date"
+                type="date"
+                value={filterDate}
+                onChange={(e) => setFilterDate(e.target.value)}
+                className="w-full md:w-auto"
+              />
+            </div>
+            <Dialog open={isDialogOpen} onOpenChange={handleOpenDialog}>
+              <DialogTrigger asChild>
+                <Button onClick={() => { setEditingShipment(null); form.reset(); setIsDialogOpen(true); }}>
+                  <PlusCircle className="mr-2 h-4 w-4" /> Nuevo Despacho
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>{editingShipment ? 'Editar Despacho' : 'Crear Nuevo Despacho'}</DialogTitle>
+                  <DialogDescription>
+                    {editingShipment ? 'Modifique los detalles del despacho.' : 'Complete todos los campos para registrar un nuevo despacho.'}
+                  </DialogDescription>
+                </DialogHeader>
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
-                        name="bodega"
+                        name="id_ruta"
                         render={({ field }) => (
-                          <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                            <FormControl>
-                              <Checkbox
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                              />
-                            </FormControl>
-                            <div className="space-y-1 leading-none">
-                              <FormLabel>Bodega</FormLabel>
-                            </div>
+                          <FormItem>
+                            <FormLabel>Ruta</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                                  <FormControl>
+                                      <SelectTrigger>
+                                          <SelectValue placeholder="Seleccione una ruta">
+                                            {getRouteDescription(field.value)}
+                                          </SelectValue>
+                                      </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                      {routes.map((route) => (
+                                          <SelectItem key={route.id_ruta} value={String(route.id_ruta)}>
+                                              {route.ruta_desc}
+                                          </SelectItem>
+                                      ))}
+                                  </SelectContent>
+                              </Select>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
                       <FormField
                         control={form.control}
-                        name="reparto"
+                        name="id_motorista"
                         render={({ field }) => (
-                          <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                            <FormControl>
-                              <Checkbox
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                              />
-                            </FormControl>
-                            <div className="space-y-1 leading-none">
-                              <FormLabel>Reparto</FormLabel>
-                            </div>
+                          <FormItem>
+                            <FormLabel>Motorista</FormLabel>
+                             <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                                  <FormControl>
+                                      <SelectTrigger>
+                                          <SelectValue placeholder="Seleccione un motorista">
+                                            {getUserName(field.value)}
+                                          </SelectValue>
+                                      </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                      {motoristas.map((motorista) => (
+                                          <SelectItem key={motorista.id_user} value={motorista.id_user}>
+                                              {motorista.name}
+                                          </SelectItem>
+                                      ))}
+                                  </SelectContent>
+                              </Select>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
                       <FormField
                         control={form.control}
-                        name="facturacion"
+                        name="id_auxiliar"
                         render={({ field }) => (
-                          <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                            <FormControl>
-                              <Checkbox
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                              />
-                            </FormControl>
-                            <div className="space-y-1 leading-none">
-                              <FormLabel>Facturación</FormLabel>
-                            </div>
+                          <FormItem>
+                            <FormLabel>Auxiliar</FormLabel>
+                             <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                                  <FormControl>
+                                      <SelectTrigger>
+                                          <SelectValue placeholder="Seleccione un auxiliar">
+                                            {getUserName(field.value)}
+                                          </SelectValue>
+                                      </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                      {auxiliares.map((auxiliar) => (
+                                          <SelectItem key={auxiliar.id_user} value={auxiliar.id_user}>
+                                              {auxiliar.name}
+                                          </SelectItem>
+                                      ))}
+                                  </SelectContent>
+                              </Select>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
                       <FormField
                         control={form.control}
-                        name="asist_admon"
+                        name="total_contado"
                         render={({ field }) => (
-                          <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                          <FormItem>
+                            <FormLabel>Total Contado</FormLabel>
                             <FormControl>
-                              <Checkbox
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                              />
+                              <Input type="number" {...field} />
                             </FormControl>
-                            <div className="space-y-1 leading-none">
-                              <FormLabel>Asist. Admon.</FormLabel>
-                            </div>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
                       <FormField
                         control={form.control}
-                        name="cobros"
+                        name="total_credito"
                         render={({ field }) => (
-                          <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                          <FormItem>
+                            <FormLabel>Total Crédito</FormLabel>
                             <FormControl>
-                              <Checkbox
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                              />
+                              <Input type="number" {...field} />
                             </FormControl>
-                            <div className="space-y-1 leading-none">
-                              <FormLabel>Cobros</FormLabel>
-                            </div>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
                       <FormField
                         control={form.control}
-                        name="gerente_admon"
+                        name="total_general"
                         render={({ field }) => (
-                          <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                          <FormItem>
+                            <FormLabel>Total General</FormLabel>
                             <FormControl>
-                              <Checkbox
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                              />
+                              <Input type="number" {...field} />
                             </FormControl>
-                            <div className="space-y-1 leading-none">
-                              <FormLabel>Gerente Admon.</FormLabel>
-                            </div>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
-                    </CardContent>
-                  </Card>
-                  <DialogFooter>
-                    <DialogClose asChild>
-                      <Button type="button" variant="secondary" onClick={handleCloseDialog}>Cancelar</Button>
-                    </DialogClose>
-                    <Button type="submit">{editingShipment ? 'Guardar Cambios' : 'Guardar Despacho'}</Button>
-                  </DialogFooter>
-                </form>
-              </Form>
-            </DialogContent>
-          </Dialog>
+                      <FormField
+                        control={form.control}
+                        name="fecha_despacho"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Fecha Despacho</FormLabel>
+                            <FormControl>
+                              <Input type="date" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                    <Card>
+                      <CardHeader><CardTitle>Estados</CardTitle></CardHeader>
+                      <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="bodega"
+                          render={({ field }) => (
+                            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                              <FormControl>
+                                <Checkbox
+                                  checked={field.value}
+                                  onCheckedChange={field.onChange}
+                                />
+                              </FormControl>
+                              <div className="space-y-1 leading-none">
+                                <FormLabel>Bodega</FormLabel>
+                              </div>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="reparto"
+                          render={({ field }) => (
+                            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                              <FormControl>
+                                <Checkbox
+                                  checked={field.value}
+                                  onCheckedChange={field.onChange}
+                                />
+                              </FormControl>
+                              <div className="space-y-1 leading-none">
+                                <FormLabel>Reparto</FormLabel>
+                              </div>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="facturacion"
+                          render={({ field }) => (
+                            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                              <FormControl>
+                                <Checkbox
+                                  checked={field.value}
+                                  onCheckedChange={field.onChange}
+                                />
+                              </FormControl>
+                              <div className="space-y-1 leading-none">
+                                <FormLabel>Facturación</FormLabel>
+                              </div>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="asist_admon"
+                          render={({ field }) => (
+                            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                              <FormControl>
+                                <Checkbox
+                                  checked={field.value}
+                                  onCheckedChange={field.onChange}
+                                />
+                              </FormControl>
+                              <div className="space-y-1 leading-none">
+                                <FormLabel>Asist. Admon.</FormLabel>
+                              </div>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="cobros"
+                          render={({ field }) => (
+                            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                              <FormControl>
+                                <Checkbox
+                                  checked={field.value}
+                                  onCheckedChange={field.onChange}
+                                />
+                              </FormControl>
+                              <div className="space-y-1 leading-none">
+                                <FormLabel>Cobros</FormLabel>
+                              </div>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="gerente_admon"
+                          render={({ field }) => (
+                            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                              <FormControl>
+                                <Checkbox
+                                  checked={field.value}
+                                  onCheckedChange={field.onChange}
+                                />
+                              </FormControl>
+                              <div className="space-y-1 leading-none">
+                                <FormLabel>Gerente Admon.</FormLabel>
+                              </div>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </CardContent>
+                    </Card>
+                    <DialogFooter>
+                      <DialogClose asChild>
+                        <Button type="button" variant="secondary" onClick={handleCloseDialog}>Cancelar</Button>
+                      </DialogClose>
+                      <Button type="submit">{editingShipment ? 'Guardar Cambios' : 'Guardar Despacho'}</Button>
+                    </DialogFooter>
+                  </form>
+                </Form>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="flex-1 overflow-auto">
@@ -611,7 +637,7 @@ export default function ShipmentsPage() {
                   <TableCell>{getRouteDescription(shipment.id_ruta)}</TableCell>
                   <TableCell>{getUserName(shipment.id_motorista)}</TableCell>
                   <TableCell>{getUserName(shipment.id_auxiliar)}</TableCell>
-                  <TableCell>{shipment.fecha_despacho}</TableCell>
+                  <TableCell>{new Date(shipment.fecha_despacho).toLocaleDateString()}</TableCell>
                   <TableCell>${shipment.total_contado.toFixed(2)}</TableCell>
                   <TableCell>${shipment.total_credito.toFixed(2)}</TableCell>
                   <TableCell>${shipment.total_general.toFixed(2)}</TableCell>
@@ -660,9 +686,11 @@ export default function ShipmentsPage() {
       </CardContent>
       <CardFooter className="pt-6">
         <div className="text-xs text-muted-foreground">
-          Mostrando <strong>1-{shipments.length}</strong> de <strong>{shipments.length}</strong> despachos.
+          Mostrando <strong>{shipments.length}</strong> de <strong>{shipments.length}</strong> despachos.
         </div>
       </CardFooter>
     </Card>
   )
 }
+
+    
