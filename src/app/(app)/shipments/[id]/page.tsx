@@ -36,11 +36,16 @@ type ShipmentInvoice = {
   forma_pago: "Efectivo" | "Tarjeta" | "Transferencia"
   monto: number
   state: boolean
+  invoice_number?: string | number
+  tax_type?: string
 }
 
 type User = { id_user: string; name: string }
 type Route = { id_ruta: string; ruta_desc: string }
-type Invoice = { id_factura: string, invoice_number: string | number }
+type Invoice = { id_factura: string, invoice_number: string | number, code_customer: string }
+type Customer = { code_customer: string; id_impuesto: number };
+type TaxType = { id_impuesto: number; impt_desc: string };
+
 
 const StatusBadge = ({ checked, text }: { checked: boolean, text: string }) => {
     return (
@@ -61,7 +66,6 @@ export default function ShipmentDetailPage() {
   const [invoices, setInvoices] = useState<ShipmentInvoice[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [routes, setRoutes] = useState<Route[]>([])
-  const [allInvoices, setAllInvoices] = useState<Invoice[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -69,49 +73,65 @@ export default function ShipmentDetailPage() {
       if (!id) return;
       setLoading(true)
       
-      // Parallel data fetching
       const [
         shipmentRes,
-        invoicesRes,
         usersRes,
         routesRes,
-        allInvoicesRes
+        shipmentInvoicesRes,
       ] = await Promise.all([
         supabase.from('despacho').select('*').eq('id_despacho', id).single(),
-        supabase.from('facturacion_x_despacho').select('*').eq('id_despacho', id),
         supabase.from('usuario').select('id_user, name'),
         supabase.from('rutas').select('id_ruta, ruta_desc'),
-        supabase.from('facturacion').select('id_factura, invoice_number')
+        supabase.from('facturacion_x_despacho').select('*').eq('id_despacho', id),
       ]);
 
-      if (shipmentRes.error) {
-        toast({ title: "Error", description: "No se pudo cargar el despacho.", variant: "destructive" })
-      } else {
-        setShipment(shipmentRes.data as Shipment)
-      }
+      if (shipmentRes.error) toast({ title: "Error", description: "No se pudo cargar el despacho.", variant: "destructive" })
+      else setShipment(shipmentRes.data as Shipment)
 
-      if (invoicesRes.error) {
+      if (usersRes.error) toast({ title: "Error", description: "No se pudieron cargar los usuarios.", variant: "destructive" })
+      else setUsers(usersRes.data as User[])
+
+      if (routesRes.error) toast({ title: "Error", description: "No se pudieron cargar las rutas.", variant: "destructive" })
+      else setRoutes(routesRes.data as Route[])
+      
+      if (shipmentInvoicesRes.error) {
         toast({ title: "Error", description: "No se pudieron cargar las facturas asociadas.", variant: "destructive" })
       } else {
-        setInvoices(invoicesRes.data as ShipmentInvoice[])
-      }
+        const shipmentInvoicesData = (shipmentInvoicesRes.data || []) as ShipmentInvoice[]
+        const invoiceIds = shipmentInvoicesData.map(inv => inv.id_factura)
 
-      if (usersRes.error) {
-        toast({ title: "Error", description: "No se pudieron cargar los usuarios.", variant: "destructive" })
-      } else {
-        setUsers(usersRes.data as User[])
-      }
+        if (invoiceIds.length > 0) {
+            const { data: invoicesData, error: invoicesError } = await supabase.from('facturacion').select('id_factura, invoice_number, code_customer').in('id_factura', invoiceIds)
+            if (invoicesError) {
+                toast({ title: "Error", description: "No se pudieron cargar los datos de facturas.", variant: "destructive" });
+            } else {
+                const customerCodes = (invoicesData || []).map(inv => inv.code_customer)
+                const { data: customersData, error: customersError } = await supabase.from('customer').select('code_customer, id_impuesto').in('code_customer', customerCodes)
+                if (customersError) {
+                    toast({ title: "Error", description: "No se pudieron cargar los datos de clientes.", variant: "destructive" });
+                } else {
+                    const taxIds = (customersData || []).map(c => c.id_impuesto)
+                    const { data: taxesData, error: taxesError } = await supabase.from('tipo_impuesto').select('id_impuesto, impt_desc').in('id_impuesto', taxIds)
+                    if (taxesError) {
+                        toast({ title: "Error", description: "No se pudieron cargar los tipos de impuesto.", variant: "destructive" });
+                    } else {
+                        const taxMap = new Map((taxesData || []).map(t => [t.id_impuesto, t.impt_desc]))
+                        const customerTaxMap = new Map((customersData || []).map(c => [c.code_customer, taxMap.get(c.id_impuesto)]))
+                        const invoiceCustomerMap = new Map((invoicesData || []).map(i => [i.id_factura, i.code_customer]))
+                        const invoiceNumberMap = new Map((invoicesData || []).map(i => [i.id_factura, i.invoice_number]))
 
-      if (routesRes.error) {
-        toast({ title: "Error", description: "No se pudieron cargar las rutas.", variant: "destructive" })
-      } else {
-        setRoutes(routesRes.data as Route[])
-      }
-
-      if (allInvoicesRes.error) {
-        toast({ title: "Error", description: "No se pudieron cargar los datos de facturas.", variant: "destructive" })
-      } else {
-        setAllInvoices(allInvoicesRes.data as Invoice[])
+                        const enrichedInvoices = shipmentInvoicesData.map(si => ({
+                            ...si,
+                            invoice_number: invoiceNumberMap.get(si.id_factura),
+                            tax_type: customerTaxMap.get(invoiceCustomerMap.get(si.id_factura) || '')
+                        }));
+                        setInvoices(enrichedInvoices);
+                    }
+                }
+            }
+        } else {
+          setInvoices([])
+        }
       }
 
       setLoading(false)
@@ -122,9 +142,13 @@ export default function ShipmentDetailPage() {
 
   const getRouteDescription = (routeId: string) => routes.find(route => String(route.id_ruta) === String(routeId))?.ruta_desc || routeId
   const getUserName = (userId: string) => users.find(user => String(user.id_user) === String(userId))?.name || userId
-  const getInvoiceNumber = (invoiceId: string) => allInvoices.find(inv => inv.id_factura === invoiceId)?.invoice_number || invoiceId
   const getStatusLabel = (status: boolean) => status ? "Pagado" : "Pendiente"
   const getBadgeVariant = (status: boolean) => status ? "default" : "secondary"
+
+  const fiscalCreditInvoices = invoices.filter(inv => inv.tax_type === 'Crédito Fiscal');
+  const finalConsumerInvoices = invoices.filter(inv => inv.tax_type === 'Consumidor Final');
+  const otherInvoices = invoices.filter(inv => inv.tax_type !== 'Crédito Fiscal' && inv.tax_type !== 'Consumidor Final');
+
 
   if (loading) {
     return <p>Cargando detalles del despacho...</p>
@@ -133,6 +157,48 @@ export default function ShipmentDetailPage() {
   if (!shipment) {
     return <p>Despacho no encontrado.</p>
   }
+
+  const renderInvoicesTable = (invoiceList: ShipmentInvoice[], title: string, description: string) => (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>No. Factura</TableHead>
+              <TableHead>Comprobante</TableHead>
+              <TableHead>Forma de Pago</TableHead>
+              <TableHead>Monto</TableHead>
+              <TableHead>Estado</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {invoiceList.length > 0 ? invoiceList.map((invoice) => (
+              <TableRow key={invoice.id_fac_desp}>
+                <TableCell className="font-medium">{String(invoice.invoice_number || invoice.id_factura)}</TableCell>
+                <TableCell>{invoice.comprobante}</TableCell>
+                <TableCell>{invoice.forma_pago}</TableCell>
+                <TableCell>${invoice.monto.toFixed(2)}</TableCell>
+                <TableCell><Badge variant={getBadgeVariant(invoice.state)}>{getStatusLabel(invoice.state)}</Badge></TableCell>
+              </TableRow>
+            )) : (
+              <TableRow>
+                  <TableCell colSpan={5} className="text-center">No hay facturas en esta categoría.</TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </CardContent>
+      <CardFooter>
+          <div className="text-xs text-muted-foreground">
+              Mostrando <strong>{invoiceList.length}</strong> de <strong>{invoiceList.length}</strong> facturas.
+          </div>
+      </CardFooter>
+    </Card>
+  );
 
   return (
     <div className="space-y-6">
@@ -196,47 +262,13 @@ export default function ShipmentDetailPage() {
          </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Facturación Asociada</CardTitle>
-          <CardDescription>
-            Facturas que han sido procesadas en este despacho.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>No. Factura</TableHead>
-                <TableHead>Comprobante</TableHead>
-                <TableHead>Forma de Pago</TableHead>
-                <TableHead>Monto</TableHead>
-                <TableHead>Estado</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {invoices.length > 0 ? invoices.map((invoice) => (
-                <TableRow key={invoice.id_fac_desp}>
-                  <TableCell className="font-medium">{getInvoiceNumber(invoice.id_factura)}</TableCell>
-                  <TableCell>{invoice.comprobante}</TableCell>
-                  <TableCell>{invoice.forma_pago}</TableCell>
-                  <TableCell>${invoice.monto.toFixed(2)}</TableCell>
-                  <TableCell><Badge variant={getBadgeVariant(invoice.state)}>{getStatusLabel(invoice.state)}</Badge></TableCell>
-                </TableRow>
-              )) : (
-                <TableRow>
-                    <TableCell colSpan={5} className="text-center">No hay facturas asociadas a este despacho.</TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-        <CardFooter>
-            <div className="text-xs text-muted-foreground">
-                Mostrando <strong>{invoices.length}</strong> de <strong>{invoices.length}</strong> facturas.
-            </div>
-        </CardFooter>
-      </Card>
+      <div className="space-y-6">
+        {renderInvoicesTable(fiscalCreditInvoices, "Facturación - Crédito Fiscal", "Facturas asociadas a clientes de tipo Crédito Fiscal.")}
+        {renderInvoicesTable(finalConsumerInvoices, "Facturación - Consumidor Final", "Facturas asociadas a clientes de tipo Consumidor Final.")}
+        {otherInvoices.length > 0 && renderInvoicesTable(otherInvoices, "Facturación - Otros", "Facturas sin un tipo de cliente especificado.")}
+      </div>
     </div>
   )
 }
+
+    
