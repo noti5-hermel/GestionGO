@@ -26,6 +26,8 @@ export default function AppLayout({
   const router = useRouter();
 
   useEffect(() => {
+    // This effect runs once on the client to check for the session cookie.
+    // If the cookie is not present, it redirects to the login page.
     const sessionCookie = document.cookie.split('; ').find(row => row.startsWith('user-session='));
     if (!sessionCookie) {
       router.push('/login');
@@ -34,6 +36,7 @@ export default function AppLayout({
 
 
   const handleLogout = () => {
+    // Clear the session cookie and redirect to the login page.
     document.cookie = 'user-session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
     window.location.href = '/login';
   };
