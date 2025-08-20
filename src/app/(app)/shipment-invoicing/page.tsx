@@ -2,7 +2,7 @@
 
 'use client'
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -42,7 +42,7 @@ const shipmentInvoiceSchema = z.object({
 })
 
 type ShipmentInvoice = z.infer<typeof shipmentInvoiceSchema> & { id_fac_desp: number }
-type Invoice = { id_factura: string, invoice_number: string | number }
+type Invoice = { id_factura: string, invoice_number: string | number, fecha: string }
 type Shipment = { id_despacho: number, fecha_despacho: string }
 
 const paymentMethods: ShipmentInvoice['forma_pago'][] = ["Efectivo", "Tarjeta", "Transferencia"];
@@ -54,8 +54,8 @@ const statusOptions: { label: string; value: boolean }[] = [
 
 export default function ShipmentInvoicingPage() {
   const [shipmentInvoices, setShipmentInvoices] = useState<ShipmentInvoice[]>([])
-  const [invoices, setInvoices] = useState<Invoice[]>([])
-  const [shipments, setShipments] = useState<Shipment[]>([])
+  const [allInvoices, setAllInvoices] = useState<Invoice[]>([])
+  const [allShipments, setAllShipments] = useState<Shipment[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingShipmentInvoice, setEditingShipmentInvoice] = useState<ShipmentInvoice | null>(null)
   const { toast } = useToast()
@@ -71,6 +71,25 @@ export default function ShipmentInvoicingPage() {
       state: false,
     },
   })
+  
+  const selectedShipmentId = form.watch("id_despacho");
+  const selectedInvoiceId = form.watch("id_factura");
+
+  const filteredInvoices = useMemo(() => {
+    if (!selectedShipmentId) return allInvoices;
+    const selectedShipment = allShipments.find(s => String(s.id_despacho) === selectedShipmentId);
+    if (!selectedShipment) return allInvoices;
+    const selectedDate = new Date(selectedShipment.fecha_despacho).toISOString().split('T')[0];
+    return allInvoices.filter(inv => new Date(inv.fecha).toISOString().split('T')[0] === selectedDate);
+  }, [selectedShipmentId, allInvoices, allShipments]);
+
+  const filteredShipments = useMemo(() => {
+    if (!selectedInvoiceId) return allShipments;
+    const selectedInvoice = allInvoices.find(inv => inv.id_factura === selectedInvoiceId);
+    if (!selectedInvoice) return allShipments;
+    const selectedDate = new Date(selectedInvoice.fecha).toISOString().split('T')[0];
+    return allShipments.filter(ship => new Date(ship.fecha_despacho).toISOString().split('T')[0] === selectedDate);
+  }, [selectedInvoiceId, allInvoices, allShipments]);
   
   useEffect(() => {
     fetchShipmentInvoices()
@@ -95,6 +114,18 @@ export default function ShipmentInvoicingPage() {
       })
     }
   }, [editingShipmentInvoice, form])
+  
+  useEffect(() => {
+    if (!editingShipmentInvoice) {
+      form.setValue("id_factura", "");
+    }
+  }, [selectedShipmentId, editingShipmentInvoice, form]);
+
+  useEffect(() => {
+    if (!editingShipmentInvoice) {
+      form.setValue("id_despacho", "");
+    }
+  }, [selectedInvoiceId, editingShipmentInvoice, form]);
 
   const fetchShipmentInvoices = async () => {
     const { data, error } = await supabase.from('facturacion_x_despacho').select('*')
@@ -106,11 +137,11 @@ export default function ShipmentInvoicingPage() {
   }
   
   const fetchInvoices = async () => {
-    const { data, error } = await supabase.from('facturacion').select('id_factura, invoice_number')
+    const { data, error } = await supabase.from('facturacion').select('id_factura, invoice_number, fecha')
     if (error) {
       toast({ title: "Error", description: "No se pudieron cargar las facturas.", variant: "destructive" })
     } else {
-      setInvoices(data as Invoice[])
+      setAllInvoices(data as Invoice[])
     }
   }
   
@@ -119,7 +150,7 @@ export default function ShipmentInvoicingPage() {
     if (error) {
       toast({ title: "Error", description: "No se pudieron cargar los despachos.", variant: "destructive" })
     } else {
-      setShipments(data as Shipment[])
+      setAllShipments(data as Shipment[])
     }
   }
 
@@ -208,12 +239,12 @@ export default function ShipmentInvoicingPage() {
   }
   
   const getInvoiceNumber = (invoiceId: string) => {
-    return invoices.find(inv => inv.id_factura === invoiceId)?.invoice_number || invoiceId;
+    return allInvoices.find(inv => inv.id_factura === invoiceId)?.invoice_number || invoiceId;
   }
 
   const getShipmentDate = (shipmentId: string | number) => {
       const id = typeof shipmentId === 'string' ? parseInt(shipmentId, 10) : shipmentId;
-      const shipment = shipments.find(ship => ship.id_despacho === id);
+      const shipment = allShipments.find(ship => ship.id_despacho === id);
       return shipment ? new Date(shipment.fecha_despacho).toLocaleDateString() : shipmentId;
   }
 
@@ -243,30 +274,6 @@ export default function ShipmentInvoicingPage() {
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                   <FormField
                     control={form.control}
-                    name="id_factura"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Factura</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
-                            <FormControl>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Seleccione una factura" />
-                                </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                                {invoices.map((invoice) => (
-                                    <SelectItem key={invoice.id_factura} value={invoice.id_factura}>
-                                        {invoice.invoice_number}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
                     name="id_despacho"
                     render={({ field }) => (
                       <FormItem>
@@ -278,9 +285,33 @@ export default function ShipmentInvoicingPage() {
                                 </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                                {shipments.map((shipment) => (
+                                {filteredShipments.map((shipment) => (
                                     <SelectItem key={shipment.id_despacho} value={String(shipment.id_despacho)}>
                                         ID: {shipment.id_despacho} - Fecha: {new Date(shipment.fecha_despacho).toLocaleDateString()}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="id_factura"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Factura</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                            <FormControl>
+                                <SelectTrigger disabled={!selectedShipmentId && !editingShipmentInvoice}>
+                                    <SelectValue placeholder="Seleccione una factura" />
+                                </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                                {filteredInvoices.map((invoice) => (
+                                    <SelectItem key={invoice.id_factura} value={invoice.id_factura}>
+                                        {String(invoice.invoice_number)}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
