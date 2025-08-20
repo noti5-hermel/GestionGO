@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 import { ArrowLeft } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 type Shipment = {
   id_despacho: string
@@ -68,82 +69,102 @@ export default function ShipmentDetailPage() {
   const [routes, setRoutes] = useState<Route[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!id) return;
-      setLoading(true)
-      
-      const [
-        shipmentRes,
-        usersRes,
-        routesRes,
-        shipmentInvoicesRes,
-      ] = await Promise.all([
-        supabase.from('despacho').select('*').eq('id_despacho', id).single(),
-        supabase.from('usuario').select('id_user, name'),
-        supabase.from('rutas').select('id_ruta, ruta_desc'),
-        supabase.from('facturacion_x_despacho').select('*').eq('id_despacho', id),
-      ]);
+  const fetchData = async () => {
+    if (!id) return;
+    setLoading(true)
+    
+    const [
+      shipmentRes,
+      usersRes,
+      routesRes,
+      shipmentInvoicesRes,
+    ] = await Promise.all([
+      supabase.from('despacho').select('*').eq('id_despacho', id).single(),
+      supabase.from('usuario').select('id_user, name'),
+      supabase.from('rutas').select('id_ruta, ruta_desc'),
+      supabase.from('facturacion_x_despacho').select('*').eq('id_despacho', id),
+    ]);
 
-      if (shipmentRes.error) toast({ title: "Error", description: "No se pudo cargar el despacho.", variant: "destructive" })
-      else setShipment(shipmentRes.data as Shipment)
+    if (shipmentRes.error) toast({ title: "Error", description: "No se pudo cargar el despacho.", variant: "destructive" })
+    else setShipment(shipmentRes.data as Shipment)
 
-      if (usersRes.error) toast({ title: "Error", description: "No se pudieron cargar los usuarios.", variant: "destructive" })
-      else setUsers(usersRes.data as User[])
+    if (usersRes.error) toast({ title: "Error", description: "No se pudieron cargar los usuarios.", variant: "destructive" })
+    else setUsers(usersRes.data as User[])
 
-      if (routesRes.error) toast({ title: "Error", description: "No se pudieron cargar las rutas.", variant: "destructive" })
-      else setRoutes(routesRes.data as Route[])
-      
-      if (shipmentInvoicesRes.error) {
-        toast({ title: "Error", description: "No se pudieron cargar las facturas asociadas.", variant: "destructive" })
+    if (routesRes.error) toast({ title: "Error", description: "No se pudieron cargar las rutas.", variant: "destructive" })
+    else setRoutes(routesRes.data as Route[])
+    
+    if (shipmentInvoicesRes.error) {
+      toast({ title: "Error", description: "No se pudieron cargar las facturas asociadas.", variant: "destructive" })
+    } else {
+      const shipmentInvoicesData = (shipmentInvoicesRes.data || []) as ShipmentInvoice[]
+      const invoiceIds = shipmentInvoicesData.map(inv => inv.id_factura)
+
+      if (invoiceIds.length > 0) {
+          const { data: invoicesData, error: invoicesError } = await supabase.from('facturacion').select('id_factura, invoice_number, code_customer').in('id_factura', invoiceIds)
+          if (invoicesError) {
+              toast({ title: "Error", description: "No se pudieron cargar los datos de facturas.", variant: "destructive" });
+          } else {
+              const customerCodes = (invoicesData || []).map(inv => inv.code_customer)
+              const { data: customersData, error: customersError } = await supabase.from('customer').select('code_customer, id_impuesto').in('code_customer', customerCodes)
+              if (customersError) {
+                  toast({ title: "Error", description: "No se pudieron cargar los datos de clientes.", variant: "destructive" });
+              } else {
+                  const taxIds = (customersData || []).map(c => c.id_impuesto)
+                  const { data: taxesData, error: taxesError } = await supabase.from('tipo_impuesto').select('id_impuesto, impt_desc').in('id_impuesto', taxIds)
+                  if (taxesError) {
+                      toast({ title: "Error", description: "No se pudieron cargar los tipos de impuesto.", variant: "destructive" });
+                  } else {
+                      const taxMap = new Map((taxesData || []).map(t => [t.id_impuesto, t.impt_desc]))
+                      const customerTaxMap = new Map((customersData || []).map(c => [c.code_customer, taxMap.get(c.id_impuesto)]))
+                      const invoiceCustomerMap = new Map((invoicesData || []).map(i => [i.id_factura, i.code_customer]))
+                      const invoiceNumberMap = new Map((invoicesData || []).map(i => [i.id_factura, i.invoice_number]))
+
+                      const enrichedInvoices = shipmentInvoicesData.map(si => ({
+                          ...si,
+                          invoice_number: invoiceNumberMap.get(si.id_factura),
+                          tax_type: customerTaxMap.get(invoiceCustomerMap.get(si.id_factura) || '')
+                      }));
+                      setInvoices(enrichedInvoices);
+                  }
+              }
+          }
       } else {
-        const shipmentInvoicesData = (shipmentInvoicesRes.data || []) as ShipmentInvoice[]
-        const invoiceIds = shipmentInvoicesData.map(inv => inv.id_factura)
-
-        if (invoiceIds.length > 0) {
-            const { data: invoicesData, error: invoicesError } = await supabase.from('facturacion').select('id_factura, invoice_number, code_customer').in('id_factura', invoiceIds)
-            if (invoicesError) {
-                toast({ title: "Error", description: "No se pudieron cargar los datos de facturas.", variant: "destructive" });
-            } else {
-                const customerCodes = (invoicesData || []).map(inv => inv.code_customer)
-                const { data: customersData, error: customersError } = await supabase.from('customer').select('code_customer, id_impuesto').in('code_customer', customerCodes)
-                if (customersError) {
-                    toast({ title: "Error", description: "No se pudieron cargar los datos de clientes.", variant: "destructive" });
-                } else {
-                    const taxIds = (customersData || []).map(c => c.id_impuesto)
-                    const { data: taxesData, error: taxesError } = await supabase.from('tipo_impuesto').select('id_impuesto, impt_desc').in('id_impuesto', taxIds)
-                    if (taxesError) {
-                        toast({ title: "Error", description: "No se pudieron cargar los tipos de impuesto.", variant: "destructive" });
-                    } else {
-                        const taxMap = new Map((taxesData || []).map(t => [t.id_impuesto, t.impt_desc]))
-                        const customerTaxMap = new Map((customersData || []).map(c => [c.code_customer, taxMap.get(c.id_impuesto)]))
-                        const invoiceCustomerMap = new Map((invoicesData || []).map(i => [i.id_factura, i.code_customer]))
-                        const invoiceNumberMap = new Map((invoicesData || []).map(i => [i.id_factura, i.invoice_number]))
-
-                        const enrichedInvoices = shipmentInvoicesData.map(si => ({
-                            ...si,
-                            invoice_number: invoiceNumberMap.get(si.id_factura),
-                            tax_type: customerTaxMap.get(invoiceCustomerMap.get(si.id_factura) || '')
-                        }));
-                        setInvoices(enrichedInvoices);
-                    }
-                }
-            }
-        } else {
-          setInvoices([])
-        }
+        setInvoices([])
       }
-
-      setLoading(false)
     }
 
+    setLoading(false)
+  }
+
+  useEffect(() => {
     fetchData()
   }, [id, toast])
+
+  const handleStatusChange = async (invoiceId: number, newState: boolean) => {
+    const { error } = await supabase
+      .from('facturacion_x_despacho')
+      .update({ state: newState })
+      .eq('id_fac_desp', invoiceId);
+  
+    if (error) {
+      toast({
+        title: "Error al actualizar",
+        description: "No se pudo cambiar el estado de la factura.",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Éxito",
+        description: "Estado de la factura actualizado correctamente.",
+      });
+      fetchData(); // Recargar datos para reflejar el cambio
+    }
+  };
 
   const getRouteDescription = (routeId: string) => routes.find(route => String(route.id_ruta) === String(routeId))?.ruta_desc || routeId
   const getUserName = (userId: string) => users.find(user => String(user.id_user) === String(userId))?.name || userId
   const getStatusLabel = (status: boolean) => status ? "Pagado" : "Pendiente"
-  const getBadgeVariant = (status: boolean) => status ? "default" : "secondary"
 
   const fiscalCreditInvoices = invoices.filter(inv => inv.tax_type === 'Crédito Fiscal');
   const finalConsumerInvoices = invoices.filter(inv => inv.tax_type === 'Consumidor Final');
@@ -159,7 +180,7 @@ export default function ShipmentDetailPage() {
   }
 
   const renderInvoicesTable = (invoiceList: ShipmentInvoice[], title: string, description: string) => (
-    <Card>
+    <Card className="mt-6">
       <CardHeader>
         <CardTitle>{title}</CardTitle>
         <CardDescription>{description}</CardDescription>
@@ -182,7 +203,20 @@ export default function ShipmentDetailPage() {
                 <TableCell>{invoice.comprobante}</TableCell>
                 <TableCell>{invoice.forma_pago}</TableCell>
                 <TableCell>${invoice.monto.toFixed(2)}</TableCell>
-                <TableCell><Badge variant={getBadgeVariant(invoice.state)}>{getStatusLabel(invoice.state)}</Badge></TableCell>
+                <TableCell>
+                  <Select
+                    value={String(invoice.state)}
+                    onValueChange={(value) => handleStatusChange(invoice.id_fac_desp, value === 'true')}
+                  >
+                    <SelectTrigger className="w-[120px]">
+                      <SelectValue placeholder="Seleccionar estado" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="true">Pagado</SelectItem>
+                      <SelectItem value="false">Pendiente</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </TableCell>
               </TableRow>
             )) : (
               <TableRow>
@@ -270,5 +304,3 @@ export default function ShipmentDetailPage() {
     </div>
   )
 }
-
-    
