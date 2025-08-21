@@ -22,9 +22,15 @@ export default function AppLayout({
   children: React.ReactNode;
 }>) {
 
+  /**
+   * Cierra la sesión del usuario eliminando la cookie de sesión
+   * y redirigiendo a la página de inicio de sesión.
+   */
   const handleLogout = () => {
-    // Clear the session cookie and redirect to the login page.
-    document.cookie = 'user-session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    // Establece la fecha de expiración de la cookie a una fecha pasada para que el navegador la elimine.
+    // SameSite=None y Secure son necesarios para que funcione correctamente en entornos de iframe como Firebase Studio.
+    document.cookie = 'user-session=true; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=None; Secure';
+    // Redirige al usuario a la página de login.
     window.location.href = '/login';
   };
 

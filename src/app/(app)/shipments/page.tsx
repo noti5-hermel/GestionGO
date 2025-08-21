@@ -31,6 +31,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 
+// Esquema de validación para el formulario de despacho.
 const shipmentSchema = z.object({
   id_ruta: z.preprocess(
     (val) => String(val),
@@ -56,17 +57,21 @@ const shipmentSchema = z.object({
   gerente_admon: z.boolean().default(false),
 })
 
+// Tipos de datos para la gestión de despachos.
 type Shipment = z.infer<typeof shipmentSchema> & { id_despacho: string }
 type Route = { id_ruta: string; ruta_desc: string }
 type User = { id_user: string; name: string }
 
+// Componente para mostrar un badge de estado de forma consistente.
 const StatusBadge = ({ checked }: { checked: boolean }) => {
   return <Badge variant={checked ? "default" : "outline"}>{checked ? "OK" : "Pend."}</Badge>
 }
 
+// Constante para el número de ítems por página en la paginación.
 const ITEMS_PER_PAGE = 10;
 
 export default function ShipmentsPage() {
+  // Estados para gestionar los datos y la UI de la página.
   const [shipments, setShipments] = useState<Shipment[]>([])
   const [filteredShipments, setFilteredShipments] = useState<Shipment[]>([])
   const [routes, setRoutes] = useState<Route[]>([])
@@ -80,6 +85,7 @@ export default function ShipmentsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const { toast } = useToast()
 
+  // Configuración del formulario con react-hook-form y Zod.
   const form = useForm<z.infer<typeof shipmentSchema>>({
     resolver: zodResolver(shipmentSchema),
     defaultValues: {
@@ -99,6 +105,7 @@ export default function ShipmentsPage() {
     },
   })
   
+  // Función para aplicar los filtros de fecha a la lista de despachos.
   const applyFilters = () => {
     let newFilteredShipments = [...shipments];
     if (filterType === 'today') {
@@ -108,10 +115,10 @@ export default function ShipmentsPage() {
         newFilteredShipments = shipments.filter(s => s.fecha_despacho === customDate);
     }
     setFilteredShipments(newFilteredShipments);
-    setCurrentPage(1); // Reset to first page on filter change
+    setCurrentPage(1); // Resetea a la primera página cada vez que cambia el filtro.
   };
 
-
+  // Carga los datos iniciales al montar el componente.
   useEffect(() => {
     fetchShipments()
     fetchRoutes()
@@ -119,11 +126,12 @@ export default function ShipmentsPage() {
     fetchAllUsers()
   }, [])
   
+  // Vuelve a aplicar los filtros cada vez que los despachos o las opciones de filtro cambian.
   useEffect(() => {
     applyFilters();
   }, [shipments, filterType, customDate]);
 
-
+  // Rellena el formulario cuando se selecciona un despacho para editar.
   useEffect(() => {
     if (editingShipment) {
       form.reset({
@@ -152,6 +160,7 @@ export default function ShipmentsPage() {
     }
   }, [editingShipment, form])
 
+  // Obtiene todos los usuarios para poder mostrar sus nombres.
   const fetchAllUsers = async () => {
     const { data, error } = await supabase.from('usuario').select('id_user, name');
     if (error) {
@@ -161,6 +170,7 @@ export default function ShipmentsPage() {
     }
   }
 
+  // Obtiene la lista completa de despachos.
   const fetchShipments = async () => {
     const { data, error } = await supabase.from('despacho').select('*').order('fecha_despacho', { ascending: false });
 
@@ -175,6 +185,7 @@ export default function ShipmentsPage() {
     }
   }
 
+  // Obtiene las rutas disponibles.
   const fetchRoutes = async () => {
     const { data, error } = await supabase.from('rutas').select('id_ruta, ruta_desc');
     if (error) {
@@ -188,7 +199,9 @@ export default function ShipmentsPage() {
     }
   };
 
+  // Obtiene los usuarios filtrados por rol para los selects de motorista y auxiliar.
   const fetchUsersByRole = async () => {
+    // Busca el rol de motorista (podría tener variaciones en la descripción).
     const { data: motoristaRoles, error: motoristaRolesError } = await supabase
       .from('rol')
       .select('id_rol')
@@ -210,6 +223,7 @@ export default function ShipmentsPage() {
       }
     }
 
+    // Busca auxiliares (asumiendo que tienen un id_rol fijo de 3).
     const { data: auxiliaresData, error: auxiliaresError } = await supabase
         .from('usuario')
         .select('id_user, name')
@@ -222,10 +236,12 @@ export default function ShipmentsPage() {
     }
   }
 
+  // Gestiona el envío del formulario para crear o actualizar un despacho.
   const onSubmit = async (values: z.infer<typeof shipmentSchema>) => {
     let error;
 
     if (editingShipment) {
+      // Actualiza un despacho existente.
       const { error: updateError } = await supabase
         .from('despacho')
         .update(values)
@@ -233,13 +249,13 @@ export default function ShipmentsPage() {
         .select()
       error = updateError;
     } else {
+      // Inserta un nuevo despacho.
        const { error: insertError } = await supabase
         .from('despacho')
         .insert([values])
         .select()
       error = insertError;
     }
-
 
     if (error) {
       toast({
@@ -257,6 +273,7 @@ export default function ShipmentsPage() {
     }
   }
 
+  // Elimina un despacho.
   const handleDelete = async (shipmentId: string) => {
     const { error } = await supabase
       .from('despacho')
@@ -286,11 +303,13 @@ export default function ShipmentsPage() {
     }
   }
   
+  // Prepara el formulario para editar un despacho.
   const handleEdit = (shipment: Shipment) => {
     setEditingShipment(shipment);
     setIsDialogOpen(true);
   }
 
+  // Controla la apertura y cierre del diálogo, reseteando el estado de edición.
   const handleOpenDialog = (open: boolean) => {
     setIsDialogOpen(open);
     if (!open) {
@@ -298,6 +317,7 @@ export default function ShipmentsPage() {
     }
   };
 
+  // Cierra el diálogo y resetea el formulario.
   const handleCloseDialog = () => {
     setEditingShipment(null);
     form.reset({
@@ -318,6 +338,7 @@ export default function ShipmentsPage() {
     setIsDialogOpen(false);
   }
 
+  // Funciones para obtener descripciones legibles a partir de IDs.
   const getRouteDescription = (routeId: string) => {
     if (!routes || routes.length === 0) return routeId;
     return routes.find(route => String(route.id_ruta) === String(routeId))?.ruta_desc || routeId;
@@ -327,12 +348,14 @@ export default function ShipmentsPage() {
     return users.find(user => String(user.id_user) === String(userId))?.name || userId;
   }
   
+  // Lógica de paginación.
   const totalPages = Math.ceil(filteredShipments.length / ITEMS_PER_PAGE);
   const paginatedShipments = filteredShipments.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
   
+  // Maneja el cambio en el input de fecha personalizada.
   const handleCustomDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFilterType('date');
     setCustomDate(e.target.value);

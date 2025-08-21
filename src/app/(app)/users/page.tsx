@@ -27,10 +27,12 @@ import { PlusCircle, Pencil, Trash2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 
+// Esquema de validación para el formulario de usuario.
 const userSchema = z.object({
   id_user: z.string().optional(),
   name: z.string().min(1, { message: "El nombre es requerido." }),
   correo: z.string().email({ message: "Debe ser un correo electrónico válido." }),
+  // La contraseña es opcional durante la actualización.
   contraseña: z.string().min(6, { message: "La contraseña debe tener al menos 6 caracteres." }).optional().or(z.literal('')),
   id_rol: z.preprocess(
     (val) => String(val),
@@ -38,21 +40,27 @@ const userSchema = z.object({
   ),
 })
 
+// Tipos de datos para la gestión de usuarios.
 type User = {
   id_user: string;
   name: string;
   correo: string;
   id_rol: string | number;
 }
-
 type Role = {
   id_rol: string | number
   rol_desc: string
 }
 
-// Leemos la clave secreta desde las variables de entorno
+// Se lee la clave secreta desde las variables de entorno para el hash de contraseñas.
 const HMAC_SECRET_KEY = process.env.NEXT_PUBLIC_HMAC_SECRET_KEY;
 
+/**
+ * Aplica un hash a la contraseña usando HMAC-SHA256 para mayor seguridad.
+ * Nunca se debe guardar la contraseña en texto plano.
+ * @param password La contraseña en texto plano.
+ * @returns La contraseña hasheada en formato hexadecimal.
+ */
 function hashPassword(password: string): string {
   if (!HMAC_SECRET_KEY) {
     throw new Error("La clave secreta HMAC no está configurada en las variables de entorno.");
@@ -61,12 +69,14 @@ function hashPassword(password: string): string {
 }
 
 export default function UsersPage() {
+  // Estados para gestionar los datos de la página.
   const [users, setUsers] = useState<User[]>([])
   const [roles, setRoles] = useState<Role[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const { toast } = useToast()
 
+  // Configuración del formulario con react-hook-form y Zod.
   const form = useForm<z.infer<typeof userSchema>>({
     resolver: zodResolver(userSchema),
     defaultValues: {
@@ -77,11 +87,13 @@ export default function UsersPage() {
     },
   })
 
+  // Carga los datos iniciales al montar el componente.
   useEffect(() => {
     fetchRoles()
     fetchUsers()
   }, [])
   
+  // Rellena el formulario cuando se selecciona un usuario para editar.
   useEffect(() => {
     if (editingUser) {
       form.reset({
@@ -89,7 +101,7 @@ export default function UsersPage() {
         name: editingUser.name,
         correo: editingUser.correo,
         id_rol: String(editingUser.id_rol),
-        contraseña: "", // No pre-cargamos la contraseña por seguridad
+        contraseña: "", // La contraseña nunca se precarga por seguridad.
       });
     } else {
       form.reset({
@@ -101,6 +113,7 @@ export default function UsersPage() {
     }
   }, [editingUser, form]);
 
+  // Obtiene los usuarios desde la base de datos.
   const fetchUsers = async () => {
     let { data: usuario, error } = await supabase
       .from('usuario')
@@ -116,6 +129,7 @@ export default function UsersPage() {
     }
   }
 
+  // Obtiene los roles desde la base de datos para el menú desplegable.
   const fetchRoles = async () => {
     const { data, error } = await supabase.from('rol').select('id_rol, rol_desc')
     if (error) {
@@ -129,6 +143,7 @@ export default function UsersPage() {
     }
   }
 
+  // Lógica para crear un nuevo usuario.
   const handleCreateUser = async (values: z.infer<typeof userSchema>) => {
     if (!values.contraseña) {
       toast({
@@ -143,7 +158,7 @@ export default function UsersPage() {
       name: values.name,
       correo: values.correo,
       id_rol: parseInt(String(values.id_rol), 10),
-      contraseña: hashPassword(values.contraseña),
+      contraseña: hashPassword(values.contraseña), // Hashear la contraseña antes de guardarla.
     };
 
     const { error } = await supabase.from('usuario').insert([userData]).select();
@@ -164,6 +179,7 @@ export default function UsersPage() {
     }
   };
 
+  // Lógica para actualizar un usuario existente.
   const handleUpdateUser = async (values: z.infer<typeof userSchema>) => {
     if (!editingUser) return;
 
@@ -173,6 +189,7 @@ export default function UsersPage() {
       id_rol: parseInt(String(values.id_rol), 10),
     };
 
+    // Solo actualiza la contraseña si se ha proporcionado una nueva.
     if (values.contraseña) {
       userData.contraseña = hashPassword(values.contraseña);
     }
@@ -198,6 +215,7 @@ export default function UsersPage() {
     }
   };
 
+  // Determina si se debe crear o actualizar un usuario al enviar el formulario.
   const onSubmit = (values: z.infer<typeof userSchema>) => {
     if (editingUser) {
       handleUpdateUser(values);
@@ -206,7 +224,7 @@ export default function UsersPage() {
     }
   };
 
-
+  // Elimina un usuario.
   const handleDelete = async (userId: string) => {
     const { error } = await supabase
         .from('usuario')
@@ -236,11 +254,13 @@ export default function UsersPage() {
     }
   }
 
+  // Prepara el formulario para editar un usuario.
   const handleEdit = (user: User) => {
     setEditingUser(user);
     setIsDialogOpen(true);
   }
 
+  // Controla la apertura y cierre del diálogo, reseteando el estado de edición.
   const handleOpenDialog = (open: boolean) => {
     setIsDialogOpen(open);
     if (!open) {
@@ -248,12 +268,14 @@ export default function UsersPage() {
     }
   };
 
+  // Cierra el diálogo y resetea el formulario.
   const handleCloseDialog = () => {
     setEditingUser(null);
     form.reset({ name: "", correo: "", contraseña: "", id_rol: "" });
     setIsDialogOpen(false);
   }
 
+  // Obtiene el nombre del rol a partir de su ID para mostrarlo en la tabla.
   const getRoleName = (roleId: string | number) => {
     return roles.find(role => String(role.id_rol) === String(roleId))?.rol_desc || "N/A"
   }

@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import { useState, useEffect } from "react"
@@ -28,6 +27,7 @@ import { PlusCircle, Trash2, Pencil } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 
+// Esquema de validación para el formulario de cliente.
 const customerSchema = z.object({
   code_customer: z.string().min(1, { message: "El código es requerido." }),
   customer_name: z.string().min(1, { message: "El nombre es requerido." }),
@@ -42,20 +42,13 @@ const customerSchema = z.object({
   ruta: z.string().min(1, { message: "La ruta es requerida." }),
 })
 
+// Tipos de datos para la gestión de clientes.
 type Customer = z.infer<typeof customerSchema> & { id_term: string | number, id_impuesto: string | number, ruta: string | number }
-
-
-type PaymentTerm = {
-  id_term: string | number
-  term_desc: string
-}
-
-type Tax = {
-    id_impuesto: string | number
-    impt_desc: string
-}
+type PaymentTerm = { id_term: string | number; term_desc: string }
+type Tax = { id_impuesto: string | number; impt_desc: string }
 
 export default function CustomersPage() {
+  // Estados para gestionar los datos de la página.
   const [customers, setCustomers] = useState<Customer[]>([])
   const [paymentTerms, setPaymentTerms] = useState<PaymentTerm[]>([])
   const [taxes, setTaxes] = useState<Tax[]>([])
@@ -63,6 +56,7 @@ export default function CustomersPage() {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const { toast } = useToast()
 
+  // Configuración del formulario con react-hook-form y Zod.
   const form = useForm<z.infer<typeof customerSchema>>({
     resolver: zodResolver(customerSchema),
     defaultValues: {
@@ -74,12 +68,14 @@ export default function CustomersPage() {
     },
   })
 
+  // Carga los datos iniciales al montar el componente.
   useEffect(() => {
     fetchCustomers()
     fetchPaymentTerms()
     fetchTaxes()
   }, [])
   
+  // Rellena el formulario cuando se selecciona un cliente para editar.
   useEffect(() => {
     if (editingCustomer) {
       form.reset({
@@ -99,7 +95,7 @@ export default function CustomersPage() {
     }
   }, [editingCustomer, form]);
 
-
+  // Obtiene los clientes desde la base de datos.
   const fetchCustomers = async () => {
     const { data, error } = await supabase.from('customer').select('code_customer,customer_name,id_impuesto,id_term,ruta')
     if (error) {
@@ -113,6 +109,7 @@ export default function CustomersPage() {
     }
   }
 
+  // Obtiene los términos de pago desde la base de datos.
   const fetchPaymentTerms = async () => {
     const { data, error } = await supabase.from('terminos_pago').select('id_term, term_desc')
     if (error) {
@@ -126,6 +123,7 @@ export default function CustomersPage() {
     }
   }
 
+  // Obtiene los tipos de impuesto desde la base de datos.
   const fetchTaxes = async () => {
     const { data, error } = await supabase.from('tipo_impuesto').select('id_impuesto, impt_desc')
     if (error) {
@@ -139,10 +137,12 @@ export default function CustomersPage() {
     }
   }
 
+  // Gestiona el envío del formulario para crear o actualizar un cliente.
   const onSubmit = async (values: z.infer<typeof customerSchema>) => {
     let error;
 
     if (editingCustomer) {
+      // Actualiza un cliente existente.
       const { error: updateError } = await supabase
         .from('customer')
         .update(values)
@@ -150,6 +150,7 @@ export default function CustomersPage() {
         .select()
       error = updateError;
     } else {
+      // Inserta un nuevo cliente.
       const { error: insertError } = await supabase
         .from('customer')
         .insert([values])
@@ -168,13 +169,14 @@ export default function CustomersPage() {
         title: "Éxito",
         description: `Cliente ${editingCustomer ? 'actualizado' : 'guardado'} correctamente.`,
       })
-      fetchCustomers()
+      fetchCustomers() // Recarga la lista de clientes.
       form.reset()
       setEditingCustomer(null)
       setIsDialogOpen(false)
     }
   }
 
+  // Elimina un cliente de la base de datos.
   const handleDelete = async (customerId: string) => {
     const { error } = await supabase
       .from('customer')
@@ -182,6 +184,7 @@ export default function CustomersPage() {
       .eq('code_customer', customerId)
 
     if (error) {
+      // Manejo de errores específicos, como la violación de claves foráneas.
       if (error.code === '23503') {
         toast({
           title: "Error al eliminar",
@@ -200,15 +203,17 @@ export default function CustomersPage() {
         title: "Éxito",
         description: "Cliente eliminado correctamente.",
       })
-      fetchCustomers()
+      fetchCustomers() // Recarga la lista de clientes.
     }
   }
 
+  // Prepara el formulario para editar un cliente.
   const handleEdit = (customer: Customer) => {
     setEditingCustomer(customer);
     setIsDialogOpen(true);
   }
 
+  // Controla la apertura y cierre del diálogo, reseteando el estado de edición.
   const handleOpenDialog = (open: boolean) => {
     setIsDialogOpen(open);
     if (!open) {
@@ -216,6 +221,7 @@ export default function CustomersPage() {
     }
   };
 
+  // Funciones para obtener descripciones legibles a partir de IDs.
   const getTaxDescription = (taxId: string | number) => {
     return taxes.find(tax => String(tax.id_impuesto) === String(taxId))?.impt_desc || taxId;
   }

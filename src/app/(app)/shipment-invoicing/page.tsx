@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import { useState, useEffect, useMemo } from "react"
@@ -29,6 +28,7 @@ import { PlusCircle, Pencil, Trash2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 
+// Esquema de validación para el formulario de facturación por despacho.
 const shipmentInvoiceSchema = z.object({
   id_factura: z.string().min(1, "El ID de factura es requerido."),
   id_despacho: z.preprocess(
@@ -41,18 +41,20 @@ const shipmentInvoiceSchema = z.object({
   state: z.boolean(),
 })
 
+// Tipos de datos para la gestión de facturación por despacho.
 type ShipmentInvoice = z.infer<typeof shipmentInvoiceSchema> & { id_fac_desp: number }
 type Invoice = { id_factura: string, invoice_number: string | number, fecha: string }
 type Shipment = { id_despacho: number, fecha_despacho: string }
 
+// Opciones estáticas para menús desplegables.
 const paymentMethods: ShipmentInvoice['forma_pago'][] = ["Efectivo", "Tarjeta", "Transferencia"];
-
 const statusOptions: { label: string; value: boolean }[] = [
   { label: "Pagado", value: true },
   { label: "Pendiente", value: false },
 ]
 
 export default function ShipmentInvoicingPage() {
+  // Estados para gestionar los datos de la página.
   const [shipmentInvoices, setShipmentInvoices] = useState<ShipmentInvoice[]>([])
   const [allInvoices, setAllInvoices] = useState<Invoice[]>([])
   const [allShipments, setAllShipments] = useState<Shipment[]>([])
@@ -60,6 +62,7 @@ export default function ShipmentInvoicingPage() {
   const [editingShipmentInvoice, setEditingShipmentInvoice] = useState<ShipmentInvoice | null>(null)
   const { toast } = useToast()
 
+  // Configuración del formulario con react-hook-form y Zod.
   const form = useForm<z.infer<typeof shipmentInvoiceSchema>>({
     resolver: zodResolver(shipmentInvoiceSchema),
     defaultValues: {
@@ -72,25 +75,30 @@ export default function ShipmentInvoicingPage() {
     },
   })
   
+  // Observa el valor del campo 'id_despacho' para actualizar dinámicamente las opciones de factura.
   const selectedShipmentId = form.watch("id_despacho");
 
+  // `useMemo` se usa para calcular las facturas disponibles de forma eficiente.
+  // Esta lógica solo se vuelve a ejecutar si sus dependencias cambian.
   const availableInvoices = useMemo(() => {
     if (!selectedShipmentId) return [];
     
-    // Find the selected shipment to get its date
+    // Encuentra el despacho seleccionado para obtener su fecha.
     const selectedShipment = allShipments.find(s => String(s.id_despacho) === selectedShipmentId);
     if (!selectedShipment) return [];
     const selectedDate = new Date(selectedShipment.fecha_despacho).toISOString().split('T')[0];
 
-    // Get a list of invoice IDs that are already used
+    // Obtiene una lista de IDs de factura que ya están asignadas a algún despacho.
     const usedInvoiceIds = new Set(shipmentInvoices.map(si => si.id_factura));
 
-    // Filter invoices that match the date and are not already used
+    // Filtra las facturas que cumplen ambas condiciones:
+    // 1. La fecha de la factura coincide con la del despacho seleccionado.
+    // 2. La factura no ha sido asignada a otro despacho.
     return allInvoices.filter(inv => {
         const invoiceDate = new Date(inv.fecha).toISOString().split('T')[0];
         const isDateMatch = invoiceDate === selectedDate;
         const isNotUsed = !usedInvoiceIds.has(inv.id_factura);
-        // An invoice being edited should still appear in the list
+        // Permite que la factura que se está editando actualmente aparezca en la lista.
         const isCurrentlyEditing = editingShipmentInvoice?.id_factura === inv.id_factura;
 
         return isDateMatch && (isNotUsed || isCurrentlyEditing);
@@ -98,12 +106,14 @@ export default function ShipmentInvoicingPage() {
   }, [selectedShipmentId, allInvoices, allShipments, shipmentInvoices, editingShipmentInvoice]);
 
   
+  // Carga los datos iniciales al montar el componente.
   useEffect(() => {
     fetchShipmentInvoices()
     fetchInvoices()
     fetchShipments()
   }, [])
 
+  // Rellena el formulario cuando se selecciona un registro para editar.
   useEffect(() => {
     if (editingShipmentInvoice) {
       form.reset({
@@ -122,13 +132,14 @@ export default function ShipmentInvoicingPage() {
     }
   }, [editingShipmentInvoice, form])
   
-  // When shipment changes, reset the selected invoice
+  // Cuando cambia la selección de despacho, resetea la factura seleccionada para forzar una nueva elección.
   useEffect(() => {
     if (!editingShipmentInvoice) {
       form.setValue("id_factura", "");
     }
   }, [selectedShipmentId, editingShipmentInvoice, form]);
 
+  // Obtiene los registros de la tabla de unión `facturacion_x_despacho`.
   const fetchShipmentInvoices = async () => {
     const { data, error } = await supabase.from('facturacion_x_despacho').select('*')
     if (error) {
@@ -138,6 +149,7 @@ export default function ShipmentInvoicingPage() {
     }
   }
   
+  // Obtiene todas las facturas.
   const fetchInvoices = async () => {
     const { data, error } = await supabase.from('facturacion').select('id_factura, invoice_number, fecha')
     if (error) {
@@ -147,6 +159,7 @@ export default function ShipmentInvoicingPage() {
     }
   }
   
+  // Obtiene todos los despachos.
   const fetchShipments = async () => {
     const { data, error } = await supabase.from('despacho').select('id_despacho, fecha_despacho')
     if (error) {
@@ -156,6 +169,7 @@ export default function ShipmentInvoicingPage() {
     }
   }
 
+  // Gestiona el envío del formulario para crear o actualizar un registro.
   const onSubmit = async (values: z.infer<typeof shipmentInvoiceSchema>) => {
     let error;
 
@@ -188,6 +202,7 @@ export default function ShipmentInvoicingPage() {
     }
   }
 
+  // Elimina un registro de la tabla de unión.
   const handleDelete = async (id: number) => {
     const { error } = await supabase
       .from('facturacion_x_despacho')
@@ -214,11 +229,13 @@ export default function ShipmentInvoicingPage() {
     }
   }
 
+  // Prepara el formulario para editar.
   const handleEdit = (shipmentInvoice: ShipmentInvoice) => {
     setEditingShipmentInvoice(shipmentInvoice);
     setIsDialogOpen(true);
   }
 
+  // Controla la apertura y cierre del diálogo.
   const handleOpenDialog = (open: boolean) => {
     setIsDialogOpen(open);
     if (!open) {
@@ -226,12 +243,14 @@ export default function ShipmentInvoicingPage() {
     }
   };
 
+  // Cierra el diálogo y resetea el formulario.
   const handleCloseDialog = () => {
     setEditingShipmentInvoice(null);
     form.reset()
     setIsDialogOpen(false)
   }
   
+  // Funciones auxiliares para la UI.
   const getBadgeVariant = (status: boolean) => {
     return status ? "default" : "secondary"
   }
@@ -249,7 +268,6 @@ export default function ShipmentInvoicingPage() {
       const shipment = allShipments.find(ship => ship.id_despacho === id);
       return shipment ? new Date(shipment.fecha_despacho).toLocaleDateString() : shipmentId;
   }
-
 
   return (
     <Card className="h-full flex flex-col">
@@ -474,5 +492,3 @@ export default function ShipmentInvoicingPage() {
     </Card>
   )
 }
-
-    

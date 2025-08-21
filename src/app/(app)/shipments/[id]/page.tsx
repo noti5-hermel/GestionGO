@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import { useState, useEffect } from "react"
@@ -13,6 +12,7 @@ import { useToast } from "@/hooks/use-toast"
 import { ArrowLeft } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
+// Tipos de datos para la página de detalle del despacho.
 type Shipment = {
   id_despacho: string
   id_ruta: string
@@ -37,8 +37,8 @@ type ShipmentInvoice = {
   forma_pago: "Efectivo" | "Tarjeta" | "Transferencia"
   monto: number
   state: boolean
-  invoice_number?: string | number
-  tax_type?: string
+  invoice_number?: string | number // Opcional, se añade después
+  tax_type?: string // Opcional, se añade después
 }
 
 type User = { id_user: string; name: string }
@@ -48,6 +48,7 @@ type Customer = { code_customer: string; id_impuesto: number };
 type TaxType = { id_impuesto: number; impt_desc: string };
 
 
+// Componente reutilizable para mostrar un badge de estado del proceso.
 const StatusBadge = ({ checked, text }: { checked: boolean, text: string }) => {
     return (
         <div className="flex items-center gap-2">
@@ -63,16 +64,19 @@ export default function ShipmentDetailPage() {
   const { id } = params
   const { toast } = useToast()
 
+  // Estados para almacenar los datos de la página.
   const [shipment, setShipment] = useState<Shipment | null>(null)
   const [invoices, setInvoices] = useState<ShipmentInvoice[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [routes, setRoutes] = useState<Route[]>([])
   const [loading, setLoading] = useState(true)
 
+  // Función principal para obtener todos los datos necesarios para la página.
   const fetchData = async () => {
     if (!id) return;
     setLoading(true)
     
+    // Se realizan múltiples consultas en paralelo para mejorar el rendimiento.
     const [
       shipmentRes,
       usersRes,
@@ -94,6 +98,7 @@ export default function ShipmentDetailPage() {
     if (routesRes.error) toast({ title: "Error", description: "No se pudieron cargar las rutas.", variant: "destructive" })
     else setRoutes(routesRes.data as Route[])
     
+    // Lógica compleja para enriquecer los datos de las facturas con información adicional (número, tipo de impuesto).
     if (shipmentInvoicesRes.error) {
       toast({ title: "Error", description: "No se pudieron cargar las facturas asociadas.", variant: "destructive" })
     } else {
@@ -101,25 +106,30 @@ export default function ShipmentDetailPage() {
       const invoiceIds = shipmentInvoicesData.map(inv => inv.id_factura)
 
       if (invoiceIds.length > 0) {
+          // Obtener datos de facturas (facturacion).
           const { data: invoicesData, error: invoicesError } = await supabase.from('facturacion').select('id_factura, invoice_number, code_customer').in('id_factura', invoiceIds)
           if (invoicesError) {
               toast({ title: "Error", description: "No se pudieron cargar los datos de facturas.", variant: "destructive" });
           } else {
+              // Obtener datos de clientes (customer).
               const customerCodes = (invoicesData || []).map(inv => inv.code_customer)
               const { data: customersData, error: customersError } = await supabase.from('customer').select('code_customer, id_impuesto').in('code_customer', customerCodes)
               if (customersError) {
                   toast({ title: "Error", description: "No se pudieron cargar los datos de clientes.", variant: "destructive" });
               } else {
+                  // Obtener tipos de impuesto (tipo_impuesto).
                   const taxIds = (customersData || []).map(c => c.id_impuesto)
                   const { data: taxesData, error: taxesError } = await supabase.from('tipo_impuesto').select('id_impuesto, impt_desc').in('id_impuesto', taxIds)
                   if (taxesError) {
                       toast({ title: "Error", description: "No se pudieron cargar los tipos de impuesto.", variant: "destructive" });
                   } else {
+                      // Se crean mapas para una búsqueda eficiente de datos relacionados.
                       const taxMap = new Map((taxesData || []).map(t => [t.id_impuesto, t.impt_desc]))
                       const customerTaxMap = new Map((customersData || []).map(c => [c.code_customer, taxMap.get(c.id_impuesto)]))
                       const invoiceCustomerMap = new Map((invoicesData || []).map(i => [i.id_factura, i.code_customer]))
                       const invoiceNumberMap = new Map((invoicesData || []).map(i => [i.id_factura, i.invoice_number]))
 
+                      // Se enriquecen las facturas del despacho con los datos obtenidos.
                       const enrichedInvoices = shipmentInvoicesData.map(si => ({
                           ...si,
                           invoice_number: invoiceNumberMap.get(si.id_factura),
@@ -137,10 +147,12 @@ export default function ShipmentDetailPage() {
     setLoading(false)
   }
 
+  // Carga los datos cuando el componente se monta o el ID del despacho cambia.
   useEffect(() => {
     fetchData()
   }, [id, toast])
 
+  // Maneja el cambio de estado de una factura (Pagado/Pendiente).
   const handleStatusChange = async (invoiceId: number, newState: boolean) => {
     const { error } = await supabase
       .from('facturacion_x_despacho')
@@ -158,14 +170,16 @@ export default function ShipmentDetailPage() {
         title: "Éxito",
         description: "Estado de la factura actualizado correctamente.",
       });
-      fetchData(); // Recargar datos para reflejar el cambio
+      fetchData(); // Recarga los datos para reflejar el cambio.
     }
   };
 
+  // Funciones auxiliares para obtener descripciones legibles a partir de IDs.
   const getRouteDescription = (routeId: string) => routes.find(route => String(route.id_ruta) === String(routeId))?.ruta_desc || routeId
   const getUserName = (userId: string) => users.find(user => String(user.id_user) === String(userId))?.name || userId
   const getStatusLabel = (status: boolean) => status ? "Pagado" : "Pendiente"
 
+  // Filtra las facturas por tipo de impuesto para mostrarlas en tablas separadas.
   const fiscalCreditInvoices = invoices.filter(inv => inv.tax_type === 'Crédito Fiscal');
   const finalConsumerInvoices = invoices.filter(inv => inv.tax_type === 'Consumidor Final');
   const otherInvoices = invoices.filter(inv => inv.tax_type !== 'Crédito Fiscal' && inv.tax_type !== 'Consumidor Final');
@@ -179,6 +193,7 @@ export default function ShipmentDetailPage() {
     return <p>Despacho no encontrado.</p>
   }
 
+  // Función para renderizar una tabla de facturas.
   const renderInvoicesTable = (invoiceList: ShipmentInvoice[], title: string, description: string) => (
     <Card className="mt-6">
       <CardHeader>
@@ -284,7 +299,7 @@ export default function ShipmentDetailPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="mt-6">
          <CardHeader><CardTitle>Estado del Proceso</CardTitle></CardHeader>
          <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             <StatusBadge checked={shipment.bodega} text="Bodega"/>
