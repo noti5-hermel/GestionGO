@@ -338,11 +338,11 @@ export default function CustomersPage() {
                       </FormItem>
                     )}
                   />
-                  <DialogFooter>
+                  <DialogFooter className="gap-2 pt-4">
                     <DialogClose asChild>
-                      <Button type="button" variant="secondary">Cancelar</Button>
+                      <Button type="button" variant="secondary" className="w-full sm:w-auto">Cancelar</Button>
                     </DialogClose>
-                    <Button type="submit">{editingCustomer ? 'Guardar Cambios' : 'Guardar Cliente'}</Button>
+                    <Button type="submit" className="w-full sm:w-auto">{editingCustomer ? 'Guardar Cambios' : 'Guardar Cliente'}</Button>
                   </DialogFooter>
                 </form>
               </Form>
