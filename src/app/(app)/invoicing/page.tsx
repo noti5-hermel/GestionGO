@@ -268,7 +268,7 @@ export default function InvoicingPage() {
     }
   }
   
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -279,24 +279,68 @@ export default function InvoicingPage() {
             const workbook = xlsx.read(data, { type: 'array', cellDates: true });
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
-            const json = xlsx.utils.sheet_to_json(worksheet);
+            const json: any[] = xlsx.utils.sheet_to_json(worksheet, { header: 1 }); // Leer como array de arrays
 
-            const validatedInvoices = z.array(invoiceSchema).safeParse(json);
+            if (json.length < 2) {
+                toast({ title: "Error", description: "El archivo Excel está vacío o no tiene datos.", variant: "destructive" });
+                return;
+            }
+
+            const header = json[0];
+            const dataRows = json.slice(1);
+            
+            // Busca los clientes para poder asignar el código de cliente
+            const { data: allCustomers, error: customerError } = await supabase.from('customer').select('code_customer, customer_name, ruta, id_term');
+            const { data: allTerms, error: termsError } = await supabase.from('terminos_pago').select('id_term, term_desc');
+
+            if (customerError || termsError) {
+              toast({ title: "Error", description: "No se pudieron cargar datos necesarios para la importación (clientes/términos).", variant: "destructive" });
+              return;
+            }
+
+            const customerMap = new Map((allCustomers || []).map(c => [c.customer_name.toLowerCase(), c]));
+            const termsMap = new Map((allTerms || []).map(t => [t.id_term, t.term_desc]));
+
+            const mappedData = dataRows.map((row) => {
+                const customerName = row[header.indexOf('Customer Name')] || '';
+                const customer = customerMap.get(customerName.toLowerCase());
+                const subtotal = parseFloat(row[header.indexOf('Subtotal')] || 0);
+
+                return {
+                    invoice_number: String(row[header.indexOf('Invoice number')] || ''),
+                    fecha: new Date(row[header.indexOf('Transaction Date')] || new Date()).toISOString().split('T')[0],
+                    customer_name: customerName,
+                    tax_id_number: String(row[header.indexOf('tax id number')] || ''),
+                    subtotal: subtotal,
+                    // Valores por defecto o calculados para campos faltantes
+                    id_factura: `FACT-${Date.now()}-${Math.floor(Math.random() * 1000)}`, // ID único temporal
+                    code_customer: customer ? customer.code_customer : 'N/A',
+                    ruta: customer ? String(customer.ruta) : 'N/A',
+                    term_description: customer ? (termsMap.get(customer.id_term) || 'N/A') : 'N/A',
+                    total_sale: subtotal, // Asumiendo que es igual al subtotal
+                    grand_total: subtotal, // Asumiendo que es igual al subtotal
+                    payment: 0,
+                    net_to_pay: subtotal,
+                    state: false,
+                };
+            });
+
+            const validatedInvoices = z.array(invoiceSchema).safeParse(mappedData);
             
             if (!validatedInvoices.success) {
-                console.error(validatedInvoices.error);
+                console.error("Error de validación Zod:", validatedInvoices.error.flatten().fieldErrors);
                 toast({
                     title: "Error de validación",
-                    description: "El formato de los datos en el archivo Excel no es correcto.",
+                    description: "Algunos datos del archivo Excel no son correctos o están incompletos. Revisa la consola para más detalles.",
                     variant: "destructive"
                 });
                 return;
             }
 
-            const { error } = await supabase.from('facturacion').insert(validatedInvoices.data);
+            const { error: insertError } = await supabase.from('facturacion').insert(validatedInvoices.data);
 
-            if (error) {
-                toast({ title: "Error al importar", description: error.message, variant: "destructive" });
+            if (insertError) {
+                toast({ title: "Error al importar", description: insertError.message, variant: "destructive" });
             } else {
                 toast({ title: "Éxito", description: "Facturas importadas correctamente." });
                 fetchInvoices();
@@ -309,7 +353,7 @@ export default function InvoicingPage() {
     reader.readAsArrayBuffer(file);
     
     // Resetea el input para permitir seleccionar el mismo archivo de nuevo.
-    event.target.value = '';
+    if(event.target) event.target.value = '';
   };
   
   const handleImportClick = () => {
@@ -650,3 +694,5 @@ export default function InvoicingPage() {
     </Card>
   )
 }
+
+    
