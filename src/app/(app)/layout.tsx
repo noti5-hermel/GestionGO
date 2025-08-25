@@ -72,7 +72,7 @@ export default function AppLayout({
       </Sidebar>
       <SidebarInset>
         <header className="flex h-16 items-center gap-4 border-b bg-card px-6 sticky top-0 z-10 shrink-0">
-          {/* Botón para desplegar el menú en vista móvil. */}
+          {/* Botón para desplegar el menú en vista móvil. Siempre visible. */}
           <SidebarTrigger className="flex md:hidden" />
           <div className="flex-1 text-right">
             
