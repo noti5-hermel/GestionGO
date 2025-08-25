@@ -279,51 +279,58 @@ export default function InvoicingPage() {
             const workbook = xlsx.read(data, { type: 'array', cellDates: true });
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
-            const json: any[] = xlsx.utils.sheet_to_json(worksheet, { header: 1 }); // Leer como array de arrays
+            const json: any[] = xlsx.utils.sheet_to_json(worksheet, { header: 1, defval: "" }); // Leer como array de arrays
 
             if (json.length < 2) {
                 toast({ title: "Error", description: "El archivo Excel está vacío o no tiene datos.", variant: "destructive" });
                 return;
             }
 
-            const header = json[0];
+            const header = (json[0] as string[]).map(h => h.toLowerCase());
             const dataRows = json.slice(1);
             
-            // Busca los clientes para poder asignar el código de cliente
-            const { data: allCustomers, error: customerError } = await supabase.from('customer').select('code_customer, customer_name, ruta, id_term');
-            const { data: allTerms, error: termsError } = await supabase.from('terminos_pago').select('id_term, term_desc');
-
-            if (customerError || termsError) {
-              toast({ title: "Error", description: "No se pudieron cargar datos necesarios para la importación (clientes/términos).", variant: "destructive" });
-              return;
-            }
-
-            const customerMap = new Map((allCustomers || []).map(c => [c.customer_name.toLowerCase(), c]));
-            const termsMap = new Map((allTerms || []).map(t => [t.id_term, t.term_desc]));
+            // Indices de las columnas según el usuario
+            const colIndices = {
+              invoice_number: header.indexOf('invoice number'),
+              fecha: header.indexOf('transaction date'),
+              customer_name: header.indexOf('customer name'),
+              tax_id_number: header.indexOf('tax id number'),
+              subtotal: header.indexOf('subtotal'),
+              total_sale: header.indexOf('total sale'),
+              grand_total: header.indexOf('grant total'),
+              payment: header.indexOf('payment'),
+              net_to_pay: header.indexOf('net to pay'),
+              ruta: header.indexOf('ruta'),
+              term_description: header.indexOf('descripcion de termino'),
+              id_factura: header.indexOf('id factura'),
+              code_customer: header.indexOf('codigo cliente')
+            };
 
             const mappedData = dataRows.map((row) => {
-                const customerName = row[header.indexOf('Customer Name')] || '';
-                const customer = customerMap.get(customerName.toLowerCase());
-                const subtotal = parseFloat(row[header.indexOf('Subtotal')] || 0);
+                const getDate = (dateValue: any) => {
+                  if (!dateValue) return new Date().toISOString().split('T')[0];
+                  // Intenta parsear la fecha, si falla, devuelve la fecha actual.
+                  const date = new Date(dateValue);
+                  return isNaN(date.getTime()) ? new Date().toISOString().split('T')[0] : date.toISOString().split('T')[0];
+                };
 
                 return {
-                    invoice_number: String(row[header.indexOf('Invoice number')] || ''),
-                    fecha: new Date(row[header.indexOf('Transaction Date')] || new Date()).toISOString().split('T')[0],
-                    customer_name: customerName,
-                    tax_id_number: String(row[header.indexOf('tax id number')] || ''),
-                    subtotal: subtotal,
-                    // Valores por defecto o calculados para campos faltantes
-                    id_factura: `FACT-${Date.now()}-${Math.floor(Math.random() * 1000)}`, // ID único temporal
-                    code_customer: customer ? customer.code_customer : 'N/A',
-                    ruta: customer ? String(customer.ruta) : 'N/A',
-                    term_description: customer ? (termsMap.get(customer.id_term) || 'N/A') : 'N/A',
-                    total_sale: subtotal, // Asumiendo que es igual al subtotal
-                    grand_total: subtotal, // Asumiendo que es igual al subtotal
-                    payment: 0,
-                    net_to_pay: subtotal,
-                    state: false,
+                    invoice_number: String(row[colIndices.invoice_number]),
+                    fecha: getDate(row[colIndices.fecha]),
+                    customer_name: String(row[colIndices.customer_name]),
+                    tax_id_number: String(row[colIndices.tax_id_number]),
+                    subtotal: parseFloat(String(row[colIndices.subtotal] || 0)),
+                    total_sale: parseFloat(String(row[colIndices.total_sale] || 0)),
+                    grand_total: parseFloat(String(row[colIndices.grand_total] || 0)),
+                    payment: parseFloat(String(row[colIndices.payment] || 0)),
+                    net_to_pay: parseFloat(String(row[colIndices.net_to_pay] || 0)),
+                    ruta: String(row[colIndices.ruta]),
+                    term_description: String(row[colIndices.term_description]),
+                    id_factura: String(row[colIndices.id_factura]),
+                    code_customer: String(row[colIndices.code_customer]),
+                    state: false, // Por defecto, las facturas importadas estarán pendientes
                 };
-            });
+            }).filter(d => d.id_factura); // Filtrar filas que no tengan ID de factura.
 
             const validatedInvoices = z.array(invoiceSchema).safeParse(mappedData);
             
@@ -342,7 +349,7 @@ export default function InvoicingPage() {
             if (insertError) {
                 toast({ title: "Error al importar", description: insertError.message, variant: "destructive" });
             } else {
-                toast({ title: "Éxito", description: "Facturas importadas correctamente." });
+                toast({ title: "Éxito", description: `${validatedInvoices.data.length} facturas importadas correctamente.` });
                 fetchInvoices();
             }
         } catch (error) {
@@ -694,5 +701,7 @@ export default function InvoicingPage() {
     </Card>
   )
 }
+
+    
 
     
