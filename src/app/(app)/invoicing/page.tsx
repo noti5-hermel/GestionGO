@@ -2,10 +2,11 @@
 
 'use client'
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
+import * as xlsx from "xlsx"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
@@ -25,7 +26,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { PlusCircle, Pencil, Trash2 } from "lucide-react"
+import { PlusCircle, Pencil, Trash2, Upload } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 
@@ -79,6 +80,7 @@ export default function InvoicingPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null)
   const { toast } = useToast()
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Configuración del formulario con react-hook-form y Zod
   const form = useForm<z.infer<typeof invoiceSchema>>({
@@ -265,6 +267,54 @@ export default function InvoicingPage() {
         return "outline"
     }
   }
+  
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const data = new Uint8Array(e.target?.result as ArrayBuffer);
+            const workbook = xlsx.read(data, { type: 'array', cellDates: true });
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            const json = xlsx.utils.sheet_to_json(worksheet);
+
+            const validatedInvoices = z.array(invoiceSchema).safeParse(json);
+            
+            if (!validatedInvoices.success) {
+                console.error(validatedInvoices.error);
+                toast({
+                    title: "Error de validación",
+                    description: "El formato de los datos en el archivo Excel no es correcto.",
+                    variant: "destructive"
+                });
+                return;
+            }
+
+            const { error } = await supabase.from('facturacion').insert(validatedInvoices.data);
+
+            if (error) {
+                toast({ title: "Error al importar", description: error.message, variant: "destructive" });
+            } else {
+                toast({ title: "Éxito", description: "Facturas importadas correctamente." });
+                fetchInvoices();
+            }
+        } catch (error) {
+            console.error("Error al procesar el archivo:", error);
+            toast({ title: "Error", description: "No se pudo procesar el archivo Excel.", variant: "destructive" });
+        }
+    };
+    reader.readAsArrayBuffer(file);
+    
+    // Resetea el input para permitir seleccionar el mismo archivo de nuevo.
+    event.target.value = '';
+  };
+  
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
 
   return (
     <Card className="h-full flex flex-col">
@@ -274,6 +324,18 @@ export default function InvoicingPage() {
             <CardTitle>Facturación</CardTitle>
             <CardDescription>Cree y visualice facturas.</CardDescription>
           </div>
+          <div className="flex gap-2">
+            {/* Botón para importar desde Excel */}
+            <Button onClick={handleImportClick} variant="outline">
+                <Upload className="mr-2 h-4 w-4" /> Importar desde Excel
+            </Button>
+            <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                className="hidden"
+                accept=".xlsx, .xls"
+            />
           {/* Diálogo para crear una nueva factura */}
           <Dialog open={isDialogOpen} onOpenChange={handleOpenDialog}>
             <DialogTrigger asChild>
@@ -507,6 +569,7 @@ export default function InvoicingPage() {
               </Form>
             </DialogContent>
           </Dialog>
+        </div>
         </div>
       </CardHeader>
       <CardContent className="flex-1 overflow-auto">
