@@ -293,20 +293,23 @@ export default function InvoicingPage() {
             const colIndices = {
               invoice_number: header.indexOf('invoice number'),
               fecha: header.indexOf('transaction date'),
-              customer_name: header.indexOf('customer name'),
+              customer_name_excel: header.indexOf('customer name'),
               tax_id_number: header.indexOf('tax id number'),
               subtotal: header.indexOf('subtotal'),
               total_sale: header.indexOf('total sale'),
               grand_total: header.indexOf('grant total'),
               payment: header.indexOf('payment'),
               net_to_pay: header.indexOf('net to pay'),
-              ruta: header.indexOf('ruta'),
-              term_description: header.indexOf('descripcion de termino'),
+              ruta_excel: header.indexOf('ruta'),
+              term_description_excel: header.indexOf('descripcion de termino'),
               id_factura: header.indexOf('id factura'),
               code_customer: header.indexOf('codigo cliente')
             };
+            
+            const customerMap = new Map(customers.map(c => [c.code_customer, c]));
+            const paymentTermMap = new Map(paymentTerms.map(pt => [pt.id_term, pt.term_desc]));
 
-            const mappedData = dataRows.map((row) => {
+            const mappedDataPromises = dataRows.map(async (row) => {
                 const getDate = (dateValue: any) => {
                   if (!dateValue) return new Date().toISOString().split('T')[0];
                   // Intenta parsear la fecha, si falla, devuelve la fecha actual.
@@ -314,23 +317,40 @@ export default function InvoicingPage() {
                   return isNaN(date.getTime()) ? new Date().toISOString().split('T')[0] : date.toISOString().split('T')[0];
                 };
 
+                const code_customer = String(row[colIndices.code_customer]);
+                const customer = customerMap.get(code_customer);
+
+                if (!customer) {
+                  console.warn(`Cliente con código ${code_customer} no encontrado. Se omitirá esta fila.`);
+                  return null;
+                }
+
+                const term_description = paymentTermMap.get(customer.id_term) || "";
+
                 return {
                     invoice_number: String(row[colIndices.invoice_number]),
                     fecha: getDate(row[colIndices.fecha]),
-                    customer_name: String(row[colIndices.customer_name]),
+                    customer_name: customer.customer_name,
                     tax_id_number: String(row[colIndices.tax_id_number]),
                     subtotal: parseFloat(String(row[colIndices.subtotal] || 0)),
                     total_sale: parseFloat(String(row[colIndices.total_sale] || 0)),
                     grand_total: parseFloat(String(row[colIndices.grand_total] || 0)),
                     payment: parseFloat(String(row[colIndices.payment] || 0)),
                     net_to_pay: parseFloat(String(row[colIndices.net_to_pay] || 0)),
-                    ruta: String(row[colIndices.ruta]),
-                    term_description: String(row[colIndices.term_description]),
+                    ruta: String(customer.ruta),
+                    term_description: term_description,
                     id_factura: String(row[colIndices.id_factura]),
-                    code_customer: String(row[colIndices.code_customer]),
+                    code_customer: code_customer,
                     state: false, // Por defecto, las facturas importadas estarán pendientes
                 };
-            }).filter(d => d.id_factura); // Filtrar filas que no tengan ID de factura.
+            });
+
+            const mappedData = (await Promise.all(mappedDataPromises)).filter(d => d && d.id_factura); // Filtrar nulos y filas sin ID de factura
+
+            if(mappedData.length === 0) {
+              toast({ title: "Advertencia", description: "No se encontraron filas válidas para importar. Verifica los códigos de cliente.", variant: "destructive" });
+              return;
+            }
 
             const validatedInvoices = z.array(invoiceSchema).safeParse(mappedData);
             
@@ -701,7 +721,3 @@ export default function InvoicingPage() {
     </Card>
   )
 }
-
-    
-
-    
