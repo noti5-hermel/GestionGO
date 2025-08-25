@@ -25,10 +25,11 @@ export default function AppLayout({
   /**
    * Cierra la sesión del usuario eliminando la cookie de sesión
    * y redirigiendo a la página de inicio de sesión.
+   * La función está diseñada para funcionar en iframes (como en Firebase Studio)
+   * estableciendo SameSite=None y Secure.
    */
   const handleLogout = () => {
     // Establece la fecha de expiración de la cookie a una fecha pasada para que el navegador la elimine.
-    // SameSite=None y Secure son necesarios para que funcione correctamente en entornos de iframe como Firebase Studio.
     document.cookie = 'user-session=true; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=None; Secure';
     // Redirige al usuario a la página de login.
     window.location.href = '/login';
@@ -38,14 +39,14 @@ export default function AppLayout({
     <SidebarProvider>
       <Sidebar variant="sidebar" collapsible="icon">
         <SidebarHeader className="p-4">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-primary group-data-[state=collapsed]:hidden">GestiónGo</h1>
-            <h1 className="text-2xl font-bold text-primary group-data-[state=expanded]:hidden">GG</h1>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 group-data-[state=collapsed]:-ml-1">
+              <h1 className="text-2xl font-bold text-primary group-data-[state=collapsed]:hidden">GestiónGo</h1>
+              <h1 className="text-2xl font-bold text-primary group-data-[state=expanded]:hidden">GG</h1>
+            </div>
+            <SidebarTrigger className="hidden md:flex group-data-[state=collapsed]:hidden" />
           </div>
         </SidebarHeader>
-        <div className="flex items-center justify-end p-2 group-data-[state=expanded]:-mt-8">
-            <SidebarTrigger className="hidden md:flex" />
-        </div>
         <SidebarSeparator />
         <SidebarContent>
           <MainNav />
