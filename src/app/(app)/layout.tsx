@@ -44,7 +44,8 @@ export default function AppLayout({
               <h1 className="text-2xl font-bold text-primary group-data-[state=collapsed]:hidden">GestiónGo</h1>
               <h1 className="text-2xl font-bold text-primary group-data-[state=expanded]:hidden">GG</h1>
             </div>
-            <SidebarTrigger className="hidden md:flex group-data-[state=collapsed]:hidden" />
+            {/* Botón para colapsar/expandir el menú en escritorio. Se mantiene visible. */}
+            <SidebarTrigger className="hidden md:flex" />
           </div>
         </SidebarHeader>
         <SidebarSeparator />
@@ -69,6 +70,7 @@ export default function AppLayout({
       </Sidebar>
       <SidebarInset>
         <header className="flex h-16 items-center gap-4 border-b bg-card px-6 sticky top-0 z-10 shrink-0">
+          {/* Botón para desplegar el menú en vista móvil. */}
           <SidebarTrigger className="flex md:hidden" />
           <div className="flex-1 text-right">
             
