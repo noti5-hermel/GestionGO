@@ -44,7 +44,7 @@ export default function AppLayout({
           </div>
         </SidebarHeader>
         <div className="flex items-center justify-end p-2 group-data-[state=expanded]:-mt-8">
-            <SidebarTrigger className="md:flex" />
+            <SidebarTrigger className="hidden md:flex" />
         </div>
         <SidebarSeparator />
         <SidebarContent>
@@ -68,6 +68,7 @@ export default function AppLayout({
       </Sidebar>
       <SidebarInset>
         <header className="flex h-16 items-center gap-4 border-b bg-card px-6 sticky top-0 z-10 shrink-0">
+          <SidebarTrigger className="flex md:hidden" />
           <div className="flex-1 text-right">
             
           </div>
