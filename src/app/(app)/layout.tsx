@@ -44,10 +44,12 @@ export default function AppLayout({
               <h1 className="text-2xl font-bold text-primary group-data-[state=collapsed]:hidden">GestiónGo</h1>
               <h1 className="text-2xl font-bold text-primary group-data-[state=expanded]:hidden">GG</h1>
             </div>
-            {/* Botón para colapsar/expandir el menú en escritorio. Se mantiene visible. */}
-            <SidebarTrigger className="hidden md:flex" />
           </div>
         </SidebarHeader>
+        <div className="px-4 mb-2">
+            {/* Botón para colapsar/expandir el menú en escritorio. Se mantiene visible. */}
+            <SidebarTrigger className="hidden md:flex w-full justify-start" />
+        </div>
         <SidebarSeparator />
         <SidebarContent>
           <MainNav />
