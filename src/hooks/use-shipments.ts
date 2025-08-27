@@ -38,6 +38,11 @@ const shipmentSchema = z.object({
 export type Shipment = z.infer<typeof shipmentSchema> & { id_despacho: string }
 export type Route = { id_ruta: string; ruta_desc: string }
 export type User = { id_user: string; name: string }
+interface UserSession {
+  id: string;
+  name: string;
+  role: string;
+}
 
 interface UseShipmentsProps {
   itemsPerPage: number;
@@ -56,6 +61,7 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
   const [filterType, setFilterType] = useState<'all' | 'today' | 'date'>('all');
   const [customDate, setCustomDate] = useState<string>("")
   const [currentPage, setCurrentPage] = useState(1);
+  const [session, setSession] = useState<UserSession | null>(null);
   const { toast } = useToast()
 
   // Configuración del formulario con react-hook-form y Zod.
@@ -80,16 +86,40 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
   
   // Función para aplicar los filtros de fecha a la lista de despachos.
   const applyFilters = () => {
-    let newFilteredShipments = [...shipments];
+    let baseShipments = [...shipments];
+    
+    // Filtrar por rol si es motorista o auxiliar
+    if (session) {
+      const userRole = session.role.toLowerCase();
+      if (userRole.includes('motorista') || userRole.includes('auxiliar')) {
+        baseShipments = shipments.filter(s =>
+          String(s.id_motorista) === String(session.id) ||
+          String(s.id_auxiliar) === String(session.id)
+        );
+      }
+    }
+
+    let newFilteredShipments = [...baseShipments];
     if (filterType === 'today') {
         const today = new Date().toISOString().split('T')[0];
-        newFilteredShipments = shipments.filter(s => s.fecha_despacho === today);
+        newFilteredShipments = baseShipments.filter(s => s.fecha_despacho === today);
     } else if (filterType === 'date' && customDate) {
-        newFilteredShipments = shipments.filter(s => s.fecha_despacho === customDate);
+        newFilteredShipments = baseShipments.filter(s => s.fecha_despacho === customDate);
     }
     setFilteredShipments(newFilteredShipments);
     setCurrentPage(1); // Resetea a la primera página cada vez que cambia el filtro.
   };
+  
+  useEffect(() => {
+    try {
+      const userSession = localStorage.getItem('user-session');
+      if (userSession) {
+        setSession(JSON.parse(userSession));
+      }
+    } catch (error) {
+      console.error("Failed to parse user session from localStorage", error);
+    }
+  }, []);
 
   // Carga los datos iniciales al montar el componente.
   useEffect(() => {
@@ -99,10 +129,10 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
     fetchAllUsers()
   }, [])
   
-  // Vuelve a aplicar los filtros cada vez que los despachos o las opciones de filtro cambian.
+  // Vuelve a aplicar los filtros cada vez que los despachos, la sesión o las opciones de filtro cambian.
   useEffect(() => {
     applyFilters();
-  }, [shipments, filterType, customDate]);
+  }, [shipments, filterType, customDate, session]);
 
   // Rellena el formulario cuando se selecciona un despacho para editar.
   useEffect(() => {
@@ -196,16 +226,25 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
       }
     }
 
-    // Busca auxiliares (asumiendo que tienen un id_rol fijo de 3).
-    const { data: auxiliaresData, error: auxiliaresError } = await supabase
+    // Busca el rol de auxiliar (podría tener variaciones en la descripción).
+    const { data: auxiliarRoles, error: auxiliarRolesError } = await supabase
+      .from('rol')
+      .select('id_rol')
+      .ilike('rol_desc', '%auxiliar%');
+
+    if (auxiliarRolesError) {
+      toast({ title: "Error al buscar rol auxiliar", description: auxiliarRolesError.message, variant: "destructive" });
+    } else if (auxiliarRoles && auxiliarRoles.length > 0) {
+      const auxiliarRoleIds = auxiliarRoles.map(r => r.id_rol);
+      const { data: auxiliaresData, error: auxiliaresError } = await supabase
         .from('usuario')
         .select('id_user, name')
-        .eq('id_rol', 3);
-
-    if (auxiliaresError) {
+        .in('id_rol', auxiliarRoleIds);
+      if (auxiliaresError) {
         toast({ title: "Error al cargar auxiliares", description: `No se pudieron cargar los auxiliares: ${auxiliaresError.message}`, variant: "destructive" });
-    } else {
+      } else {
         setAuxiliares(auxiliaresData || []);
+      }
     }
   }
 
@@ -333,6 +372,8 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
     setFilterType('date');
     setCustomDate(e.target.value);
   }
+  
+  const isMotoristaOrAuxiliar = session?.role?.toLowerCase().includes('motorista') || session?.role?.toLowerCase().includes('auxiliar');
 
   return {
     shipments,
@@ -362,6 +403,7 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
     handleOpenDialog,
     handleCloseDialog,
     getRouteDescription,
-    getUserName
+    getUserName,
+    isMotoristaOrAuxiliar
   }
 }

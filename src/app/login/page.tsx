@@ -66,15 +66,20 @@ export default function LoginPage() {
 
   // Maneja el proceso de inicio de sesión.
   const handleLogin = async () => {
-    // Busca al usuario por su correo electrónico.
+    // Busca al usuario por su correo electrónico y une con la tabla de roles.
     const { data, error } = await supabase
       .from('usuario')
-      .select('contraseña')
+      .select(`
+        id_user,
+        name,
+        contraseña,
+        rol ( rol_desc )
+      `)
       .eq('correo', email)
-      .single()
+      .single();
 
     // Manejo de errores de la consulta.
-    if (error && error.code !== 'PGRST116') { // PGRST116: No se encontraron filas, lo cual es un caso de "usuario no encontrado".
+    if (error && error.code !== 'PGRST116') { // PGRST116: No se encontraron filas.
       toast({
         title: "Error",
         description: "Ocurrió un error al intentar iniciar sesión.",
@@ -85,12 +90,21 @@ export default function LoginPage() {
     }
 
     if (data) {
-      // Si se encuentra el usuario, hashea la contraseña introducida y la compara con la almacenada.
       const hashedPassword = hashPassword(password);
       if (hashedPassword === data.contraseña) {
-        // Si las contraseñas coinciden, se crea la cookie de sesión.
-        // `SameSite=None; Secure` son necesarios para que la autenticación funcione en entornos de iframe (como Firebase Studio).
-        document.cookie = `user-session=true; path=/; SameSite=None; Secure`;
+        const role = Array.isArray(data.rol) ? data.rol[0]?.rol_desc : data.rol?.rol_desc;
+        const sessionData = {
+          id: data.id_user,
+          name: data.name,
+          role: role || 'Sin rol',
+        };
+
+        // Guardar sesión en localStorage
+        localStorage.setItem('user-session', JSON.stringify(sessionData));
+
+        // Crear cookie de sesión para la verificación del lado del servidor/middleware si es necesario
+        document.cookie = `auth-session=true; path=/; SameSite=None; Secure`;
+        
         toast({
           title: "¡Éxito!",
           description: "¡Bienvenido!",

@@ -30,6 +30,7 @@ interface ShipmentsTableProps {
   handleDelete: (shipmentId: string) => void;
   getRouteDescription: (routeId: string) => string;
   getUserName: (userId: string) => string;
+  isMotoristaOrAuxiliar?: boolean;
 }
 
 export function ShipmentsTable({
@@ -37,7 +38,8 @@ export function ShipmentsTable({
   handleEdit,
   handleDelete,
   getRouteDescription,
-  getUserName
+  getUserName,
+  isMotoristaOrAuxiliar
 }: ShipmentsTableProps) {
   return (
     <div className="relative w-full overflow-auto">
@@ -84,30 +86,34 @@ export function ShipmentsTable({
                     <Eye className="h-4 w-4" />
                   </Link>
                 </Button>
-                <Button variant="ghost" size="icon" onClick={() => handleEdit(shipment)}>
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="ghost" size="icon">
-                      <Trash2 className="h-4 w-4 text-destructive" />
+                {!isMotoristaOrAuxiliar && (
+                  <>
+                    <Button variant="ghost" size="icon" onClick={() => handleEdit(shipment)}>
+                      <Pencil className="h-4 w-4" />
                     </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Esta acción no se puede deshacer. Esto eliminará permanentemente el despacho.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => handleDelete(shipment.id_despacho)}>
-                        Eliminar
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon">
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Esta acción no se puede deshacer. Esto eliminará permanentemente el despacho.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleDelete(shipment.id_despacho)}>
+                            Eliminar
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </>
+                )}
               </TableCell>
             </TableRow>
           ))}

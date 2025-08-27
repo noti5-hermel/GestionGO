@@ -21,10 +21,20 @@ import {
   SidebarMenuButton,
 } from '@/components/ui/sidebar'
 
-const menuItems = [
+interface UserSession {
+  id: string;
+  name: string;
+  role: string;
+}
+
+interface MainNavProps {
+  session: UserSession | null;
+}
+
+const allMenuItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/customers', label: 'Clientes', icon: Users },
-  { href: '/shipments', label: 'Despachos', icon: Truck },
+  { href: '/shipments', label: 'Despachos', icon: Truck, roles: ['Motorista', 'Auxiliar'] },
   { href: '/invoicing', label: 'Facturación', icon: FileText },
   { href: '/shipment-invoicing', label: 'Facturación por Despacho', icon: ClipboardList },
   { href: '/routes', label: 'Rutas', icon: MapIcon },
@@ -37,12 +47,23 @@ const adminMenuItems = [
     { href: '/user-roles', label: 'Roles de Usuario', icon: Shield },
 ]
 
-export function MainNav() {
+export function MainNav({ session }: MainNavProps) {
   const pathname = usePathname()
+
+  const userRole = session?.role?.toLowerCase() || ''
+  
+  const isMotoristaOrAuxiliar = userRole.includes('motorista') || userRole.includes('auxiliar');
+
+  const menuItemsToRender = isMotoristaOrAuxiliar
+    ? allMenuItems.filter(item => item.href === '/shipments')
+    : allMenuItems;
+  
+  const adminItemsToRender = isMotoristaOrAuxiliar ? [] : adminMenuItems;
+
 
   return (
     <SidebarMenu className="p-2">
-      {menuItems.map((item) => (
+      {menuItemsToRender.map((item) => (
         <SidebarMenuItem key={item.href}>
           <SidebarMenuButton
             asChild
@@ -56,10 +77,14 @@ export function MainNav() {
           </SidebarMenuButton>
         </SidebarMenuItem>
       ))}
-       <SidebarMenuItem>
-        <div className="my-2 border-t border-sidebar-border" />
-      </SidebarMenuItem>
-      {adminMenuItems.map((item) => (
+      
+      {adminItemsToRender.length > 0 && (
+        <SidebarMenuItem>
+          <div className="my-2 border-t border-sidebar-border" />
+        </SidebarMenuItem>
+      )}
+
+      {adminItemsToRender.map((item) => (
         <SidebarMenuItem key={item.href}>
           <SidebarMenuButton
             asChild

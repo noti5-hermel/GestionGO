@@ -1,6 +1,7 @@
 
 'use client'
 
+import { useState, useEffect } from 'react';
 import {
   SidebarProvider,
   Sidebar,
@@ -16,11 +17,33 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { LogOut } from 'lucide-react'
 
+// Definir un tipo para la sesión del usuario
+interface UserSession {
+  id: string;
+  name: string;
+  role: string;
+}
+
 export default function AppLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const [session, setSession] = useState<UserSession | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    try {
+      const userSession = localStorage.getItem('user-session');
+      if (userSession) {
+        setSession(JSON.parse(userSession));
+      }
+    } catch (error) {
+      console.error("Failed to parse user session from localStorage", error);
+    }
+    setLoading(false);
+  }, []);
+
 
   /**
    * Cierra la sesión del usuario eliminando la cookie de sesión
@@ -29,11 +52,21 @@ export default function AppLayout({
    * estableciendo SameSite=None y Secure.
    */
   const handleLogout = () => {
+    // Limpia la sesión del localStorage
+    localStorage.removeItem('user-session');
     // Establece la fecha de expiración de la cookie a una fecha pasada para que el navegador la elimine.
-    document.cookie = 'user-session=true; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=None; Secure';
+    document.cookie = 'auth-session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=None; Secure';
     // Redirige al usuario a la página de login.
     window.location.href = '/login';
   };
+  
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <p>Cargando...</p>
+      </div>
+    );
+  }
 
   return (
     <SidebarProvider>
@@ -52,22 +85,24 @@ export default function AppLayout({
         </div>
         <SidebarSeparator />
         <SidebarContent>
-          <MainNav />
+          <MainNav session={session} />
         </SidebarContent>
         <SidebarFooter className="p-2">
-          <div className="flex items-center gap-3 p-2 rounded-md transition-colors hover:bg-sidebar-accent">
-            <Avatar className="size-8">
-              <AvatarImage src="https://placehold.co/40x40.png" alt="@user" data-ai-hint="profile picture" />
-              <AvatarFallback>U</AvatarFallback>
-            </Avatar>
-            <div className="flex flex-col group-data-[state=collapsed]:hidden">
-              <span className="font-semibold text-sm">Usuario</span>
-              <span className="text-xs text-muted-foreground">usuario@email.com</span>
+          {session && (
+            <div className="flex items-center gap-3 p-2 rounded-md transition-colors hover:bg-sidebar-accent">
+              <Avatar className="size-8">
+                <AvatarImage src="https://placehold.co/40x40.png" alt="@user" data-ai-hint="profile picture" />
+                <AvatarFallback>{session.name ? session.name.charAt(0).toUpperCase() : 'U'}</AvatarFallback>
+              </Avatar>
+              <div className="flex flex-col group-data-[state=collapsed]:hidden">
+                <span className="font-semibold text-sm">{session.name}</span>
+                <span className="text-xs text-muted-foreground">{session.role}</span>
+              </div>
+              <Button variant="ghost" size="icon" className="ml-auto group-data-[state=collapsed]:hidden" onClick={handleLogout}>
+                <LogOut className="size-4" />
+              </Button>
             </div>
-            <Button variant="ghost" size="icon" className="ml-auto group-data-[state=collapsed]:hidden" onClick={handleLogout}>
-              <LogOut className="size-4" />
-            </Button>
-          </div>
+          )}
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>

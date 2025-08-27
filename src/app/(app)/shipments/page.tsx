@@ -40,6 +40,7 @@ export default function ShipmentsPage() {
     users,
     getRouteDescription,
     getUserName,
+    isMotoristaOrAuxiliar
   } = useShipments({ itemsPerPage: ITEMS_PER_PAGE });
 
   return (
@@ -62,25 +63,27 @@ export default function ShipmentsPage() {
                 className="w-auto"
               />
             </div>
-            <ShipmentForm
-              form={form}
-              isOpen={isDialogOpen}
-              setIsOpen={setIsDialogOpen}
-              editingShipment={editingShipment}
-              setEditingShipment={setEditingShipment}
-              onSubmit={onSubmit}
-              handleCloseDialog={handleCloseDialog}
-              routes={routes}
-              motoristas={motoristas}
-              auxiliares={auxiliares}
-              users={users}
-              getRouteDescription={getRouteDescription}
-              getUserName={getUserName}
-            >
-              <Button onClick={() => { setEditingShipment(null); form.reset(); setIsDialogOpen(true); }}>
-                <PlusCircle className="mr-2 h-4 w-4" /> Nuevo Despacho
-              </Button>
-            </ShipmentForm>
+            {!isMotoristaOrAuxiliar && (
+              <ShipmentForm
+                form={form}
+                isOpen={isDialogOpen}
+                setIsOpen={setIsDialogOpen}
+                editingShipment={editingShipment}
+                setEditingShipment={setEditingShipment}
+                onSubmit={onSubmit}
+                handleCloseDialog={handleCloseDialog}
+                routes={routes}
+                motoristas={motoristas}
+                auxiliares={auxiliares}
+                users={users}
+                getRouteDescription={getRouteDescription}
+                getUserName={getUserName}
+              >
+                <Button onClick={() => { setEditingShipment(null); form.reset(); setIsDialogOpen(true); }}>
+                  <PlusCircle className="mr-2 h-4 w-4" /> Nuevo Despacho
+                </Button>
+              </ShipmentForm>
+            )}
           </div>
         </div>
       </CardHeader>
@@ -91,6 +94,7 @@ export default function ShipmentsPage() {
           handleDelete={handleDelete}
           getRouteDescription={getRouteDescription}
           getUserName={getUserName}
+          isMotoristaOrAuxiliar={isMotoristaOrAuxiliar}
         />
       </CardContent>
       <CardFooter className="pt-6 flex justify-between items-center">
@@ -122,4 +126,3 @@ export default function ShipmentsPage() {
     </Card>
   )
 }
-
