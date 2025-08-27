@@ -3,18 +3,28 @@
 
 import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { z } from "zod"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, Pencil } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 
+// Esquema para el formulario de edición de la factura del despacho
+const shipmentInvoiceEditSchema = z.object({
+  comprobante: z.string().min(1, "El comprobante es requerido."),
+  forma_pago: z.enum(["Efectivo", "Tarjeta", "Transferencia"]),
+  monto: z.coerce.number().min(0, "El monto debe ser un número positivo."),
+  state: z.boolean(),
+});
 
 // Tipos de datos para la página de detalle del despacho.
 type Shipment = {
@@ -50,7 +60,11 @@ type Route = { id_ruta: string; ruta_desc: string }
 type Invoice = { id_factura: string, invoice_number: string | number, code_customer: string }
 type Customer = { code_customer: string; id_impuesto: number };
 type TaxType = { id_impuesto: number; impt_desc: string };
-
+const paymentMethods: ShipmentInvoice['forma_pago'][] = ["Efectivo", "Tarjeta", "Transferencia"];
+const statusOptions: { label: string; value: boolean }[] = [
+  { label: "Pagado", value: true },
+  { label: "Pendiente", value: false },
+]
 
 // Componente reutilizable para mostrar un badge de estado del proceso.
 const StatusBadge = ({ checked, text }: { checked: boolean, text: string }) => {
@@ -75,10 +89,19 @@ export default function ShipmentDetailPage() {
   const [routes, setRoutes] = useState<Route[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Estados para el diálogo de edición de monto
-  const [isAmountDialogOpen, setIsAmountDialogOpen] = useState(false);
-  const [editingInvoiceInfo, setEditingInvoiceInfo] = useState<{ id: number; amount: number; } | null>(null);
-  const [newAmount, setNewAmount] = useState<number | string>("");
+  // Estados para el diálogo de edición de factura
+  const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
+  const [editingShipmentInvoice, setEditingShipmentInvoice] = useState<ShipmentInvoice | null>(null);
+
+  const form = useForm<z.infer<typeof shipmentInvoiceEditSchema>>({
+    resolver: zodResolver(shipmentInvoiceEditSchema),
+    defaultValues: {
+      comprobante: "",
+      forma_pago: "Efectivo",
+      monto: 0,
+      state: false,
+    },
+  });
 
   // Función principal para obtener todos los datos necesarios para la página.
   const fetchData = async () => {
@@ -107,7 +130,6 @@ export default function ShipmentDetailPage() {
     if (routesRes.error) toast({ title: "Error", description: "No se pudieron cargar las rutas.", variant: "destructive" })
     else setRoutes(routesRes.data as Route[])
     
-    // Lógica compleja para enriquecer los datos de las facturas con información adicional (número, tipo de impuesto).
     if (shipmentInvoicesRes.error) {
       toast({ title: "Error", description: "No se pudieron cargar las facturas asociadas.", variant: "destructive" })
     } else {
@@ -115,30 +137,25 @@ export default function ShipmentDetailPage() {
       const invoiceIds = shipmentInvoicesData.map(inv => inv.id_factura)
 
       if (invoiceIds.length > 0) {
-          // Obtener datos de facturas (facturacion).
           const { data: invoicesData, error: invoicesError } = await supabase.from('facturacion').select('id_factura, invoice_number, code_customer').in('id_factura', invoiceIds)
           if (invoicesError) {
               toast({ title: "Error", description: "No se pudieron cargar los datos de facturas.", variant: "destructive" });
           } else {
-              // Obtener datos de clientes (customer).
               const customerCodes = (invoicesData || []).map(inv => inv.code_customer)
               const { data: customersData, error: customersError } = await supabase.from('customer').select('code_customer, id_impuesto').in('code_customer', customerCodes)
               if (customersError) {
                   toast({ title: "Error", description: "No se pudieron cargar los datos de clientes.", variant: "destructive" });
               } else {
-                  // Obtener tipos de impuesto (tipo_impuesto).
                   const taxIds = (customersData || []).map(c => c.id_impuesto)
                   const { data: taxesData, error: taxesError } = await supabase.from('tipo_impuesto').select('id_impuesto, impt_desc').in('id_impuesto', taxIds)
                   if (taxesError) {
                       toast({ title: "Error", description: "No se pudieron cargar los tipos de impuesto.", variant: "destructive" });
                   } else {
-                      // Se crean mapas para una búsqueda eficiente de datos relacionados.
                       const taxMap = new Map((taxesData || []).map(t => [t.id_impuesto, t.impt_desc]))
                       const customerTaxMap = new Map((customersData || []).map(c => [c.code_customer, taxMap.get(c.id_impuesto)]))
                       const invoiceCustomerMap = new Map((invoicesData || []).map(i => [i.id_factura, i.code_customer]))
                       const invoiceNumberMap = new Map((invoicesData || []).map(i => [i.id_factura, i.invoice_number]))
 
-                      // Se enriquecen las facturas del despacho con los datos obtenidos.
                       const enrichedInvoices = shipmentInvoicesData.map(si => ({
                           ...si,
                           invoice_number: invoiceNumberMap.get(si.id_factura),
@@ -156,76 +173,64 @@ export default function ShipmentDetailPage() {
     setLoading(false)
   }
 
-  // Carga los datos cuando el componente se monta o el ID del despacho cambia.
   useEffect(() => {
     fetchData()
   }, [id, toast])
-
-  // Maneja el cambio de estado de una factura (Pagado/Pendiente).
-  const handleStatusChange = (invoiceId: number, currentAmount: number, newState: boolean) => {
-    if (newState) { // Si se marca como "Pagado"
-        setEditingInvoiceInfo({ id: invoiceId, amount: currentAmount });
-        setNewAmount(currentAmount);
-        setIsAmountDialogOpen(true);
-    } else { // Si se marca como "Pendiente"
-        updateInvoice(invoiceId, false, currentAmount);
+  
+  useEffect(() => {
+    if (editingShipmentInvoice) {
+      form.reset({
+        comprobante: editingShipmentInvoice.comprobante,
+        forma_pago: editingShipmentInvoice.forma_pago,
+        monto: editingShipmentInvoice.monto,
+        state: editingShipmentInvoice.state,
+      });
     }
-  };
+  }, [editingShipmentInvoice, form]);
 
-  const updateInvoice = async (invoiceId: number, state: boolean, amount: number) => {
+  const handleEditInvoice = (invoice: ShipmentInvoice) => {
+    setEditingShipmentInvoice(invoice);
+    setIsInvoiceDialogOpen(true);
+  };
+  
+  const handleUpdateInvoice = async (values: z.infer<typeof shipmentInvoiceEditSchema>) => {
+    if (!editingShipmentInvoice) return;
+
     const { error } = await supabase
-        .from('facturacion_x_despacho')
-        .update({ state, monto: amount })
-        .eq('id_fac_desp', invoiceId);
+      .from('facturacion_x_despacho')
+      .update(values)
+      .eq('id_fac_desp', editingShipmentInvoice.id_fac_desp);
     
     if (error) {
-        toast({
-            title: "Error al actualizar",
-            description: "No se pudo cambiar el estado de la factura.",
-            variant: "destructive",
-        });
+      toast({
+        title: "Error al actualizar",
+        description: "No se pudo actualizar la factura del despacho.",
+        variant: "destructive",
+      });
     } else {
-        toast({
-            title: "Éxito",
-            description: "Estado de la factura actualizado correctamente.",
-        });
-        fetchData();
+      toast({
+        title: "Éxito",
+        description: "Factura del despacho actualizada correctamente.",
+      });
+      fetchData();
+      closeInvoiceDialog();
     }
-  }
-
-  const handleConfirmAmount = () => {
-    if (editingInvoiceInfo) {
-        const amount = typeof newAmount === 'string' ? parseFloat(newAmount) : newAmount;
-        if (isNaN(amount) || amount < 0) {
-            toast({
-                title: "Error de validación",
-                description: "Por favor, ingrese un monto válido.",
-                variant: "destructive",
-            });
-            return;
-        }
-        updateInvoice(editingInvoiceInfo.id, true, amount);
-    }
-    closeAmountDialog();
   };
 
-  const closeAmountDialog = () => {
-      setIsAmountDialogOpen(false);
-      setEditingInvoiceInfo(null);
-      setNewAmount("");
+  const closeInvoiceDialog = () => {
+    setIsInvoiceDialogOpen(false);
+    setEditingShipmentInvoice(null);
+    form.reset();
   };
 
-
-  // Funciones auxiliares para obtener descripciones legibles a partir de IDs.
   const getRouteDescription = (routeId: string) => routes.find(route => String(route.id_ruta) === String(routeId))?.ruta_desc || routeId
   const getUserName = (userId: string) => users.find(user => String(user.id_user) === String(userId))?.name || userId
   const getStatusLabel = (status: boolean) => status ? "Pagado" : "Pendiente"
+  const getBadgeVariant = (status: boolean) => status ? "default" : "secondary"
 
-  // Filtra las facturas por tipo de impuesto para mostrarlas en tablas separadas.
   const fiscalCreditInvoices = invoices.filter(inv => inv.tax_type === 'Crédito Fiscal');
   const finalConsumerInvoices = invoices.filter(inv => inv.tax_type === 'Consumidor Final');
   const otherInvoices = invoices.filter(inv => inv.tax_type !== 'Crédito Fiscal' && inv.tax_type !== 'Consumidor Final');
-
 
   if (loading) {
     return <p>Cargando detalles del despacho...</p>
@@ -235,7 +240,6 @@ export default function ShipmentDetailPage() {
     return <p>Despacho no encontrado.</p>
   }
 
-  // Función para renderizar una tabla de facturas.
   const renderInvoicesTable = (invoiceList: ShipmentInvoice[], title: string, description: string) => (
     <Card className="mt-6">
       <CardHeader>
@@ -251,6 +255,7 @@ export default function ShipmentDetailPage() {
               <TableHead>Forma de Pago</TableHead>
               <TableHead>Monto</TableHead>
               <TableHead>Estado</TableHead>
+              <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -261,23 +266,19 @@ export default function ShipmentDetailPage() {
                 <TableCell>{invoice.forma_pago}</TableCell>
                 <TableCell>${invoice.monto.toFixed(2)}</TableCell>
                 <TableCell>
-                  <Select
-                    value={String(invoice.state)}
-                    onValueChange={(value) => handleStatusChange(invoice.id_fac_desp, invoice.monto, value === 'true')}
-                  >
-                    <SelectTrigger className="w-[120px]">
-                      <SelectValue placeholder="Seleccionar estado" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="true">Pagado</SelectItem>
-                      <SelectItem value="false">Pendiente</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Badge variant={getBadgeVariant(invoice.state)}>
+                    {getStatusLabel(invoice.state)}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button variant="ghost" size="icon" onClick={() => handleEditInvoice(invoice)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
                 </TableCell>
               </TableRow>
             )) : (
               <TableRow>
-                  <TableCell colSpan={5} className="text-center">No hay facturas en esta categoría.</TableCell>
+                  <TableCell colSpan={6} className="text-center">No hay facturas en esta categoría.</TableCell>
               </TableRow>
             )}
           </TableBody>
@@ -359,34 +360,105 @@ export default function ShipmentDetailPage() {
         {otherInvoices.length > 0 && renderInvoicesTable(otherInvoices, "Facturación - Otros", "Facturas sin un tipo de cliente especificado.")}
       </div>
 
-       <AlertDialog open={isAmountDialogOpen} onOpenChange={setIsAmountDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Actualizar Monto Pagado</AlertDialogTitle>
-            <AlertDialogDescription>
-              La factura se marcará como pagada. Por favor, ingrese el monto final recibido.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="amount" className="text-right">
-                Monto
-              </Label>
-              <Input
-                id="amount"
-                type="number"
-                value={newAmount}
-                onChange={(e) => setNewAmount(e.target.value)}
-                className="col-span-3"
+      <Dialog open={isInvoiceDialogOpen} onOpenChange={setIsInvoiceDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Factura del Despacho</DialogTitle>
+            <DialogDescription>
+              Modifique los detalles de la factura para este despacho.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(handleUpdateInvoice)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="comprobante"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Comprobante</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ej: C-789" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={closeAmountDialog}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmAmount}>Actualizar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
+              <FormField
+                control={form.control}
+                name="forma_pago"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Forma de Pago</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccione una forma de pago" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {paymentMethods.map((method) => (
+                          <SelectItem key={method} value={method}>
+                            {method}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="monto"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Monto</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="0.01" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="state"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Estado</FormLabel>
+                    <Select
+                      onValueChange={(value) => field.onChange(value === 'true')}
+                      value={String(field.value)}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccione un estado" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {statusOptions.map((option) => (
+                          <SelectItem key={option.label} value={String(option.value)}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button type="button" variant="secondary" onClick={closeInvoiceDialog}>Cancelar</Button>
+                </DialogClose>
+                <Button type="submit">Guardar Cambios</Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
+}
+
+    
