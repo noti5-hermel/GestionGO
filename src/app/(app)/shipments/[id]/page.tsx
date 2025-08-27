@@ -11,6 +11,10 @@ import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 import { ArrowLeft } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+
 
 // Tipos de datos para la página de detalle del despacho.
 type Shipment = {
@@ -70,6 +74,11 @@ export default function ShipmentDetailPage() {
   const [users, setUsers] = useState<User[]>([])
   const [routes, setRoutes] = useState<Route[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Estados para el diálogo de edición de monto
+  const [isAmountDialogOpen, setIsAmountDialogOpen] = useState(false);
+  const [editingInvoiceInfo, setEditingInvoiceInfo] = useState<{ id: number; amount: number; } | null>(null);
+  const [newAmount, setNewAmount] = useState<number | string>("");
 
   // Función principal para obtener todos los datos necesarios para la página.
   const fetchData = async () => {
@@ -153,26 +162,59 @@ export default function ShipmentDetailPage() {
   }, [id, toast])
 
   // Maneja el cambio de estado de una factura (Pagado/Pendiente).
-  const handleStatusChange = async (invoiceId: number, newState: boolean) => {
-    const { error } = await supabase
-      .from('facturacion_x_despacho')
-      .update({ state: newState })
-      .eq('id_fac_desp', invoiceId);
-  
-    if (error) {
-      toast({
-        title: "Error al actualizar",
-        description: "No se pudo cambiar el estado de la factura.",
-        variant: "destructive",
-      });
-    } else {
-      toast({
-        title: "Éxito",
-        description: "Estado de la factura actualizado correctamente.",
-      });
-      fetchData(); // Recarga los datos para reflejar el cambio.
+  const handleStatusChange = (invoiceId: number, currentAmount: number, newState: boolean) => {
+    if (newState) { // Si se marca como "Pagado"
+        setEditingInvoiceInfo({ id: invoiceId, amount: currentAmount });
+        setNewAmount(currentAmount);
+        setIsAmountDialogOpen(true);
+    } else { // Si se marca como "Pendiente"
+        updateInvoice(invoiceId, false, currentAmount);
     }
   };
+
+  const updateInvoice = async (invoiceId: number, state: boolean, amount: number) => {
+    const { error } = await supabase
+        .from('facturacion_x_despacho')
+        .update({ state, monto: amount })
+        .eq('id_fac_desp', invoiceId);
+    
+    if (error) {
+        toast({
+            title: "Error al actualizar",
+            description: "No se pudo cambiar el estado de la factura.",
+            variant: "destructive",
+        });
+    } else {
+        toast({
+            title: "Éxito",
+            description: "Estado de la factura actualizado correctamente.",
+        });
+        fetchData();
+    }
+  }
+
+  const handleConfirmAmount = () => {
+    if (editingInvoiceInfo) {
+        const amount = typeof newAmount === 'string' ? parseFloat(newAmount) : newAmount;
+        if (isNaN(amount) || amount < 0) {
+            toast({
+                title: "Error de validación",
+                description: "Por favor, ingrese un monto válido.",
+                variant: "destructive",
+            });
+            return;
+        }
+        updateInvoice(editingInvoiceInfo.id, true, amount);
+    }
+    closeAmountDialog();
+  };
+
+  const closeAmountDialog = () => {
+      setIsAmountDialogOpen(false);
+      setEditingInvoiceInfo(null);
+      setNewAmount("");
+  };
+
 
   // Funciones auxiliares para obtener descripciones legibles a partir de IDs.
   const getRouteDescription = (routeId: string) => routes.find(route => String(route.id_ruta) === String(routeId))?.ruta_desc || routeId
@@ -221,7 +263,7 @@ export default function ShipmentDetailPage() {
                 <TableCell>
                   <Select
                     value={String(invoice.state)}
-                    onValueChange={(value) => handleStatusChange(invoice.id_fac_desp, value === 'true')}
+                    onValueChange={(value) => handleStatusChange(invoice.id_fac_desp, invoice.monto, value === 'true')}
                   >
                     <SelectTrigger className="w-[120px]">
                       <SelectValue placeholder="Seleccionar estado" />
@@ -316,6 +358,35 @@ export default function ShipmentDetailPage() {
         {renderInvoicesTable(finalConsumerInvoices, "Facturación - Consumidor Final", "Facturas asociadas a clientes de tipo Consumidor Final.")}
         {otherInvoices.length > 0 && renderInvoicesTable(otherInvoices, "Facturación - Otros", "Facturas sin un tipo de cliente especificado.")}
       </div>
+
+       <AlertDialog open={isAmountDialogOpen} onOpenChange={setIsAmountDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Actualizar Monto Pagado</AlertDialogTitle>
+            <AlertDialogDescription>
+              La factura se marcará como pagada. Por favor, ingrese el monto final recibido.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="amount" className="text-right">
+                Monto
+              </Label>
+              <Input
+                id="amount"
+                type="number"
+                value={newAmount}
+                onChange={(e) => setNewAmount(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={closeAmountDialog}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmAmount}>Actualizar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </div>
   )
-}
