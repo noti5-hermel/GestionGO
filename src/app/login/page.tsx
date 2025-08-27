@@ -109,7 +109,14 @@ export default function LoginPage() {
           title: "¡Éxito!",
           description: "¡Bienvenido!",
         })
-        window.location.href = "/users"; // Redirige a la página principal de la app.
+        
+        const userRole = sessionData.role.toLowerCase();
+        if (userRole.includes('motorista') || userRole.includes('auxiliar')) {
+          window.location.href = "/shipments";
+        } else {
+          window.location.href = "/users";
+        }
+
       } else {
         toast({
           title: "Error de autenticación",
