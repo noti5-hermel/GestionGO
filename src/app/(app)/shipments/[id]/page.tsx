@@ -19,10 +19,10 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input"
 
 // Esquema para el formulario de edición de la factura del despacho
-const shipmentInvoiceEditSchema = z.object({
+const shipmentInvoiceEditSchema = (maxAmount: number) => z.object({
   comprobante: z.string().min(1, "El comprobante es requerido."),
   forma_pago: z.enum(["Efectivo", "Tarjeta", "Transferencia"]),
-  monto: z.coerce.number().min(0, "El monto debe ser un número positivo."),
+  monto: z.coerce.number().min(0, "El monto debe ser un número positivo.").max(maxAmount, `El monto no puede ser mayor que el total de la factura: $${maxAmount.toFixed(2)}`),
   state: z.boolean(),
 });
 
@@ -53,11 +53,12 @@ type ShipmentInvoice = {
   state: boolean
   invoice_number?: string | number // Opcional, se añade después
   tax_type?: string // Opcional, se añade después
+  grand_total?: number // Opcional, se añade después
 }
 
 type User = { id_user: string; name: string }
 type Route = { id_ruta: string; ruta_desc: string }
-type Invoice = { id_factura: string, invoice_number: string | number, code_customer: string }
+type Invoice = { id_factura: string, invoice_number: string | number, code_customer: string, grand_total: number }
 type Customer = { code_customer: string; id_impuesto: number };
 type TaxType = { id_impuesto: number; impt_desc: string };
 const paymentMethods: ShipmentInvoice['forma_pago'][] = ["Efectivo", "Tarjeta", "Transferencia"];
@@ -93,8 +94,8 @@ export default function ShipmentDetailPage() {
   const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
   const [editingShipmentInvoice, setEditingShipmentInvoice] = useState<ShipmentInvoice | null>(null);
 
-  const form = useForm<z.infer<typeof shipmentInvoiceEditSchema>>({
-    resolver: zodResolver(shipmentInvoiceEditSchema),
+  const form = useForm<z.infer<ReturnType<typeof shipmentInvoiceEditSchema>>>({
+    resolver: zodResolver(shipmentInvoiceEditSchema(editingShipmentInvoice?.grand_total || Number.MAX_SAFE_INTEGER)),
     defaultValues: {
       comprobante: "",
       forma_pago: "Efectivo",
@@ -137,7 +138,7 @@ export default function ShipmentDetailPage() {
       const invoiceIds = shipmentInvoicesData.map(inv => inv.id_factura)
 
       if (invoiceIds.length > 0) {
-          const { data: invoicesData, error: invoicesError } = await supabase.from('facturacion').select('id_factura, invoice_number, code_customer').in('id_factura', invoiceIds)
+          const { data: invoicesData, error: invoicesError } = await supabase.from('facturacion').select('id_factura, invoice_number, code_customer, grand_total').in('id_factura', invoiceIds)
           if (invoicesError) {
               toast({ title: "Error", description: "No se pudieron cargar los datos de facturas.", variant: "destructive" });
           } else {
@@ -153,14 +154,21 @@ export default function ShipmentDetailPage() {
                   } else {
                       const taxMap = new Map((taxesData || []).map(t => [t.id_impuesto, t.impt_desc]))
                       const customerTaxMap = new Map((customersData || []).map(c => [c.code_customer, taxMap.get(c.id_impuesto)]))
-                      const invoiceCustomerMap = new Map((invoicesData || []).map(i => [i.id_factura, i.code_customer]))
-                      const invoiceNumberMap = new Map((invoicesData || []).map(i => [i.id_factura, i.invoice_number]))
+                      const invoiceInfoMap = new Map((invoicesData || []).map(i => [i.id_factura, {
+                        invoice_number: i.invoice_number,
+                        code_customer: i.code_customer,
+                        grand_total: i.grand_total,
+                      }]));
 
-                      const enrichedInvoices = shipmentInvoicesData.map(si => ({
+                      const enrichedInvoices = shipmentInvoicesData.map(si => {
+                        const invoiceInfo = invoiceInfoMap.get(si.id_factura);
+                        return {
                           ...si,
-                          invoice_number: invoiceNumberMap.get(si.id_factura),
-                          tax_type: customerTaxMap.get(invoiceCustomerMap.get(si.id_factura) || '')
-                      }));
+                          invoice_number: invoiceInfo?.invoice_number,
+                          grand_total: invoiceInfo?.grand_total,
+                          tax_type: customerTaxMap.get(invoiceInfo?.code_customer || '')
+                        }
+                      });
                       setInvoices(enrichedInvoices);
                   }
               }
@@ -193,7 +201,7 @@ export default function ShipmentDetailPage() {
     setIsInvoiceDialogOpen(true);
   };
   
-  const handleUpdateInvoice = async (values: z.infer<typeof shipmentInvoiceEditSchema>) => {
+  const handleUpdateInvoice = async (values: z.infer<ReturnType<typeof shipmentInvoiceEditSchema>>) => {
     if (!editingShipmentInvoice) return;
 
     const { error } = await supabase
@@ -252,8 +260,9 @@ export default function ShipmentDetailPage() {
             <TableRow>
               <TableHead>No. Factura</TableHead>
               <TableHead>Comprobante</TableHead>
+              <TableHead>Total Factura</TableHead>
               <TableHead>Forma de Pago</TableHead>
-              <TableHead>Monto</TableHead>
+              <TableHead>Monto Pagado</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
@@ -263,6 +272,7 @@ export default function ShipmentDetailPage() {
               <TableRow key={invoice.id_fac_desp}>
                 <TableCell className="font-medium">{String(invoice.invoice_number || invoice.id_factura)}</TableCell>
                 <TableCell>{invoice.comprobante}</TableCell>
+                <TableCell>${(invoice.grand_total ?? 0).toFixed(2)}</TableCell>
                 <TableCell>{invoice.forma_pago}</TableCell>
                 <TableCell>${invoice.monto.toFixed(2)}</TableCell>
                 <TableCell>
@@ -278,7 +288,7 @@ export default function ShipmentDetailPage() {
               </TableRow>
             )) : (
               <TableRow>
-                  <TableCell colSpan={6} className="text-center">No hay facturas en esta categoría.</TableCell>
+                  <TableCell colSpan={7} className="text-center">No hay facturas en esta categoría.</TableCell>
               </TableRow>
             )}
           </TableBody>
