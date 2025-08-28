@@ -57,8 +57,8 @@ export function MainNav({ session }: MainNavProps) {
     'auxiliar', 
     'bodega',
     'reparto',
-    'asistente admon',
-    'gerente admon',
+    'asist.admon',
+    'gerente.admon',
     'cobros'
   ];
 

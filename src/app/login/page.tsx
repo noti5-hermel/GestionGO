@@ -113,7 +113,7 @@ export default function LoginPage() {
         const userRole = sessionData.role.toLowerCase();
         const restrictedRoles = [
           'motorista', 'auxiliar', 'bodega', 'reparto', 
-          'asistente admon', 'gerente admon', 'cobros'
+          'asist.admon', 'gerente.admon', 'cobros'
         ];
 
         if (restrictedRoles.some(role => userRole.includes(role))) {
