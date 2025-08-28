@@ -355,12 +355,12 @@ export default function ShipmentDetailPage() {
       <Card className="mt-6">
          <CardHeader><CardTitle>Estado del Proceso</CardTitle></CardHeader>
          <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            <StatusBadge checked={shipment.facturacion} text="Facturación"/>
             <StatusBadge checked={shipment.bodega} text="Bodega"/>
             <StatusBadge checked={shipment.reparto} text="Reparto"/>
-            <StatusBadge checked={shipment.facturacion} text="Facturación"/>
             <StatusBadge checked={shipment.asist_admon} text="Asist. Admon."/>
-            <StatusBadge checked={shipment.cobros} text="Cobros"/>
             <StatusBadge checked={shipment.gerente_admon} text="Gerente Admon."/>
+            <StatusBadge checked={shipment.cobros} text="Cobros"/>
          </CardContent>
       </Card>
 
@@ -470,5 +470,3 @@ export default function ShipmentDetailPage() {
     </div>
   )
 }
-
-    

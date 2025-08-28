@@ -54,12 +54,12 @@ export function ShipmentsTable({
             <TableHead>T. Contado</TableHead>
             <TableHead>T. Crédito</TableHead>
             <TableHead>T. General</TableHead>
+            <TableHead>Facturación</TableHead>
             <TableHead>Bodega</TableHead>
             <TableHead>Reparto</TableHead>
-            <TableHead>Facturación</TableHead>
             <TableHead>Asist. Admon.</TableHead>
-            <TableHead>Cobros</TableHead>
             <TableHead>Gerente Admon.</TableHead>
+            <TableHead>Cobros</TableHead>
             <TableHead className="text-right">Acciones</TableHead>
           </TableRow>
         </TableHeader>
@@ -74,12 +74,12 @@ export function ShipmentsTable({
               <TableCell>${shipment.total_contado.toFixed(2)}</TableCell>
               <TableCell>${shipment.total_credito.toFixed(2)}</TableCell>
               <TableCell>${shipment.total_general.toFixed(2)}</TableCell>
+              <TableCell><StatusBadge checked={shipment.facturacion} /></TableCell>
               <TableCell><StatusBadge checked={shipment.bodega} /></TableCell>
               <TableCell><StatusBadge checked={shipment.reparto} /></TableCell>
-              <TableCell><StatusBadge checked={shipment.facturacion} /></TableCell>
               <TableCell><StatusBadge checked={shipment.asist_admon} /></TableCell>
-              <TableCell><StatusBadge checked={shipment.cobros} /></TableCell>
               <TableCell><StatusBadge checked={shipment.gerente_admon} /></TableCell>
+              <TableCell><StatusBadge checked={shipment.cobros} /></TableCell>
               <TableCell className="text-right">
                 <Button variant="ghost" size="icon" asChild>
                   <Link href={`/shipments/${shipment.id_despacho}`}>
