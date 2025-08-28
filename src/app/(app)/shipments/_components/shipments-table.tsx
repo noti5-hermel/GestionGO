@@ -45,6 +45,9 @@ export function ShipmentsTable({
   isMotoristaOrAuxiliar,
   reviewRole,
 }: ShipmentsTableProps) {
+  
+  const canEdit = reviewRole || !isMotoristaOrAuxiliar;
+
   return (
     <div className="w-full overflow-x-auto">
       <Table className="min-w-max">
@@ -90,7 +93,7 @@ export function ShipmentsTable({
                     <Eye className="h-4 w-4" />
                   </Link>
                 </Button>
-                {!isMotoristaOrAuxiliar && (
+                {canEdit && (
                   <Button variant="ghost" size="icon" onClick={() => handleEdit(shipment)}>
                     <Pencil className="h-4 w-4" />
                   </Button>
