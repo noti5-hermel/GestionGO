@@ -34,7 +34,7 @@ interface MainNavProps {
 const allMenuItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/customers', label: 'Clientes', icon: Users },
-  { href: '/shipments', label: 'Despachos', icon: Truck, roles: ['Motorista', 'Auxiliar'] },
+  { href: '/shipments', label: 'Despachos', icon: Truck },
   { href: '/invoicing', label: 'Facturación', icon: FileText },
   { href: '/shipment-invoicing', label: 'Facturación por Despacho', icon: ClipboardList },
   { href: '/routes', label: 'Rutas', icon: MapIcon },
@@ -52,13 +52,13 @@ export function MainNav({ session }: MainNavProps) {
 
   const userRole = session?.role?.toLowerCase() || ''
   
-  const isMotoristaOrAuxiliar = userRole.includes('motorista') || userRole.includes('auxiliar');
+  const isRestrictedRole = userRole.includes('motorista') || userRole.includes('auxiliar') || userRole.includes('bodega');
 
-  const menuItemsToRender = isMotoristaOrAuxiliar
+  const menuItemsToRender = isRestrictedRole
     ? allMenuItems.filter(item => item.href === '/shipments')
     : allMenuItems;
   
-  const adminItemsToRender = isMotoristaOrAuxiliar ? [] : adminMenuItems;
+  const adminItemsToRender = isRestrictedRole ? [] : adminMenuItems;
 
 
   return (
