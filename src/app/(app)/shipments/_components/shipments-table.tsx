@@ -24,7 +24,7 @@ const StatusBadge = ({ checked }: { checked: boolean }) => {
   return <Badge variant={checked ? "default" : "outline"}>{checked ? "OK" : "Pend."}</Badge>
 }
 
-type ReviewRole = keyof Pick<Shipment, 'bodega' | 'reparto' | 'asist_admon' | 'gerente_admon' | 'cobros'>;
+type ReviewRole = keyof Pick<Shipment, 'facturacion' | 'bodega' | 'reparto' | 'asist_admon' | 'gerente_admon' | 'cobros'>;
 
 interface ShipmentsTableProps {
   shipments: Shipment[];
