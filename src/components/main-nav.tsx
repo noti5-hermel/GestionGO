@@ -52,14 +52,17 @@ export function MainNav({ session }: MainNavProps) {
 
   const userRole = session?.role?.toLowerCase() || ''
   
-  const isRestrictedRole = 
-    userRole.includes('motorista') || 
-    userRole.includes('auxiliar') || 
-    userRole.includes('bodega') ||
-    userRole.includes('reparto') ||
-    userRole.includes('asistente admon') ||
-    userRole.includes('gerente admon') ||
-    userRole.includes('cobros');
+  const restrictedRoles = [
+    'motorista', 
+    'auxiliar', 
+    'bodega',
+    'reparto',
+    'asistente admon',
+    'gerente admon',
+    'cobros'
+  ];
+
+  const isRestrictedRole = restrictedRoles.some(role => userRole.includes(role));
 
   const menuItemsToRender = isRestrictedRole
     ? allMenuItems.filter(item => item.href === '/shipments')
