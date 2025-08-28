@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Combobox } from "@/components/ui/combobox"
+import { ScrollableCombobox } from "@/components/ui/combobox"
 import type { Shipment, Route, User } from "@/hooks/use-shipments"
 
 // Esquema de validación para el formulario de despacho.
@@ -106,13 +106,13 @@ export function ShipmentForm({
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Ruta</FormLabel>
-                    <Combobox
-                      options={routeOptions}
+                    <ScrollableCombobox
+                      items={routeOptions}
                       value={field.value}
-                      onChange={field.onChange}
+                      onValueChange={field.onChange}
                       placeholder="Seleccione una ruta"
-                      searchPlaceholder="Buscar ruta..."
-                      notFoundMessage="No se encontró la ruta."
+                      searchText="Buscar ruta..."
+                      noItemsText="No se encontró la ruta."
                     />
                     <FormMessage />
                   </FormItem>
