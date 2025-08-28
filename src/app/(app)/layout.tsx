@@ -105,7 +105,7 @@ export default function AppLayout({
           )}
         </SidebarFooter>
       </Sidebar>
-      <SidebarInset>
+      <SidebarInset className="flex flex-col overflow-hidden">
         <header className="flex h-16 items-center gap-4 border-b bg-card px-6 sticky top-0 z-10 shrink-0">
           {/* Botón para desplegar el menú en vista móvil. Siempre visible. */}
           <SidebarTrigger className="flex md:hidden" />
