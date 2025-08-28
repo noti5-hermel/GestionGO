@@ -88,7 +88,7 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
   const applyFilters = () => {
     let baseShipments = [...shipments];
     
-    // Filtrar por rol si es motorista o auxiliar
+    // Filtrar por rol
     if (session) {
       const userRole = session.role.toLowerCase();
       if (userRole.includes('motorista') || userRole.includes('auxiliar')) {
@@ -96,6 +96,8 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
           String(s.id_motorista) === String(session.id) ||
           String(s.id_auxiliar) === String(session.id)
         );
+      } else if (userRole.includes('bodega')) {
+        baseShipments = shipments.filter(s => s.bodega === false);
       }
     }
 
