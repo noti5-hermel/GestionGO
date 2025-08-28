@@ -115,14 +115,16 @@ export function ShipmentForm({
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Ruta</FormLabel>
-                    <Combobox
-                      options={routeOptions}
-                      value={field.value}
-                      onChange={field.onChange}
-                      placeholder="Seleccione una ruta"
-                      searchPlaceholder="Buscar ruta..."
-                      emptyText="No se encontró la ruta."
-                    />
+                    <FormControl>
+                      <Combobox
+                        options={routeOptions}
+                        value={field.value}
+                        onChange={field.onChange}
+                        placeholder="Seleccione una ruta"
+                        searchPlaceholder="Buscar ruta..."
+                        emptyText="No se encontró la ruta."
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -133,14 +135,16 @@ export function ShipmentForm({
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Motorista</FormLabel>
-                    <Combobox
-                      options={motoristaOptions}
-                      value={field.value}
-                      onChange={field.onChange}
-                      placeholder="Seleccione un motorista"
-                      searchPlaceholder="Buscar motorista..."
-                      emptyText="No se encontró el motorista."
-                    />
+                    <FormControl>
+                      <Combobox
+                        options={motoristaOptions}
+                        value={field.value}
+                        onChange={field.onChange}
+                        placeholder="Seleccione un motorista"
+                        searchPlaceholder="Buscar motorista..."
+                        emptyText="No se encontró el motorista."
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -151,14 +155,16 @@ export function ShipmentForm({
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Auxiliar</FormLabel>
-                     <Combobox
-                      options={auxiliarOptions}
-                      value={field.value}
-                      onChange={field.onChange}
-                      placeholder="Seleccione un auxiliar"
-                      searchPlaceholder="Buscar auxiliar..."
-                      emptyText="No se encontró el auxiliar."
-                    />
+                    <FormControl>
+                       <Combobox
+                        options={auxiliarOptions}
+                        value={field.value}
+                        onChange={field.onChange}
+                        placeholder="Seleccione un auxiliar"
+                        searchPlaceholder="Buscar auxiliar..."
+                        emptyText="No se encontró el auxiliar."
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

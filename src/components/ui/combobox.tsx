@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Check, ChevronsUpDown, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useFormField } from "./form";
 
 type ComboboxProps = {
   options: { label: string; value: string }[];
@@ -25,6 +26,7 @@ export function Combobox({
   className,
   maxHeight = "240px",
 }: ComboboxProps) {
+  const { error, formItemId } = useFormField();
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
 
@@ -85,13 +87,16 @@ export function Combobox({
     >
       {/* PopoverTrigger (Button) */}
       <button
+        type="button"
+        id={formItemId}
         onClick={() => setOpen(!open)}
         className={cn(
           "flex w-full items-center justify-between rounded-md border border-input bg-background px-4 py-2 text-sm",
           "font-normal shadow-sm transition-colors",
           "hover:bg-accent hover:text-accent-foreground",
           "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
-          open ? "ring-2 ring-ring ring-offset-2" : ""
+          open ? "ring-2 ring-ring ring-offset-2" : "",
+          error && "border-destructive"
         )}
         role="combobox"
         aria-expanded={open}
