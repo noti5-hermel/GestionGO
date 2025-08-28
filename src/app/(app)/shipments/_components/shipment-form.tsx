@@ -9,7 +9,6 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Combobox } from "@/components/ui/combobox"
 import type { Shipment, Route, User } from "@/hooks/use-shipments"
 
@@ -85,6 +84,16 @@ export function ShipmentForm({
     label: route.ruta_desc,
   }));
 
+  const motoristaOptions = motoristas.map(motorista => ({
+    value: String(motorista.id_user),
+    label: motorista.name,
+  }));
+
+  const auxiliarOptions = auxiliares.map(auxiliar => ({
+    value: String(auxiliar.id_user),
+    label: auxiliar.name,
+  }));
+
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
@@ -122,24 +131,16 @@ export function ShipmentForm({
                 control={form.control}
                 name="id_motorista"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="flex flex-col">
                     <FormLabel>Motorista</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
-                          <FormControl>
-                              <SelectTrigger>
-                                  <SelectValue placeholder="Seleccione un motorista">
-                                    {getUserName(field.value)}
-                                  </SelectValue>
-                              </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                              {motoristas.map((motorista) => (
-                                  <SelectItem key={motorista.id_user} value={motorista.id_user}>
-                                      {motorista.name}
-                                  </SelectItem>
-                              ))}
-                          </SelectContent>
-                      </Select>
+                    <Combobox
+                      options={motoristaOptions}
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="Seleccione un motorista"
+                      searchPlaceholder="Buscar motorista..."
+                      emptyText="No se encontró el motorista."
+                    />
                     <FormMessage />
                   </FormItem>
                 )}
@@ -148,24 +149,16 @@ export function ShipmentForm({
                 control={form.control}
                 name="id_auxiliar"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="flex flex-col">
                     <FormLabel>Auxiliar</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
-                          <FormControl>
-                              <SelectTrigger>
-                                  <SelectValue placeholder="Seleccione un auxiliar">
-                                    {getUserName(field.value)}
-                                  </SelectValue>
-                              </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                              {auxiliares.map((auxiliar) => (
-                                  <SelectItem key={auxiliar.id_user} value={auxiliar.id_user}>
-                                      {auxiliar.name}
-                                  </SelectItem>
-                              ))}
-                          </SelectContent>
-                      </Select>
+                     <Combobox
+                      options={auxiliarOptions}
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="Seleccione un auxiliar"
+                      searchPlaceholder="Buscar auxiliar..."
+                      emptyText="No se encontró el auxiliar."
+                    />
                     <FormMessage />
                   </FormItem>
                 )}
