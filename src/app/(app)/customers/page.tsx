@@ -1,10 +1,11 @@
 
 'use client'
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
+import * as xlsx from "xlsx"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
@@ -23,7 +24,7 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { PlusCircle, Trash2, Pencil } from "lucide-react"
+import { PlusCircle, Trash2, Pencil, Upload } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 
@@ -55,6 +56,7 @@ export default function CustomersPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const { toast } = useToast()
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Configuración del formulario con react-hook-form y Zod.
   const form = useForm<z.infer<typeof customerSchema>>({
@@ -206,6 +208,61 @@ export default function CustomersPage() {
       fetchCustomers() // Recarga la lista de clientes.
     }
   }
+  
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const data = new Uint8Array(e.target?.result as ArrayBuffer);
+            const workbook = xlsx.read(data, { type: 'array' });
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            const json: any[] = xlsx.utils.sheet_to_json(worksheet);
+
+            const mappedData = json.map(row => ({
+                code_customer: String(row.code_customer || ''),
+                customer_name: String(row.customer_name || ''),
+                id_impuesto: String(row.id_impuesto || ''),
+                id_term: String(row.id_term || ''),
+                ruta: String(row.ruta || ''),
+            }));
+
+            const validatedCustomers = z.array(customerSchema).safeParse(mappedData);
+
+            if (!validatedCustomers.success) {
+                console.error("Error de validación Zod:", validatedCustomers.error.flatten().fieldErrors);
+                toast({
+                    title: "Error de validación",
+                    description: "Algunos datos del archivo Excel no son correctos o están incompletos. Revisa la consola para más detalles.",
+                    variant: "destructive"
+                });
+                return;
+            }
+            
+            const { error: insertError } = await supabase.from('customer').upsert(validatedCustomers.data);
+
+            if (insertError) {
+                toast({ title: "Error al importar", description: insertError.message, variant: "destructive" });
+            } else {
+                toast({ title: "Éxito", description: `${validatedCustomers.data.length} clientes importados/actualizados correctamente.` });
+                fetchCustomers();
+            }
+
+        } catch (error) {
+            console.error("Error al procesar el archivo:", error);
+            toast({ title: "Error", description: "No se pudo procesar el archivo Excel.", variant: "destructive" });
+        }
+    };
+    reader.readAsArrayBuffer(file);
+    if(event.target) event.target.value = '';
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
 
   // Prepara el formulario para editar un cliente.
   const handleEdit = (customer: Customer) => {
@@ -238,122 +295,134 @@ export default function CustomersPage() {
             <CardTitle>Clientes</CardTitle>
             <CardDescription>Gestione su base de clientes.</CardDescription>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={handleOpenDialog}>
-            <DialogTrigger asChild>
-              <Button onClick={() => { setEditingCustomer(null); form.reset(); setIsDialogOpen(true); }}>
-                <PlusCircle className="mr-2 h-4 w-4" /> Añadir Cliente
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>{editingCustomer ? 'Editar Cliente' : 'Añadir Nuevo Cliente'}</DialogTitle>
-                <DialogDescription>
-                  {editingCustomer ? 'Modifique los detalles del cliente.' : 'Complete los detalles para crear un nuevo cliente.'}
-                </DialogDescription>
-              </DialogHeader>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="code_customer"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Código Cliente</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Ej: C003" {...field} disabled={!!editingCustomer} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="customer_name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Nombre</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Ej: Carlos Rodriguez" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="ruta"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Ruta</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Ej: Ruta 15" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="id_impuesto"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Impuesto</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value} defaultValue={String(field.value)}>
+          <div className="flex gap-2">
+            <Button onClick={handleImportClick} variant="outline">
+                <Upload className="mr-2 h-4 w-4" /> Importar desde Excel
+            </Button>
+            <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                className="hidden"
+                accept=".xlsx, .xls"
+            />
+            <Dialog open={isDialogOpen} onOpenChange={handleOpenDialog}>
+              <DialogTrigger asChild>
+                <Button onClick={() => { setEditingCustomer(null); form.reset(); setIsDialogOpen(true); }}>
+                  <PlusCircle className="mr-2 h-4 w-4" /> Añadir Cliente
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{editingCustomer ? 'Editar Cliente' : 'Añadir Nuevo Cliente'}</DialogTitle>
+                  <DialogDescription>
+                    {editingCustomer ? 'Modifique los detalles del cliente.' : 'Complete los detalles para crear un nuevo cliente.'}
+                  </DialogDescription>
+                </DialogHeader>
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="code_customer"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Código Cliente</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Ej: C003" {...field} disabled={!!editingCustomer} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="customer_name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Nombre</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Ej: Carlos Rodriguez" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="ruta"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Ruta</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Ej: Ruta 15" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="id_impuesto"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Impuesto</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value} defaultValue={String(field.value)}>
+                              <FormControl>
+                                  <SelectTrigger>
+                                      <SelectValue placeholder="Seleccione un impuesto">
+                                          {getTaxDescription(field.value)}
+                                      </SelectValue>
+                                  </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                  {taxes.map((tax) => (
+                                      <SelectItem key={String(tax.id_impuesto)} value={String(tax.id_impuesto)}>
+                                          {tax.impt_desc}
+                                      </SelectItem>
+                                  ))}
+                              </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="id_term"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Término de Pago</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value} defaultValue={String(field.value)}>
                             <FormControl>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Seleccione un impuesto">
-                                        {getTaxDescription(field.value)}
-                                    </SelectValue>
-                                </SelectTrigger>
+                              <SelectTrigger>
+                                  <SelectValue placeholder="Seleccione un término de pago">
+                                      {getTermDescription(field.value)}
+                                  </SelectValue>
+                              </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                                {taxes.map((tax) => (
-                                    <SelectItem key={String(tax.id_impuesto)} value={String(tax.id_impuesto)}>
-                                        {tax.impt_desc}
-                                    </SelectItem>
-                                ))}
+                              {paymentTerms.map((term) => (
+                                <SelectItem key={String(term.id_term)} value={String(term.id_term)}>
+                                  {term.term_desc}
+                                </SelectItem>
+                              ))}
                             </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="id_term"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Término de Pago</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value} defaultValue={String(field.value)}>
-                          <FormControl>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Seleccione un término de pago">
-                                    {getTermDescription(field.value)}
-                                </SelectValue>
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {paymentTerms.map((term) => (
-                              <SelectItem key={String(term.id_term)} value={String(term.id_term)}>
-                                {term.term_desc}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <DialogFooter className="gap-2 pt-4">
-                    <DialogClose asChild>
-                      <Button type="button" variant="secondary" className="w-full sm:w-auto">Cancelar</Button>
-                    </DialogClose>
-                    <Button type="submit" className="w-full sm:w-auto">{editingCustomer ? 'Guardar Cambios' : 'Guardar Cliente'}</Button>
-                  </DialogFooter>
-                </form>
-              </Form>
-            </DialogContent>
-          </Dialog>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <DialogFooter className="gap-2 pt-4">
+                      <DialogClose asChild>
+                        <Button type="button" variant="secondary" className="w-full sm:w-auto">Cancelar</Button>
+                      </DialogClose>
+                      <Button type="submit" className="w-full sm:w-auto">{editingCustomer ? 'Guardar Cambios' : 'Guardar Cliente'}</Button>
+                    </DialogFooter>
+                  </form>
+                </Form>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="flex-1 overflow-auto">
