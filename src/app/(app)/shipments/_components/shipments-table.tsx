@@ -24,6 +24,8 @@ const StatusBadge = ({ checked }: { checked: boolean }) => {
   return <Badge variant={checked ? "default" : "outline"}>{checked ? "OK" : "Pend."}</Badge>
 }
 
+type ReviewRole = keyof Pick<Shipment, 'bodega' | 'reparto' | 'asist_admon' | 'gerente_admon' | 'cobros'>;
+
 interface ShipmentsTableProps {
   shipments: Shipment[];
   handleEdit: (shipment: Shipment) => void;
@@ -31,7 +33,7 @@ interface ShipmentsTableProps {
   getRouteDescription: (routeId: string) => string;
   getUserName: (userId: string) => string;
   isMotoristaOrAuxiliar?: boolean;
-  isBodega?: boolean;
+  reviewRole: ReviewRole | null;
 }
 
 export function ShipmentsTable({
@@ -41,7 +43,7 @@ export function ShipmentsTable({
   getRouteDescription,
   getUserName,
   isMotoristaOrAuxiliar,
-  isBodega,
+  reviewRole,
 }: ShipmentsTableProps) {
   return (
     <div className="w-full overflow-x-auto">
@@ -89,13 +91,14 @@ export function ShipmentsTable({
                   </Link>
                 </Button>
                 {!isMotoristaOrAuxiliar && (
-                  <>
-                    <Button variant="ghost" size="icon" onClick={() => handleEdit(shipment)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
+                  <Button variant="ghost" size="icon" onClick={() => handleEdit(shipment)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                )}
+                {!isMotoristaOrAuxiliar && !reviewRole && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" disabled={isBodega}>
+                        <Button variant="ghost" size="icon">
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </AlertDialogTrigger>
@@ -114,7 +117,6 @@ export function ShipmentsTable({
                         </AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>
-                  </>
                 )}
               </TableCell>
             </TableRow>

@@ -44,6 +44,8 @@ interface UserSession {
   role: string;
 }
 
+type ReviewRole = keyof Pick<Shipment, 'bodega' | 'reparto' | 'asist_admon' | 'gerente_admon' | 'cobros'>;
+
 interface UseShipmentsProps {
   itemsPerPage: number;
 }
@@ -63,7 +65,7 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [session, setSession] = useState<UserSession | null>(null);
   const { toast } = useToast()
-  const [bodegaFilter, setBodegaFilter] = useState<'pending' | 'reviewed'>('pending');
+  const [reviewFilter, setReviewFilter] = useState<'pending' | 'reviewed'>('pending');
 
   // Configuración del formulario con react-hook-form y Zod.
   const form = useForm<z.infer<typeof shipmentSchema>>({
@@ -85,23 +87,32 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
     },
   })
   
-  // Función para aplicar los filtros de fecha a la lista de despachos.
+  const getReviewRoleFromSession = (userRole: string): ReviewRole | null => {
+    if (userRole.includes('bodega')) return 'bodega';
+    if (userRole.includes('reparto')) return 'reparto';
+    if (userRole.includes('asistente admon')) return 'asist_admon';
+    if (userRole.includes('gerente admon')) return 'gerente_admon';
+    if (userRole.includes('cobros')) return 'cobros';
+    return null;
+  };
+
   const applyFilters = () => {
     let baseShipments = [...shipments];
     
-    // Filtrar por rol
     if (session) {
       const userRole = session.role.toLowerCase();
+      const reviewRole = getReviewRoleFromSession(userRole);
+
       if (userRole.includes('motorista') || userRole.includes('auxiliar')) {
         baseShipments = shipments.filter(s =>
           String(s.id_motorista) === String(session.id) ||
           String(s.id_auxiliar) === String(session.id)
         );
-      } else if (userRole.includes('bodega')) {
-        if (bodegaFilter === 'pending') {
-          baseShipments = shipments.filter(s => s.bodega === false);
-        } else { // 'reviewed'
-          baseShipments = shipments.filter(s => s.bodega === true);
+      } else if (reviewRole) {
+        if (reviewFilter === 'pending') {
+          baseShipments = shipments.filter(s => s[reviewRole] === false);
+        } else {
+          baseShipments = shipments.filter(s => s[reviewRole] === true);
         }
       }
     }
@@ -114,7 +125,7 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
         newFilteredShipments = baseShipments.filter(s => s.fecha_despacho === customDate);
     }
     setFilteredShipments(newFilteredShipments);
-    setCurrentPage(1); // Resetea a la primera página cada vez que cambia el filtro.
+    setCurrentPage(1);
   };
   
   useEffect(() => {
@@ -128,7 +139,6 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
     }
   }, []);
 
-  // Carga los datos iniciales al montar el componente.
   useEffect(() => {
     fetchShipments()
     fetchRoutes()
@@ -136,12 +146,10 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
     fetchAllUsers()
   }, [])
   
-  // Vuelve a aplicar los filtros cada vez que los despachos, la sesión o las opciones de filtro cambian.
   useEffect(() => {
     applyFilters();
-  }, [shipments, filterType, customDate, session, bodegaFilter]);
+  }, [shipments, filterType, customDate, session, reviewFilter]);
 
-  // Rellena el formulario cuando se selecciona un despacho para editar.
   useEffect(() => {
     if (editingShipment) {
       form.reset({
@@ -170,7 +178,6 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
     }
   }, [editingShipment, form])
 
-  // Obtiene todos los usuarios para poder mostrar sus nombres.
   const fetchAllUsers = async () => {
     const { data, error } = await supabase.from('usuario').select('id_user, name');
     if (error) {
@@ -180,7 +187,6 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
     }
   }
 
-  // Obtiene la lista completa de despachos.
   const fetchShipments = async () => {
     const { data, error } = await supabase.from('despacho').select('*').order('fecha_despacho', { ascending: false });
 
@@ -195,7 +201,6 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
     }
   }
 
-  // Obtiene las rutas disponibles.
   const fetchRoutes = async () => {
     const { data, error } = await supabase.from('rutas').select('id_ruta, ruta_desc');
     if (error) {
@@ -209,9 +214,7 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
     }
   };
 
-  // Obtiene los usuarios filtrados por rol para los selects de motorista y auxiliar.
   const fetchUsersByRole = async () => {
-    // Busca el rol de motorista (podría tener variaciones en la descripción).
     const { data: motoristaRoles, error: motoristaRolesError } = await supabase
       .from('rol')
       .select('id_rol')
@@ -233,7 +236,6 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
       }
     }
 
-    // Busca el rol de auxiliar (podría tener variaciones en la descripción).
     const { data: auxiliarRoles, error: auxiliarRolesError } = await supabase
       .from('rol')
       .select('id_rol')
@@ -255,12 +257,10 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
     }
   }
 
-  // Gestiona el envío del formulario para crear o actualizar un despacho.
   const onSubmit = async (values: z.infer<typeof shipmentSchema>) => {
     let error;
 
     if (editingShipment) {
-      // Actualiza un despacho existente.
       const { error: updateError } = await supabase
         .from('despacho')
         .update(values)
@@ -268,7 +268,6 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
         .select()
       error = updateError;
     } else {
-      // Inserta un nuevo despacho.
        const { error: insertError } = await supabase
         .from('despacho')
         .insert([values])
@@ -292,7 +291,6 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
     }
   }
 
-  // Elimina un despacho.
   const handleDelete = async (shipmentId: string) => {
     const { error } = await supabase
       .from('despacho')
@@ -322,13 +320,11 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
     }
   }
   
-  // Prepara el formulario para editar un despacho.
   const handleEdit = (shipment: Shipment) => {
     setEditingShipment(shipment);
     setIsDialogOpen(true);
   }
 
-  // Controla la apertura y cierre del diálogo, reseteando el estado de edición.
   const handleOpenDialog = (open: boolean) => {
     setIsDialogOpen(open);
     if (!open) {
@@ -336,7 +332,6 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
     }
   };
 
-  // Cierra el diálogo y resetea el formulario.
   const handleCloseDialog = () => {
     setEditingShipment(null);
     form.reset({
@@ -357,7 +352,6 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
     setIsDialogOpen(false);
   }
 
-  // Funciones para obtener descripciones legibles a partir de IDs.
   const getRouteDescription = (routeId: string) => {
     if (!routes || routes.length === 0) return routeId;
     return routes.find(route => String(route.id_ruta) === String(routeId))?.ruta_desc || routeId;
@@ -367,21 +361,19 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
     return users.find(user => String(user.id_user) === String(userId))?.name || userId;
   }
   
-  // Lógica de paginación.
   const totalPages = Math.ceil(filteredShipments.length / itemsPerPage);
   const paginatedShipments = filteredShipments.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
   
-  // Maneja el cambio en el input de fecha personalizada.
   const handleCustomDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFilterType('date');
     setCustomDate(e.target.value);
   }
   
   const isMotoristaOrAuxiliar = session?.role?.toLowerCase().includes('motorista') || session?.role?.toLowerCase().includes('auxiliar');
-  const isBodega = session?.role?.toLowerCase().includes('bodega');
+  const reviewRole = session?.role ? getReviewRoleFromSession(session.role.toLowerCase()) : null;
 
   return {
     shipments,
@@ -413,8 +405,8 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
     getRouteDescription,
     getUserName,
     isMotoristaOrAuxiliar,
-    isBodega,
-    bodegaFilter,
-    setBodegaFilter
+    reviewRole,
+    reviewFilter,
+    setReviewFilter
   }
 }

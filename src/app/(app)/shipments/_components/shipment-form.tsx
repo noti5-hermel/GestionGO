@@ -39,6 +39,7 @@ const shipmentSchema = z.object({
 })
 
 type ShipmentFormValues = z.infer<typeof shipmentSchema>;
+type ReviewRole = keyof Pick<Shipment, 'bodega' | 'reparto' | 'asist_admon' | 'gerente_admon' | 'cobros'>;
 
 interface ShipmentFormProps {
   children: React.ReactNode;
@@ -55,7 +56,7 @@ interface ShipmentFormProps {
   users: User[];
   getRouteDescription: (routeId: string) => string;
   getUserName: (userId: string) => string;
-  isBodega: boolean;
+  reviewRole: ReviewRole | null;
 }
 
 export function ShipmentForm({
@@ -69,9 +70,7 @@ export function ShipmentForm({
   routes,
   motoristas,
   auxiliares,
-  getUserName,
-  getRouteDescription,
-  isBodega
+  reviewRole,
 }: ShipmentFormProps) {
   
   const handleOpenChange = (open: boolean) => {
@@ -110,7 +109,7 @@ export function ShipmentForm({
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <fieldset disabled={isBodega} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <fieldset disabled={!!reviewRole} className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="id_ruta"
@@ -237,7 +236,7 @@ export function ShipmentForm({
                           <Checkbox
                             checked={field.value}
                             onCheckedChange={field.onChange}
-                            disabled={isBodega}
+                            disabled={!!reviewRole}
                           />
                         </FormControl>
                         <div className="space-y-1 leading-none">
@@ -256,6 +255,7 @@ export function ShipmentForm({
                           <Checkbox
                             checked={field.value}
                             onCheckedChange={field.onChange}
+                            disabled={!!reviewRole && reviewRole !== 'bodega'}
                           />
                         </FormControl>
                         <div className="space-y-1 leading-none">
@@ -274,7 +274,7 @@ export function ShipmentForm({
                           <Checkbox
                             checked={field.value}
                             onCheckedChange={field.onChange}
-                            disabled={isBodega}
+                            disabled={!!reviewRole && reviewRole !== 'reparto'}
                           />
                         </FormControl>
                         <div className="space-y-1 leading-none">
@@ -293,7 +293,7 @@ export function ShipmentForm({
                           <Checkbox
                             checked={field.value}
                             onCheckedChange={field.onChange}
-                            disabled={isBodega}
+                            disabled={!!reviewRole && reviewRole !== 'asist_admon'}
                           />
                         </FormControl>
                         <div className="space-y-1 leading-none">
@@ -312,7 +312,7 @@ export function ShipmentForm({
                           <Checkbox
                             checked={field.value}
                             onCheckedChange={field.onChange}
-                            disabled={isBodega}
+                            disabled={!!reviewRole && reviewRole !== 'gerente_admon'}
                           />
                         </FormControl>
                         <div className="space-y-1 leading-none">
@@ -331,7 +331,7 @@ export function ShipmentForm({
                           <Checkbox
                             checked={field.value}
                             onCheckedChange={field.onChange}
-                            disabled={isBodega}
+                            disabled={!!reviewRole && reviewRole !== 'cobros'}
                           />
                         </FormControl>
                         <div className="space-y-1 leading-none">

@@ -40,9 +40,9 @@ export default function ShipmentsPage() {
     getRouteDescription,
     getUserName,
     isMotoristaOrAuxiliar,
-    isBodega,
-    bodegaFilter,
-    setBodegaFilter
+    reviewRole,
+    reviewFilter,
+    setReviewFilter,
   } = useShipments({ itemsPerPage: ITEMS_PER_PAGE });
 
   return (
@@ -54,11 +54,11 @@ export default function ShipmentsPage() {
             <CardDescription>Gestione la información de sus envíos y estados.</CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {isBodega ? (
+            {reviewRole ? (
               <div className="flex items-center gap-2">
                 <Label>Filtrar:</Label>
-                <Button variant={bodegaFilter === 'pending' ? 'default' : 'outline'} onClick={() => setBodegaFilter('pending')}>Pendientes</Button>
-                <Button variant={bodegaFilter === 'reviewed' ? 'default' : 'outline'} onClick={() => setBodegaFilter('reviewed')}>Revisados</Button>
+                <Button variant={reviewFilter === 'pending' ? 'default' : 'outline'} onClick={() => setReviewFilter('pending')}>Pendientes</Button>
+                <Button variant={reviewFilter === 'reviewed' ? 'default' : 'outline'} onClick={() => setReviewFilter('reviewed')}>Revisados</Button>
               </div>
             ) : (
               <div className="flex items-center gap-2">
@@ -73,7 +73,7 @@ export default function ShipmentsPage() {
                 />
               </div>
             )}
-            {!isMotoristaOrAuxiliar && (
+            {!isMotoristaOrAuxiliar && !reviewRole && (
               <ShipmentForm
                 form={form}
                 isOpen={isDialogOpen}
@@ -88,9 +88,9 @@ export default function ShipmentsPage() {
                 users={users}
                 getRouteDescription={getRouteDescription}
                 getUserName={getUserName}
-                isBodega={isBodega}
+                reviewRole={reviewRole}
               >
-                <Button onClick={() => { setEditingShipment(null); form.reset(); setIsDialogOpen(true); }} disabled={isBodega}>
+                <Button onClick={() => { setEditingShipment(null); form.reset(); setIsDialogOpen(true); }}>
                   <PlusCircle className="mr-2 h-4 w-4" /> Nuevo Despacho
                 </Button>
               </ShipmentForm>
@@ -106,7 +106,7 @@ export default function ShipmentsPage() {
           getRouteDescription={getRouteDescription}
           getUserName={getUserName}
           isMotoristaOrAuxiliar={isMotoristaOrAuxiliar}
-          isBodega={isBodega}
+          reviewRole={reviewRole}
         />
       </CardContent>
       <CardFooter className="pt-6 flex justify-between items-center">
