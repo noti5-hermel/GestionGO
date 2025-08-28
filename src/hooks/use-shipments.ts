@@ -44,7 +44,7 @@ interface UserSession {
   role: string;
 }
 
-type ReviewRole = keyof Pick<Shipment, 'bodega' | 'reparto' | 'asist_admon' | 'gerente_admon' | 'cobros'>;
+export type ReviewRole = keyof Pick<Shipment, 'facturacion' | 'bodega' | 'reparto' | 'asist_admon' | 'gerente_admon' | 'cobros'>;
 
 interface UseShipmentsProps {
   itemsPerPage: number;
@@ -88,10 +88,11 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
   })
   
   const getReviewRoleFromSession = (userRole: string): ReviewRole | null => {
+    if (userRole.includes('facturacion')) return 'facturacion';
     if (userRole.includes('bodega')) return 'bodega';
     if (userRole.includes('reparto')) return 'reparto';
-    if (userRole.includes('asistente admon')) return 'asist_admon';
-    if (userRole.includes('gerente admon')) return 'gerente_admon';
+    if (userRole.includes('asist.admon')) return 'asist_admon';
+    if (userRole.includes('gerente.admon')) return 'gerente_admon';
     if (userRole.includes('cobros')) return 'cobros';
     return null;
   };
@@ -410,3 +411,5 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
     setReviewFilter
   }
 }
+
+    
