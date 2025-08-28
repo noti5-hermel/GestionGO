@@ -30,16 +30,16 @@ const shipmentSchema = z.object({
   total_credito: z.coerce.number().min(0),
   total_general: z.coerce.number().min(0),
   fecha_despacho: z.string().min(1, "La fecha es requerida."),
+  facturacion: z.boolean().default(false),
   bodega: z.boolean().default(false),
   reparto: z.boolean().default(false),
-  facturacion: z.boolean().default(false),
   asist_admon: z.boolean().default(false),
   cobros: z.boolean().default(false),
   gerente_admon: z.boolean().default(false),
 })
 
 type ShipmentFormValues = z.infer<typeof shipmentSchema>;
-type ReviewRole = keyof Pick<Shipment, 'bodega' | 'reparto' | 'asist_admon' | 'gerente_admon' | 'cobros'>;
+type ReviewRole = keyof Pick<Shipment, 'facturacion' | 'bodega' | 'reparto' | 'asist_admon' | 'gerente_admon' | 'cobros'>;
 
 interface ShipmentFormProps {
   children: React.ReactNode;
@@ -236,7 +236,7 @@ export function ShipmentForm({
                           <Checkbox
                             checked={field.value}
                             onCheckedChange={field.onChange}
-                            disabled={!!reviewRole}
+                            disabled={!!reviewRole && reviewRole !== 'facturacion'}
                           />
                         </FormControl>
                         <div className="space-y-1 leading-none">
