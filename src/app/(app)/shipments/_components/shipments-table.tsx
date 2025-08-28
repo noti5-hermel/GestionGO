@@ -47,6 +47,7 @@ export function ShipmentsTable({
 }: ShipmentsTableProps) {
   
   const canEdit = reviewRole || !isMotoristaOrAuxiliar;
+  const canDelete = !isMotoristaOrAuxiliar && !reviewRole;
 
   return (
     <div className="w-full overflow-x-auto">
@@ -98,7 +99,7 @@ export function ShipmentsTable({
                     <Pencil className="h-4 w-4" />
                   </Button>
                 )}
-                {!isMotoristaOrAuxiliar && !reviewRole && (
+                {canDelete && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button variant="ghost" size="icon">

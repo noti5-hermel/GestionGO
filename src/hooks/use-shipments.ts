@@ -88,6 +88,8 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
   })
   
   const getReviewRoleFromSession = (userRole: string): ReviewRole | null => {
+    if (userRole.includes('motorista')) return 'reparto';
+    if (userRole.includes('auxiliar')) return 'reparto';
     if (userRole.includes('facturacion')) return 'facturacion';
     if (userRole.includes('bodega')) return 'bodega';
     if (userRole.includes('reparto')) return 'reparto';
@@ -109,7 +111,9 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
           String(s.id_motorista) === String(session.id) ||
           String(s.id_auxiliar) === String(session.id)
         );
-      } else if (reviewRole) {
+      }
+      
+      if (reviewRole && !(userRole.includes('motorista') || userRole.includes('auxiliar'))) {
         if (reviewFilter === 'pending') {
           baseShipments = shipments.filter(s => s[reviewRole] === false);
         } else {
@@ -411,5 +415,3 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
     setReviewFilter
   }
 }
-
-    

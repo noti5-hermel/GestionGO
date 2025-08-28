@@ -45,6 +45,8 @@ export default function ShipmentsPage() {
     setReviewFilter,
   } = useShipments({ itemsPerPage: ITEMS_PER_PAGE });
 
+  const showReviewFilters = reviewRole && !isMotoristaOrAuxiliar;
+
   return (
     <Card className="h-full flex flex-col">
       <CardHeader>
@@ -54,7 +56,7 @@ export default function ShipmentsPage() {
             <CardDescription>Gestione la información de sus envíos y estados.</CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {reviewRole ? (
+            {showReviewFilters ? (
               <div className="flex items-center gap-2">
                 <Label>Filtrar:</Label>
                 <Button variant={reviewFilter === 'pending' ? 'default' : 'outline'} onClick={() => setReviewFilter('pending')}>Pendientes</Button>
@@ -62,7 +64,7 @@ export default function ShipmentsPage() {
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <Label>Filtrar:</Label>
+                <Label>Filtrar por fecha:</Label>
                 <Button variant={filterType === 'all' ? 'default' : 'outline'} onClick={() => setFilterType('all')}>Todos</Button>
                 <Button variant={filterType === 'today' ? 'default' : 'outline'} onClick={() => setFilterType('today')}>Hoy</Button>
                 <Input
@@ -119,19 +121,20 @@ export default function ShipmentsPage() {
         </div>
       </CardFooter>
 
-      {/* El componente del formulario ahora está separado y se controla con el estado de la página */}
-      <ShipmentForm
-        form={form}
-        isOpen={isDialogOpen}
-        setIsOpen={setIsDialogOpen}
-        editingShipment={editingShipment}
-        onSubmit={onSubmit}
-        handleCloseDialog={handleCloseDialog}
-        routes={routes}
-        motoristas={motoristas}
-        auxiliares={auxiliares}
-        reviewRole={reviewRole}
-      />
+      {isDialogOpen && (
+          <ShipmentForm
+            form={form}
+            isOpen={isDialogOpen}
+            setIsOpen={setIsDialogOpen}
+            editingShipment={editingShipment}
+            onSubmit={onSubmit}
+            handleCloseDialog={handleCloseDialog}
+            routes={routes}
+            motoristas={motoristas}
+            auxiliares={auxiliares}
+            reviewRole={reviewRole}
+          />
+      )}
     </Card>
   )
 }
