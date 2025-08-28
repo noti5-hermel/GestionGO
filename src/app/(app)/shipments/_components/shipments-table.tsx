@@ -31,6 +31,7 @@ interface ShipmentsTableProps {
   getRouteDescription: (routeId: string) => string;
   getUserName: (userId: string) => string;
   isMotoristaOrAuxiliar?: boolean;
+  isBodega?: boolean;
 }
 
 export function ShipmentsTable({
@@ -39,7 +40,8 @@ export function ShipmentsTable({
   handleDelete,
   getRouteDescription,
   getUserName,
-  isMotoristaOrAuxiliar
+  isMotoristaOrAuxiliar,
+  isBodega,
 }: ShipmentsTableProps) {
   return (
     <div className="w-full overflow-x-auto">
@@ -93,7 +95,7 @@ export function ShipmentsTable({
                     </Button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon">
+                        <Button variant="ghost" size="icon" disabled={isBodega}>
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </AlertDialogTrigger>

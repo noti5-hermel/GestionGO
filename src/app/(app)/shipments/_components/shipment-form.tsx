@@ -55,6 +55,7 @@ interface ShipmentFormProps {
   users: User[];
   getRouteDescription: (routeId: string) => string;
   getUserName: (userId: string) => string;
+  isBodega: boolean;
 }
 
 export function ShipmentForm({
@@ -70,6 +71,7 @@ export function ShipmentForm({
   auxiliares,
   getUserName,
   getRouteDescription,
+  isBodega
 }: ShipmentFormProps) {
   
   const handleOpenChange = (open: boolean) => {
@@ -108,7 +110,7 @@ export function ShipmentForm({
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <fieldset disabled={isBodega} className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="id_ruta"
@@ -221,12 +223,12 @@ export function ShipmentForm({
                   </FormItem>
                 )}
               />
-            </div>
+            </fieldset>
             {editingShipment && (
               <Card>
                 <CardHeader><CardTitle>Estados</CardTitle></CardHeader>
                 <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  <FormField
+                <FormField
                     control={form.control}
                     name="facturacion"
                     render={({ field }) => (
@@ -235,6 +237,7 @@ export function ShipmentForm({
                           <Checkbox
                             checked={field.value}
                             onCheckedChange={field.onChange}
+                            disabled={isBodega}
                           />
                         </FormControl>
                         <div className="space-y-1 leading-none">
@@ -271,6 +274,7 @@ export function ShipmentForm({
                           <Checkbox
                             checked={field.value}
                             onCheckedChange={field.onChange}
+                            disabled={isBodega}
                           />
                         </FormControl>
                         <div className="space-y-1 leading-none">
@@ -289,6 +293,7 @@ export function ShipmentForm({
                           <Checkbox
                             checked={field.value}
                             onCheckedChange={field.onChange}
+                            disabled={isBodega}
                           />
                         </FormControl>
                         <div className="space-y-1 leading-none">
@@ -307,6 +312,7 @@ export function ShipmentForm({
                           <Checkbox
                             checked={field.value}
                             onCheckedChange={field.onChange}
+                            disabled={isBodega}
                           />
                         </FormControl>
                         <div className="space-y-1 leading-none">
@@ -325,6 +331,7 @@ export function ShipmentForm({
                           <Checkbox
                             checked={field.value}
                             onCheckedChange={field.onChange}
+                            disabled={isBodega}
                           />
                         </FormControl>
                         <div className="space-y-1 leading-none">

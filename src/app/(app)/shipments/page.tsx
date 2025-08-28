@@ -73,7 +73,7 @@ export default function ShipmentsPage() {
                 />
               </div>
             )}
-            {!isMotoristaOrAuxiliar && !isBodega && (
+            {!isMotoristaOrAuxiliar && (
               <ShipmentForm
                 form={form}
                 isOpen={isDialogOpen}
@@ -88,8 +88,9 @@ export default function ShipmentsPage() {
                 users={users}
                 getRouteDescription={getRouteDescription}
                 getUserName={getUserName}
+                isBodega={isBodega}
               >
-                <Button onClick={() => { setEditingShipment(null); form.reset(); setIsDialogOpen(true); }}>
+                <Button onClick={() => { setEditingShipment(null); form.reset(); setIsDialogOpen(true); }} disabled={isBodega}>
                   <PlusCircle className="mr-2 h-4 w-4" /> Nuevo Despacho
                 </Button>
               </ShipmentForm>
@@ -105,6 +106,7 @@ export default function ShipmentsPage() {
           getRouteDescription={getRouteDescription}
           getUserName={getUserName}
           isMotoristaOrAuxiliar={isMotoristaOrAuxiliar}
+          isBodega={isBodega}
         />
       </CardContent>
       <CardFooter className="pt-6 flex justify-between items-center">
