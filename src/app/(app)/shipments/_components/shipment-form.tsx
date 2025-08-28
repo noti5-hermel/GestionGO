@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Combobox } from "@/components/ui/combobox"
 import type { Shipment, Route, User } from "@/hooks/use-shipments"
 
 // Esquema de validación para el formulario de despacho.
@@ -79,6 +80,11 @@ export function ShipmentForm({
     }
   };
 
+  const routeOptions = routes.map(route => ({
+    value: String(route.id_ruta),
+    label: route.ruta_desc,
+  }));
+
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
@@ -98,24 +104,16 @@ export function ShipmentForm({
                 control={form.control}
                 name="id_ruta"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="flex flex-col">
                     <FormLabel>Ruta</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
-                          <FormControl>
-                              <SelectTrigger>
-                                  <SelectValue placeholder="Seleccione una ruta">
-                                    {getRouteDescription(field.value)}
-                                  </SelectValue>
-                              </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                              {routes.map((route) => (
-                                  <SelectItem key={route.id_ruta} value={String(route.id_ruta)}>
-                                      {route.ruta_desc}
-                                  </SelectItem>
-                              ))}
-                          </SelectContent>
-                      </Select>
+                    <Combobox
+                      options={routeOptions}
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="Seleccione una ruta"
+                      searchPlaceholder="Buscar ruta..."
+                      notFoundMessage="No se encontró la ruta."
+                    />
                     <FormMessage />
                   </FormItem>
                 )}
