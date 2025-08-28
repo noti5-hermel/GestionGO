@@ -111,7 +111,12 @@ export default function LoginPage() {
         })
         
         const userRole = sessionData.role.toLowerCase();
-        if (userRole.includes('motorista') || userRole.includes('auxiliar')) {
+        const restrictedRoles = [
+          'motorista', 'auxiliar', 'bodega', 'reparto', 
+          'asistente admon', 'gerente admon', 'cobros'
+        ];
+
+        if (restrictedRoles.some(role => userRole.includes(role))) {
           window.location.href = "/shipments";
         } else {
           window.location.href = "/users";
