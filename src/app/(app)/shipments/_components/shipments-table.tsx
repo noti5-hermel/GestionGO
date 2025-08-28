@@ -42,8 +42,8 @@ export function ShipmentsTable({
   isMotoristaOrAuxiliar
 }: ShipmentsTableProps) {
   return (
-    <div className="relative w-full overflow-auto">
-      <Table>
+    <div className="w-full overflow-x-auto">
+      <Table className="min-w-max">
         <TableHeader>
           <TableRow>
             <TableHead>ID Despacho</TableHead>
