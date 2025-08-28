@@ -4,7 +4,7 @@
 import { UseFormReturn } from "react-hook-form"
 import { z } from "zod"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -42,25 +42,19 @@ type ShipmentFormValues = z.infer<typeof shipmentSchema>;
 type ReviewRole = keyof Pick<Shipment, 'facturacion' | 'bodega' | 'reparto' | 'asist_admon' | 'gerente_admon' | 'cobros'>;
 
 interface ShipmentFormProps {
-  children: React.ReactNode;
   form: UseFormReturn<ShipmentFormValues>;
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
   editingShipment: Shipment | null;
-  setEditingShipment: (shipment: Shipment | null) => void;
   onSubmit: (values: ShipmentFormValues) => void;
   handleCloseDialog: () => void;
   routes: Route[];
   motoristas: User[];
   auxiliares: User[];
-  users: User[];
-  getRouteDescription: (routeId: string) => string;
-  getUserName: (userId: string) => string;
   reviewRole: ReviewRole | null;
 }
 
 export function ShipmentForm({
-  children,
   form,
   isOpen,
   setIsOpen,
@@ -97,9 +91,6 @@ export function ShipmentForm({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        {children}
-      </DialogTrigger>
       <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{editingShipment ? 'Editar Despacho' : 'Crear Nuevo Despacho'}</DialogTitle>

@@ -74,26 +74,9 @@ export default function ShipmentsPage() {
               </div>
             )}
             {!isMotoristaOrAuxiliar && !reviewRole && (
-              <ShipmentForm
-                form={form}
-                isOpen={isDialogOpen}
-                setIsOpen={setIsDialogOpen}
-                editingShipment={editingShipment}
-                setEditingShipment={setEditingShipment}
-                onSubmit={onSubmit}
-                handleCloseDialog={handleCloseDialog}
-                routes={routes}
-                motoristas={motoristas}
-                auxiliares={auxiliares}
-                users={users}
-                getRouteDescription={getRouteDescription}
-                getUserName={getUserName}
-                reviewRole={reviewRole}
-              >
-                <Button onClick={() => { setEditingShipment(null); form.reset(); setIsDialogOpen(true); }}>
-                  <PlusCircle className="mr-2 h-4 w-4" /> Nuevo Despacho
-                </Button>
-              </ShipmentForm>
+              <Button onClick={() => { setEditingShipment(null); form.reset(); setIsDialogOpen(true); }}>
+                <PlusCircle className="mr-2 h-4 w-4" /> Nuevo Despacho
+              </Button>
             )}
           </div>
         </div>
@@ -135,6 +118,20 @@ export default function ShipmentsPage() {
           Mostrando <strong>{paginatedShipments.length}</strong> de <strong>{filteredShipments.length}</strong> despachos.
         </div>
       </CardFooter>
+
+      {/* El componente del formulario ahora está separado y se controla con el estado de la página */}
+      <ShipmentForm
+        form={form}
+        isOpen={isDialogOpen}
+        setIsOpen={setIsDialogOpen}
+        editingShipment={editingShipment}
+        onSubmit={onSubmit}
+        handleCloseDialog={handleCloseDialog}
+        routes={routes}
+        motoristas={motoristas}
+        auxiliares={auxiliares}
+        reviewRole={reviewRole}
+      />
     </Card>
   )
 }
