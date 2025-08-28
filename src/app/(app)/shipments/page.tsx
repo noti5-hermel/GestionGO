@@ -20,7 +20,6 @@ export default function ShipmentsPage() {
     filterType,
     setFilterType,
     customDate,
-    setCustomDate,
     handleCustomDateChange,
     currentPage,
     setCurrentPage,
@@ -40,7 +39,10 @@ export default function ShipmentsPage() {
     users,
     getRouteDescription,
     getUserName,
-    isMotoristaOrAuxiliar
+    isMotoristaOrAuxiliar,
+    isBodega,
+    bodegaFilter,
+    setBodegaFilter
   } = useShipments({ itemsPerPage: ITEMS_PER_PAGE });
 
   return (
@@ -52,18 +54,26 @@ export default function ShipmentsPage() {
             <CardDescription>Gestione la información de sus envíos y estados.</CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2">
-              <Label>Filtrar:</Label>
-              <Button variant={filterType === 'all' ? 'default' : 'outline'} onClick={() => setFilterType('all')}>Todos</Button>
-              <Button variant={filterType === 'today' ? 'default' : 'outline'} onClick={() => setFilterType('today')}>Hoy</Button>
-              <Input
-                type="date"
-                value={customDate}
-                onChange={handleCustomDateChange}
-                className="w-auto"
-              />
-            </div>
-            {!isMotoristaOrAuxiliar && (
+            {isBodega ? (
+              <div className="flex items-center gap-2">
+                <Label>Filtrar:</Label>
+                <Button variant={bodegaFilter === 'pending' ? 'default' : 'outline'} onClick={() => setBodegaFilter('pending')}>Pendientes</Button>
+                <Button variant={bodegaFilter === 'reviewed' ? 'default' : 'outline'} onClick={() => setBodegaFilter('reviewed')}>Revisados</Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Label>Filtrar:</Label>
+                <Button variant={filterType === 'all' ? 'default' : 'outline'} onClick={() => setFilterType('all')}>Todos</Button>
+                <Button variant={filterType === 'today' ? 'default' : 'outline'} onClick={() => setFilterType('today')}>Hoy</Button>
+                <Input
+                  type="date"
+                  value={customDate}
+                  onChange={handleCustomDateChange}
+                  className="w-auto"
+                />
+              </div>
+            )}
+            {!isMotoristaOrAuxiliar && !isBodega && (
               <ShipmentForm
                 form={form}
                 isOpen={isDialogOpen}

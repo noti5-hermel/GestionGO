@@ -26,12 +26,12 @@ const shipmentSchema = z.object({
   total_credito: z.coerce.number().min(0),
   total_general: z.coerce.number().min(0),
   fecha_despacho: z.string().min(1, "La fecha es requerida."),
+  facturacion: z.boolean().default(true),
   bodega: z.boolean().default(false),
   reparto: z.boolean().default(false),
-  facturacion: z.boolean().default(true),
   asist_admon: z.boolean().default(false),
-  cobros: z.boolean().default(false),
   gerente_admon: z.boolean().default(false),
+  cobros: z.boolean().default(false),
 })
 
 // Tipos de datos para la gestión de despachos.
@@ -63,6 +63,7 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [session, setSession] = useState<UserSession | null>(null);
   const { toast } = useToast()
+  const [bodegaFilter, setBodegaFilter] = useState<'pending' | 'reviewed'>('pending');
 
   // Configuración del formulario con react-hook-form y Zod.
   const form = useForm<z.infer<typeof shipmentSchema>>({
@@ -79,8 +80,8 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
       bodega: false,
       reparto: false,
       asist_admon: false,
-      cobros: false,
       gerente_admon: false,
+      cobros: false,
     },
   })
   
@@ -97,7 +98,11 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
           String(s.id_auxiliar) === String(session.id)
         );
       } else if (userRole.includes('bodega')) {
-        baseShipments = shipments.filter(s => s.bodega === false);
+        if (bodegaFilter === 'pending') {
+          baseShipments = shipments.filter(s => s.bodega === false);
+        } else { // 'reviewed'
+          baseShipments = shipments.filter(s => s.bodega === true);
+        }
       }
     }
 
@@ -134,7 +139,7 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
   // Vuelve a aplicar los filtros cada vez que los despachos, la sesión o las opciones de filtro cambian.
   useEffect(() => {
     applyFilters();
-  }, [shipments, filterType, customDate, session]);
+  }, [shipments, filterType, customDate, session, bodegaFilter]);
 
   // Rellena el formulario cuando se selecciona un despacho para editar.
   useEffect(() => {
@@ -159,8 +164,8 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
         bodega: false,
         reparto: false,
         asist_admon: false,
-        cobros: false,
         gerente_admon: false,
+        cobros: false,
       })
     }
   }, [editingShipment, form])
@@ -346,8 +351,8 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
         bodega: false,
         reparto: false,
         asist_admon: false,
-        cobros: false,
         gerente_admon: false,
+        cobros: false,
     });
     setIsDialogOpen(false);
   }
@@ -376,6 +381,7 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
   }
   
   const isMotoristaOrAuxiliar = session?.role?.toLowerCase().includes('motorista') || session?.role?.toLowerCase().includes('auxiliar');
+  const isBodega = session?.role?.toLowerCase().includes('bodega');
 
   return {
     shipments,
@@ -406,6 +412,9 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
     handleCloseDialog,
     getRouteDescription,
     getUserName,
-    isMotoristaOrAuxiliar
+    isMotoristaOrAuxiliar,
+    isBodega,
+    bodegaFilter,
+    setBodegaFilter
   }
 }
