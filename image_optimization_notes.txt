@@ -1,0 +1,21 @@
+¡Excelente pregunta! Y sí, es una consideración muy importante para optimizar costos y rendimiento.
+
+Textualmente, te confirmo: **Sí, se puede especificar la calidad y las dimensiones de la imagen para ahorrar espacio, pero no es una función que Supabase haga automáticamente. La optimización se debe realizar en el navegador del usuario *antes* de subir el archivo.**
+
+Aquí te explico cómo funcionaría ese proceso, sin hacer ningún cambio en el código:
+
+1.  **Estado Actual:** En este momento, el código toma el archivo que el usuario selecciona (por ejemplo, una foto de 5 MB directamente desde su teléfono) y lo sube tal cual al bucket de Supabase. Supabase simplemente almacena el archivo que recibe.
+
+2.  **La Solución (Proceso Conceptual):** Para optimizar la imagen, tendríamos que añadir un paso intermedio en el navegador usando JavaScript:
+
+    *   **Capturar el Archivo:** El usuario selecciona el archivo de imagen como lo hace ahora.
+    *   **Redimensionar y Comprimir en el Navegador:** En lugar de subirlo directamente, la aplicación usaría una herramienta del navegador llamada **HTML Canvas**. El proceso sería el siguiente:
+        1.  Se crea un "lienzo" (`<canvas>`) invisible en la página.
+        2.  La imagen original que seleccionó el usuario se "dibuja" sobre este lienzo, pero podemos indicarle que la dibuje con nuevas dimensiones (por ejemplo, un máximo de 1024x1024 píxeles).
+        3.  Una vez dibujada la imagen en un tamaño más pequeño, le pedimos al lienzo que nos devuelva esa imagen en un formato específico (como `image/jpeg` o `image/webp`, que son excelentes para la compresión).
+        4.  Aquí está la clave: al pedir la imagen, podemos especificar un **nivel de calidad**. Por ejemplo, podemos pedir un JPEG con una calidad del 75% (`0.75`), lo que reduce drásticamente el tamaño del archivo sacrificando un poco de calidad que a menudo es imperceptible.
+    *   **Subir el Archivo Optimizado:** El archivo que se envía a Supabase ya no es el original de 5 MB, sino esta nueva versión optimizada que podría pesar, por ejemplo, solo 200 KB.
+
+**En resumen:**
+
+La estrategia consiste en interceptar la imagen en el navegador, usar JavaScript para redimensionarla y bajarle la calidad a un nivel aceptable, y solo entonces subir ese archivo ya optimizado a Supabase. Esto se hace del lado del cliente y es transparente para el usuario final, quien solo nota que la subida es mucho más rápida.
