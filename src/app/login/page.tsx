@@ -148,10 +148,10 @@ export default function LoginPage() {
     
     const hashedPassword = hashPassword(password);
     
-    // Asegura que el rol de 'Administrador' con ID 1 exista antes de crear el usuario.
+    // Asegura que el rol de 'ADMIN' con ID 1 exista antes de crear el usuario.
     const { error: roleError } = await supabase
       .from('rol')
-      .upsert({ id_rol: 1, rol_desc: 'Administrador' }, { onConflict: 'id_rol' });
+      .upsert({ id_rol: 1, rol_desc: 'ADMIN' }, { onConflict: 'id_rol' });
 
     if (roleError) {
         toast({ title: "Error al asegurar el rol", description: roleError.message, variant: "destructive" });
