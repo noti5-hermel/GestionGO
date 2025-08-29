@@ -35,7 +35,7 @@ export default function ImageTestPage() {
   const [loading, setLoading] = useState(false)
   const { toast } = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const BUCKET_NAME = 'image-test-bucket' // Define el nombre de tu bucket
+  const BUCKET_NAME = 'comprobante' // Define el nombre de tu bucket
 
   // Función para obtener las imágenes del bucket de Supabase
   const fetchImages = async () => {
@@ -49,7 +49,7 @@ export default function ImageTestPage() {
     if (error) {
       toast({
         title: "Error al cargar imágenes",
-        description: "Asegúrate de que el bucket 'image-test-bucket' exista y tenga las políticas correctas.",
+        description: `Asegúrate de que el bucket '${BUCKET_NAME}' exista y tenga las políticas correctas.`,
         variant: "destructive",
       });
       console.error("Error fetching images:", error.message);
@@ -126,7 +126,7 @@ export default function ImageTestPage() {
         <CardTitle>Prueba de Carga de Imágenes</CardTitle>
         <CardDescription>
           Sube imágenes a Supabase Storage y visualízalas en una tabla. 
-          Asegúrate de haber creado un bucket llamado `image-test-bucket` con acceso público.
+          Asegúrate de haber creado un bucket llamado `comprobante` con acceso público.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex-1 overflow-auto space-y-6">
@@ -178,6 +178,7 @@ export default function ImageTestPage() {
                         </a>
                     </TableCell>
                     <TableCell className="text-right">
+                      <div className="flex justify-end items-center gap-2">
                         <AlertDialog>
                         <AlertDialogTrigger asChild>
                           <Button variant="ghost" size="icon">
@@ -199,6 +200,7 @@ export default function ImageTestPage() {
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
@@ -219,5 +221,3 @@ export default function ImageTestPage() {
     </Card>
   )
 }
-
-    
