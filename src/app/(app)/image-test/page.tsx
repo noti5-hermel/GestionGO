@@ -125,8 +125,8 @@ export default function ImageTestPage() {
       <CardHeader>
         <CardTitle>Prueba de Carga de Imágenes</CardTitle>
         <CardDescription>
-          Sube imágenes a Supabase Storage y visualízalas en una tabla. 
-          Asegúrate de haber creado un bucket llamado `comprobante` con acceso público.
+          Sube imágenes a Supabase Storage y visualízalas. 
+          Asegúrate de que el bucket `comprobante` exista y que sus políticas de seguridad (RLS) permitan las operaciones de `select`, `insert`, y `delete` para los usuarios autenticados.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex-1 overflow-auto space-y-6">
