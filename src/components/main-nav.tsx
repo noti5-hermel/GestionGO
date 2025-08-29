@@ -13,7 +13,8 @@ import {
   Settings,
   LayoutDashboard,
   Car,
-  ClipboardList
+  ClipboardList,
+  Image as ImageIcon
 } from 'lucide-react'
 import {
   SidebarMenu,
@@ -45,6 +46,7 @@ const allMenuItems = [
 const adminMenuItems = [
     { href: '/users', label: 'Usuarios', icon: User },
     { href: '/user-roles', label: 'Roles de Usuario', icon: Shield },
+    { href: '/image-test', label: 'Test de Imágenes', icon: ImageIcon },
 ]
 
 export function MainNav({ session }: MainNavProps) {
@@ -63,12 +65,13 @@ export function MainNav({ session }: MainNavProps) {
   ];
 
   const isRestrictedRole = restrictedRoles.some(role => userRole.includes(role));
+  const isAdmin = userRole.includes('administrador');
 
   const menuItemsToRender = isRestrictedRole
     ? allMenuItems.filter(item => item.href === '/shipments')
     : allMenuItems;
   
-  const adminItemsToRender = isRestrictedRole ? [] : adminMenuItems;
+  const adminItemsToRender = isRestrictedRole ? [] : (isAdmin ? adminMenuItems : adminMenuItems.filter(item => item.href !== '/image-test'));
 
 
   return (
@@ -111,3 +114,5 @@ export function MainNav({ session }: MainNavProps) {
     </SidebarMenu>
   )
 }
+
+    
