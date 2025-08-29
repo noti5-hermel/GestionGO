@@ -65,7 +65,7 @@ export function MainNav({ session }: MainNavProps) {
   ];
 
   const isRestrictedRole = restrictedRoles.some(role => userRole.includes(role));
-  const isAdmin = userRole.includes('administrador');
+  const isAdmin = userRole.includes('admin');
 
   const menuItemsToRender = isRestrictedRole
     ? allMenuItems.filter(item => item.href === '/shipments')
