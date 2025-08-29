@@ -49,7 +49,7 @@ export default function ImageTestPage() {
     if (error) {
       toast({
         title: "Error al cargar imágenes",
-        description: `Asegúrate de que el bucket '${BUCKET_NAME}' exista y tenga las políticas correctas.`,
+        description: `No se pudieron listar los archivos. Asegúrate de que el bucket '${BUCKET_NAME}' exista y tenga las políticas de seguridad (RLS) correctas para la operación 'select'.`,
         variant: "destructive",
       });
       console.error("Error fetching images:", error.message);
