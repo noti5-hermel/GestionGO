@@ -196,18 +196,67 @@ export default function ShipmentInvoicingPage() {
     return publicUrl;
   };
   
-  const triggerUpdateShipmentTotals = async (shipmentId: number) => {
-    const { error } = await supabase.rpc('update_shipment_totals', {
-      p_id_despacho: shipmentId
-    })
-    if (error) {
-      toast({
-        title: "Error de Sincronización",
-        description: `No se pudieron actualizar los totales del despacho: ${error.message}`,
-        variant: "destructive",
-      })
+  const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
+    // 1. Obtener todas las facturas asociadas a este despacho
+    const { data: shipmentInvoicesData, error: shipmentInvoicesError } = await supabase
+      .from('facturacion_x_despacho')
+      .select('id_factura')
+      .eq('id_despacho', shipmentId);
+  
+    if (shipmentInvoicesError) {
+      toast({ title: "Error", description: "Paso 1: No se pudieron obtener las facturas del despacho.", variant: "destructive" });
+      return;
     }
-  }
+  
+    const invoiceIds = shipmentInvoicesData.map(si => si.id_factura);
+    if (invoiceIds.length === 0) {
+      // Si no hay facturas, los totales son cero
+      await supabase.from('despacho').update({ total_contado: 0, total_credito: 0, total_general: 0 }).eq('id_despacho', shipmentId);
+      return;
+    }
+  
+    // 2. Obtener los detalles de esas facturas y los clientes asociados
+    const { data: invoicesDetails, error: invoicesDetailsError } = await supabase
+      .from('facturacion')
+      .select('grand_total, customer(id_impuesto, tipo_impuesto(impt_desc))')
+      .in('id_factura', invoiceIds);
+  
+    if (invoicesDetailsError) {
+      toast({ title: "Error", description: "Paso 2: No se pudieron obtener los detalles de las facturas.", variant: "destructive" });
+      return;
+    }
+  
+    // 3. Calcular totales
+    let totalContado = 0;
+    let totalCredito = 0;
+  
+    invoicesDetails.forEach(inv => {
+      const taxDesc = (inv.customer as any)?.tipo_impuesto?.impt_desc;
+      if (taxDesc === 'Consumidor Final') {
+        totalContado += inv.grand_total || 0;
+      } else if (taxDesc === 'Crédito Fiscal') {
+        totalCredito += inv.grand_total || 0;
+      }
+    });
+  
+    const totalGeneral = totalContado + totalCredito;
+  
+    // 4. Actualizar el despacho
+    const { error: updateError } = await supabase
+      .from('despacho')
+      .update({
+        total_contado: totalContado,
+        total_credito: totalCredito,
+        total_general: totalGeneral
+      })
+      .eq('id_despacho', shipmentId);
+  
+    if (updateError) {
+      toast({ title: "Error", description: "Paso 4: No se pudo actualizar el despacho con los nuevos totales.", variant: "destructive" });
+    } else {
+      toast({ title: "Sincronizado", description: "Los totales del despacho han sido actualizados." });
+    }
+  };
 
   const onSubmit = async (values: z.infer<typeof shipmentInvoiceSchema>) => {
     const imageUrl = await uploadComprobante();
@@ -239,8 +288,8 @@ export default function ShipmentInvoicingPage() {
       toast({ title: "Error al guardar", description: error.message, variant: "destructive" })
     } else {
       toast({ title: "Éxito", description: `Registro ${editingShipmentInvoice ? 'actualizado' : 'creado'} correctamente.` })
-      // Después de guardar, actualiza los totales
-      await triggerUpdateShipmentTotals(dataToSubmit.id_despacho);
+      // Después de guardar, recalcula y guarda los nuevos totales.
+      await recalculateAndSaveShipmentTotals(dataToSubmit.id_despacho);
       fetchShipmentInvoices()
       handleCloseDialog()
     }
@@ -260,7 +309,8 @@ export default function ShipmentInvoicingPage() {
       })
     } else {
       toast({ title: "Éxito", description: "Registro eliminado correctamente." })
-      await triggerUpdateShipmentTotals(shipmentInvoice.id_despacho);
+      // Después de eliminar, recalcula y guarda los nuevos totales.
+      await recalculateAndSaveShipmentTotals(shipmentInvoice.id_despacho);
       fetchShipmentInvoices()
     }
   }
