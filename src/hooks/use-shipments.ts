@@ -35,7 +35,12 @@ const shipmentSchema = z.object({
 })
 
 // Tipos de datos para la gestión de despachos.
-export type Shipment = z.infer<typeof shipmentSchema> & { id_despacho: string }
+export type Shipment = z.infer<typeof shipmentSchema> & { 
+  id_despacho: string;
+  total_contado: number;
+  total_credito: number;
+  total_general: number;
+}
 export type Route = { id_ruta: string; ruta_desc: string }
 export type User = { id_user: string; name: string }
 interface UserSession {
@@ -43,6 +48,19 @@ interface UserSession {
   name: string;
   role: string;
 }
+
+export type ShipmentInvoice = {
+  id_fac_desp: number
+  id_factura: string
+  comprobante: string
+  forma_pago: "Efectivo" | "Tarjeta" | "Transferencia"
+  monto: number
+  state: boolean
+  invoice_number?: string | number // Opcional, se añade después
+  tax_type?: string // Opcional, se añade después
+  grand_total?: number // Opcional, se añade después
+}
+
 
 export type ReviewRole = keyof Pick<Shipment, 'facturacion' | 'bodega' | 'reparto' | 'asist_admon' | 'gerente_admon' | 'cobros'>;
 
@@ -428,5 +446,3 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
     setReviewFilter
   }
 }
-
-    

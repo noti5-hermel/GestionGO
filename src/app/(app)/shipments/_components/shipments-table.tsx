@@ -20,7 +20,7 @@ import { Badge } from "@/components/ui/badge"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 import { generateShipmentPDF } from "@/lib/generate-shipment-pdf"
-import type { Shipment, User, Route } from "@/hooks/use-shipments"
+import type { Shipment, User, Route, ShipmentInvoice } from "@/hooks/use-shipments"
 import { useState } from "react"
 import { PdfPreviewModal } from "@/components/pdf-preview-modal"
 
@@ -62,7 +62,7 @@ export function ShipmentsTable({
 
   const [pdfData, setPdfData] = useState<{ dataUri: string; fileName: string } | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-
+  
   const handleGeneratePdf = async (shipment: Shipment) => {
     // 1. Obtener las facturas asociadas a este despacho
     const { data: shipmentInvoices, error: invoicesError } = await supabase
@@ -75,33 +75,52 @@ export function ShipmentsTable({
       return;
     }
 
-    // 2. Obtener detalles de las facturas (opcional, pero mejora el informe)
-     const invoiceIds = shipmentInvoices.map(inv => inv.id_factura);
-     let enrichedInvoices = [...shipmentInvoices];
+     // 2. Enriquecer las facturas con detalles completos
+    let enrichedInvoices: ShipmentInvoice[] = [];
+    const invoiceIds = shipmentInvoices.map(inv => inv.id_factura);
 
-     if (invoiceIds.length > 0) {
-       const { data: invoicesData, error: facturasError } = await supabase
-         .from('facturacion')
-         .select('id_factura, invoice_number, grand_total')
-         .in('id_factura', invoiceIds);
+    if (invoiceIds.length > 0) {
+        const { data: invoicesData, error: invoicesDetailsError } = await supabase.from('facturacion').select('id_factura, invoice_number, code_customer, grand_total').in('id_factura', invoiceIds);
+        if (invoicesDetailsError) {
+            toast({ title: "Error", description: "No se pudieron cargar los datos de facturas.", variant: "destructive" });
+            return;
+        }
 
-       if (facturasError) {
-         toast({ title: "Advertencia", description: "No se pudieron cargar detalles de facturas para el PDF." });
-       } else if (invoicesData) {
-         const invoiceDetailsMap = new Map(invoicesData.map(i => [i.id_factura, { invoice_number: i.invoice_number, grand_total: i.grand_total }]));
-         enrichedInvoices = shipmentInvoices.map(si => ({
-           ...si,
-           ...invoiceDetailsMap.get(si.id_factura),
-         }));
-       }
-     }
-    
+        const customerCodes = invoicesData.map(inv => inv.code_customer);
+        const { data: customersData, error: customersError } = await supabase.from('customer').select('code_customer, id_impuesto').in('code_customer', customerCodes);
+        if (customersError) {
+            toast({ title: "Error", description: "No se pudieron cargar los datos de clientes.", variant: "destructive" });
+            return;
+        }
+
+        const taxIds = customersData.map(c => c.id_impuesto);
+        const { data: taxesData, error: taxesError } = await supabase.from('tipo_impuesto').select('id_impuesto, impt_desc').in('id_impuesto', taxIds);
+        if (taxesError) {
+            toast({ title: "Error", description: "No se pudieron cargar los tipos de impuesto.", variant: "destructive" });
+            return;
+        }
+
+        const taxMap = new Map(taxesData.map(t => [t.id_impuesto, t.impt_desc]));
+        const customerTaxMap = new Map(customersData.map(c => [c.code_customer, taxMap.get(c.id_impuesto)]));
+        const invoiceInfoMap = new Map(invoicesData.map(i => [i.id_factura, { invoice_number: i.invoice_number, code_customer: i.code_customer, grand_total: i.grand_total }]));
+
+        enrichedInvoices = shipmentInvoices.map(si => {
+            const invoiceInfo = invoiceInfoMap.get(si.id_factura);
+            return {
+                ...si,
+                invoice_number: invoiceInfo?.invoice_number,
+                grand_total: invoiceInfo?.grand_total,
+                tax_type: customerTaxMap.get(invoiceInfo?.code_customer || '')
+            } as ShipmentInvoice;
+        });
+    }
+
     // 3. Obtener descripciones de ruta y nombres de usuario
     const route = routes.find(r => r.id_ruta === shipment.id_ruta) || { ruta_desc: 'N/A' };
     const motorista = users.find(u => u.id_user === shipment.id_motorista) || { name: 'N/A' };
     const auxiliar = users.find(u => u.id_user === shipment.id_auxiliar) || { name: 'N/A' };
 
-    // 4. Llamar a la función de generación de PDF
+    // 4. Llamar a la función de generación de PDF con los datos enriquecidos
     const pdfOutput = generateShipmentPDF(shipment, enrichedInvoices, route, motorista, auxiliar);
     setPdfData(pdfOutput);
     setIsPreviewOpen(true);
