@@ -41,12 +41,14 @@ const routeSchema = z.object({
 })
 
 type Route = z.infer<typeof routeSchema>
+const ITEMS_PER_PAGE = 10;
 
 export default function RoutesPage() {
   const [routes, setRoutes] = useState<Route[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingRoute, setEditingRoute] = useState<Route | null>(null);
   const { toast } = useToast()
+  const [currentPage, setCurrentPage] = useState(1);
 
   const form = useForm<Route>({
     resolver: zodResolver(routeSchema),
@@ -161,6 +163,12 @@ export default function RoutesPage() {
     setIsDialogOpen(false);
   }
 
+  const totalPages = Math.ceil(routes.length / ITEMS_PER_PAGE);
+  const paginatedRoutes = routes.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
   return (
     <Card className="h-full flex flex-col">
       <CardHeader>
@@ -233,7 +241,7 @@ export default function RoutesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {routes.map((route) => (
+              {paginatedRoutes.map((route) => (
                 <TableRow key={route.id_ruta}>
                   <TableCell className="font-medium">{route.id_ruta}</TableCell>
                   <TableCell>{route.ruta_desc}</TableCell>
@@ -271,13 +279,32 @@ export default function RoutesPage() {
           </Table>
         </div>
       </CardContent>
-      <CardFooter className="pt-6">
+      <CardFooter className="pt-6 flex justify-between items-center">
         <div className="text-xs text-muted-foreground">
-          Mostrando <strong>1-{routes.length}</strong> de <strong>{routes.length}</strong> rutas.
+          Página <strong>{currentPage}</strong> de <strong>{totalPages}</strong>
+        </div>
+        <div className="flex items-center gap-2">
+            <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+            >
+                Anterior
+            </Button>
+            <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+            >
+                Siguiente
+            </Button>
+        </div>
+        <div className="text-xs text-muted-foreground">
+          Mostrando <strong>{paginatedRoutes.length}</strong> de <strong>{routes.length}</strong> rutas.
         </div>
       </CardFooter>
     </Card>
   )
 }
-
-    

@@ -42,11 +42,14 @@ const vehicleSchema = z.object({
 
 type Vehicle = z.infer<typeof vehicleSchema>
 
+const ITEMS_PER_PAGE = 10;
+
 export default function VehiclesPage() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
   const { toast } = useToast()
+  const [currentPage, setCurrentPage] = useState(1);
 
   const form = useForm<Vehicle>({
     resolver: zodResolver(vehicleSchema),
@@ -161,6 +164,12 @@ export default function VehiclesPage() {
     setIsDialogOpen(false);
   }
 
+  const totalPages = Math.ceil(vehicles.length / ITEMS_PER_PAGE);
+  const paginatedVehicles = vehicles.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
   return (
     <Card className="h-full flex flex-col">
       <CardHeader>
@@ -233,7 +242,7 @@ export default function VehiclesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {vehicles.map((vehicle) => (
+              {paginatedVehicles.map((vehicle) => (
                 <TableRow key={vehicle.placa_vehiculo}>
                   <TableCell className="font-medium">{vehicle.placa_vehiculo}</TableCell>
                   <TableCell>{vehicle.vehiculo_desc}</TableCell>
@@ -271,13 +280,32 @@ export default function VehiclesPage() {
           </Table>
         </div>
       </CardContent>
-      <CardFooter className="pt-6">
+      <CardFooter className="pt-6 flex justify-between items-center">
         <div className="text-xs text-muted-foreground">
-          Mostrando <strong>1-{vehicles.length}</strong> de <strong>{vehicles.length}</strong> vehículos.
+          Página <strong>{currentPage}</strong> de <strong>{totalPages}</strong>
+        </div>
+        <div className="flex items-center gap-2">
+            <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+            >
+                Anterior
+            </Button>
+            <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+            >
+                Siguiente
+            </Button>
+        </div>
+        <div className="text-xs text-muted-foreground">
+          Mostrando <strong>{paginatedVehicles.length}</strong> de <strong>{vehicles.length}</strong> vehículos.
         </div>
       </CardFooter>
     </Card>
   )
 }
-
-    

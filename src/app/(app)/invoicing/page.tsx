@@ -71,6 +71,7 @@ type PaymentTerm = { id_term: number, term_desc: string }
 
 // Opciones disponibles para el estado de la factura en el UI
 const statusOptions = ["Pagada", "Pendiente"]
+const ITEMS_PER_PAGE = 10;
 
 export default function InvoicingPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -80,6 +81,7 @@ export default function InvoicingPage() {
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null)
   const { toast } = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Configuración del formulario con react-hook-form y Zod
   const form = useForm<z.infer<typeof invoiceSchema>>({
@@ -386,6 +388,12 @@ export default function InvoicingPage() {
     fileInputRef.current?.click();
   };
 
+  const totalPages = Math.ceil(invoices.length / ITEMS_PER_PAGE);
+  const paginatedInvoices = invoices.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
   return (
     <Card className="h-full flex flex-col">
       <CardHeader>
@@ -663,7 +671,7 @@ export default function InvoicingPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {invoices.map((invoice) => {
+              {paginatedInvoices.map((invoice) => {
                 const statusLabel = getStatusLabel(invoice.state);
                 return (
                   <TableRow key={invoice.id_factura}>
@@ -714,13 +722,32 @@ export default function InvoicingPage() {
           </Table>
         </div>
       </CardContent>
-      <CardFooter className="pt-6">
+      <CardFooter className="pt-6 flex justify-between items-center">
         <div className="text-xs text-muted-foreground">
-          Mostrando <strong>1-{invoices.length}</strong> de <strong>{invoices.length}</strong> facturas.
+          Página <strong>{currentPage}</strong> de <strong>{totalPages}</strong>
+        </div>
+        <div className="flex items-center gap-2">
+            <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+            >
+                Anterior
+            </Button>
+            <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+            >
+                Siguiente
+            </Button>
+        </div>
+        <div className="text-xs text-muted-foreground">
+          Mostrando <strong>{paginatedInvoices.length}</strong> de <strong>{invoices.length}</strong> facturas.
         </div>
       </CardFooter>
     </Card>
   )
 }
-
-    

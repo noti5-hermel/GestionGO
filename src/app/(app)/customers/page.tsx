@@ -48,6 +48,8 @@ type Customer = z.infer<typeof customerSchema> & { id_term: string | number, id_
 type PaymentTerm = { id_term: string | number; term_desc: string }
 type Tax = { id_impuesto: string | number; impt_desc: string }
 
+const ITEMS_PER_PAGE = 10;
+
 export default function CustomersPage() {
   // Estados para gestionar los datos de la página.
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -57,6 +59,7 @@ export default function CustomersPage() {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const { toast } = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Configuración del formulario con react-hook-form y Zod.
   const form = useForm<z.infer<typeof customerSchema>>({
@@ -287,6 +290,12 @@ export default function CustomersPage() {
       return paymentTerms.find(term => String(term.id_term) === String(termId))?.term_desc || termId;
   }
 
+  const totalPages = Math.ceil(customers.length / ITEMS_PER_PAGE);
+  const paginatedCustomers = customers.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
   return (
     <Card className="h-full flex flex-col">
       <CardHeader>
@@ -439,7 +448,7 @@ export default function CustomersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {customers.map((customer) => (
+              {paginatedCustomers.map((customer) => (
                 <TableRow key={customer.code_customer}>
                   <TableCell className="font-medium">{customer.code_customer}</TableCell>
                   <TableCell>{customer.customer_name}</TableCell>
@@ -480,13 +489,32 @@ export default function CustomersPage() {
           </Table>
         </div>
       </CardContent>
-      <CardFooter className="pt-6">
+      <CardFooter className="pt-6 flex justify-between items-center">
         <div className="text-xs text-muted-foreground">
-          Mostrando <strong>1-{customers.length}</strong> de <strong>{customers.length}</strong> clientes.
+          Página <strong>{currentPage}</strong> de <strong>{totalPages}</strong>
+        </div>
+        <div className="flex items-center gap-2">
+            <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+            >
+                Anterior
+            </Button>
+            <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+            >
+                Siguiente
+            </Button>
+        </div>
+        <div className="text-xs text-muted-foreground">
+          Mostrando <strong>{paginatedCustomers.length}</strong> de <strong>{customers.length}</strong> clientes.
         </div>
       </CardFooter>
     </Card>
   )
 }
-
-    
