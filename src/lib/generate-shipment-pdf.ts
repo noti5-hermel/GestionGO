@@ -17,7 +17,6 @@ type Shipment = {
   fecha_despacho: string;
   total_contado: number;
   total_credito: number;
-
   total_general: number;
 }
 
@@ -63,6 +62,7 @@ export const generateShipmentPDF = (
 
   const fiscalCreditInvoices = invoices.filter(inv => inv.tax_type === 'Crédito Fiscal');
   const finalConsumerInvoices = invoices.filter(inv => inv.tax_type === 'Consumidor Final');
+  const otherInvoices = invoices.filter(inv => inv.tax_type !== 'Crédito Fiscal' && inv.tax_type !== 'Consumidor Final');
   
   const generateInvoiceTable = (title: string, invoiceList: ShipmentInvoice[]) => {
       if (invoiceList.length === 0) return;
@@ -79,7 +79,7 @@ export const generateShipmentPDF = (
 
       const tableColumn = ["No. Factura", "Total Factura", "Forma de Pago", "Monto Pagado", "Estado"];
       const tableRows = invoiceList.map(inv => [
-        String(inv.invoice_number || ''),
+        String(inv.invoice_number || inv.id_factura),
         `$${(inv.grand_total || 0).toFixed(2)}`,
         inv.forma_pago,
         `$${inv.monto.toFixed(2)}`,
@@ -94,11 +94,12 @@ export const generateShipmentPDF = (
         headStyles: { fillColor: [3, 166, 166] }, // Color del encabezado
       });
 
-      yPos = doc.autoTable.previous.finalY + 10;
+      yPos = (doc as any).autoTable.previous.finalY + 10;
   }
   
   generateInvoiceTable("Facturas de Crédito Fiscal", fiscalCreditInvoices);
   generateInvoiceTable("Facturas de Consumidor Final", finalConsumerInvoices);
+  generateInvoiceTable("Otras Facturas", otherInvoices);
 
 
   // Si el contenido excede la página, crea una nueva.
@@ -126,7 +127,7 @@ export const generateShipmentPDF = (
   });
 
   // 6. Pie de Página
-  const pageCount = doc.internal.pages.length;
+  const pageCount = (doc.internal as any).getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     doc.setFontSize(10);
