@@ -225,7 +225,10 @@ export default function CustomersPage() {
             const worksheet = workbook.Sheets[sheetName];
             const json: any[] = xlsx.utils.sheet_to_json(worksheet);
 
-            const mappedData = json.map(row => ({
+            // Filtra las filas vacías que el lector de Excel pueda haber recogido.
+            const filteredJson = json.filter(row => row.code_customer);
+
+            const mappedData = filteredJson.map(row => ({
                 code_customer: String(row.code_customer || ''),
                 customer_name: String(row.customer_name || ''),
                 id_impuesto: String(row.id_impuesto || ''),
@@ -249,6 +252,15 @@ export default function CustomersPage() {
                     duration: 9000,
                 });
                 return;
+            }
+            
+            if (validatedCustomers.data.length === 0) {
+              toast({
+                title: "Archivo vacío",
+                description: "No se encontraron datos válidos para importar en el archivo.",
+                variant: "destructive",
+              });
+              return;
             }
             
             const { error: insertError } = await supabase.from('customer').upsert(validatedCustomers.data);
