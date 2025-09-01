@@ -108,15 +108,23 @@ export const generateShipmentPDF = (
     yPos = 20;
   }
 
-  // 5. Resumen de Totales
+  // 5. Resumen de Totales (Cálculos dinámicos)
+  const totalContadoCalculado = invoices
+    .filter(inv => inv.state === true) // Suma de montos pagados
+    .reduce((acc, inv) => acc + inv.monto, 0);
+  
+  const totalCreditoCalculado = invoices
+    .filter(inv => inv.state === false) // Suma de montos pendientes
+    .reduce((acc, inv) => acc + (inv.grand_total || 0), 0);
+
   doc.setFontSize(14);
   doc.text("Resumen de Totales", 14, yPos);
   yPos += 10;
 
   doc.setFontSize(12);
   const totals = [
-    { label: "Total Contado:", value: `$${shipment.total_contado.toFixed(2)}` },
-    { label: "Total Crédito:", value: `$${shipment.total_credito.toFixed(2)}` },
+    { label: "Total Contado:", value: `$${totalContadoCalculado.toFixed(2)}` },
+    { label: "Total Crédito:", value: `$${totalCreditoCalculado.toFixed(2)}` },
     { label: "Total General:", value: `$${shipment.total_general.toFixed(2)}` }
   ];
 
@@ -140,3 +148,4 @@ export const generateShipmentPDF = (
     fileName: `despacho_${shipment.id_despacho}.pdf`
   };
 };
+
