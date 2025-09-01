@@ -47,7 +47,7 @@ type Role = z.infer<typeof roleSchema> & { id_rol: string | number }
 
 export default function UserRolesPage() {
   const [roles, setRoles] = useState<Role[]>([])
-  const [isDialogOpen, setIsDialogOpen] useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const { toast } = useToast()
 
@@ -292,5 +292,3 @@ export default function UserRolesPage() {
     </Card>
   )
 }
-
-    
