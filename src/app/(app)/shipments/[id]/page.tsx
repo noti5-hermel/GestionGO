@@ -1,7 +1,7 @@
 
 'use client'
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -12,16 +12,18 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
-import { ArrowLeft, Pencil } from "lucide-react"
+import { ArrowLeft, Pencil, Upload } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import Image from "next/image"
 
+const BUCKET_NAME = 'comprobante';
+
 // Esquema para el formulario de edición de la factura del despacho
 const shipmentInvoiceEditSchema = (maxAmount: number) => z.object({
-  comprobante: z.string().min(1, "El comprobante es requerido."),
+  comprobante: z.string().optional(),
   forma_pago: z.enum(["Efectivo", "Tarjeta", "Transferencia"]),
   monto: z.coerce.number().min(0, "El monto debe ser un número positivo.").max(maxAmount, `El monto no puede ser mayor que el total de la factura: $${maxAmount.toFixed(2)}`),
   state: z.boolean(),
@@ -94,6 +96,8 @@ export default function ShipmentDetailPage() {
   // Estados para el diálogo de edición de factura
   const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
   const [editingShipmentInvoice, setEditingShipmentInvoice] = useState<ShipmentInvoice | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const form = useForm<z.infer<ReturnType<typeof shipmentInvoiceEditSchema>>>({
     resolver: zodResolver(shipmentInvoiceEditSchema(editingShipmentInvoice?.grand_total || Number.MAX_SAFE_INTEGER)),
@@ -194,7 +198,38 @@ export default function ShipmentDetailPage() {
         state: editingShipmentInvoice.state,
       });
     }
+    setSelectedFile(null);
   }, [editingShipmentInvoice, form]);
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+    }
+  };
+
+  const uploadComprobante = async (): Promise<string | undefined> => {
+    if (!selectedFile) {
+      return editingShipmentInvoice?.comprobante;
+    }
+    setLoading(true);
+    const fileName = `${Date.now()}-${selectedFile.name}`;
+    const { data, error } = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(fileName, selectedFile, {
+        cacheControl: '3600',
+        upsert: false,
+      });
+
+    setLoading(false);
+    if (error) {
+      toast({ title: "Error al subir imagen", description: error.message, variant: "destructive" });
+      return undefined;
+    }
+    
+    const { data: { publicUrl } } = supabase.storage.from(BUCKET_NAME).getPublicUrl(fileName);
+    return publicUrl;
+  };
 
   const handleEditInvoice = (invoice: ShipmentInvoice) => {
     setEditingShipmentInvoice(invoice);
@@ -204,12 +239,15 @@ export default function ShipmentDetailPage() {
   const handleUpdateInvoice = async (values: z.infer<ReturnType<typeof shipmentInvoiceEditSchema>>) => {
     if (!editingShipmentInvoice) return;
 
-    // Nota: La lógica de subida de imagen no se maneja aquí, solo la edición de datos.
-    // La URL del comprobante se actualiza en el formulario principal de 'facturación por despacho'.
+    const imageUrl = await uploadComprobante();
+    if (!imageUrl && selectedFile) { 
+        return; 
+    }
+
     const { error } = await supabase
       .from('facturacion_x_despacho')
       .update({
-          // El campo 'comprobante' no se edita aquí, ya que no hay input de archivo.
+          comprobante: imageUrl,
           forma_pago: values.forma_pago,
           monto: values.monto,
           state: values.state
@@ -235,6 +273,7 @@ export default function ShipmentDetailPage() {
   const closeInvoiceDialog = () => {
     setIsInvoiceDialogOpen(false);
     setEditingShipmentInvoice(null);
+    setSelectedFile(null);
     form.reset();
   };
 
@@ -396,21 +435,31 @@ export default function ShipmentDetailPage() {
           <DialogHeader>
             <DialogTitle>Editar Factura del Despacho</DialogTitle>
             <DialogDescription>
-              Modifique los detalles de la factura para este despacho. El comprobante no se puede cambiar desde aquí.
+              Modifique los detalles de la factura o cargue un nuevo comprobante.
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(handleUpdateInvoice)} className="space-y-4">
-               {/* Campo de comprobante deshabilitado para edición visual */}
-               <FormItem>
+              <FormItem>
                   <FormLabel>Comprobante</FormLabel>
                    <FormControl>
-                      {editingShipmentInvoice?.comprobante ? (
-                          <Image src={editingShipmentInvoice.comprobante} alt="Comprobante" width={80} height={80} className="rounded-md object-cover" />
-                      ) : (
-                          <Input value="No hay imagen" disabled />
-                      )}
+                     <Input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleFileChange}
+                        accept="image/*"
+                      />
                   </FormControl>
+                  <FormMessage />
+                  {selectedFile && <p className="text-sm text-muted-foreground mt-2">Nuevo archivo: {selectedFile.name}</p>}
+                  {editingShipmentInvoice?.comprobante && !selectedFile && (
+                      <div className="mt-2">
+                          <p className="text-sm text-muted-foreground">Comprobante actual:</p>
+                          <a href={editingShipmentInvoice.comprobante} target="_blank" rel="noopener noreferrer">
+                              <Image src={editingShipmentInvoice.comprobante} alt="Comprobante actual" width={80} height={80} className="rounded-md object-cover mt-1" />
+                          </a>
+                      </div>
+                  )}
               </FormItem>
               
               <FormField
@@ -481,7 +530,7 @@ export default function ShipmentDetailPage() {
                 <DialogClose asChild>
                   <Button type="button" variant="secondary" onClick={closeInvoiceDialog}>Cancelar</Button>
                 </DialogClose>
-                <Button type="submit">Guardar Cambios</Button>
+                <Button type="submit" disabled={loading}>{loading ? 'Guardando...' : 'Guardar Cambios'}</Button>
               </DialogFooter>
             </form>
           </Form>
