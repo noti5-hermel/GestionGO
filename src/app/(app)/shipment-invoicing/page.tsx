@@ -1,7 +1,7 @@
 
 'use client'
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -24,9 +24,12 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { PlusCircle, Pencil, Trash2 } from "lucide-react"
+import { PlusCircle, Pencil, Trash2, Upload } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
+import Image from "next/image"
+
+const BUCKET_NAME = 'comprobante';
 
 // Esquema de validación para el formulario de facturación por despacho.
 const shipmentInvoiceSchema = z.object({
@@ -35,14 +38,14 @@ const shipmentInvoiceSchema = z.object({
     (val) => String(val),
     z.string().min(1, "El ID de despacho es requerido.")
   ),
-  comprobante: z.string().min(1, "El comprobante es requerido."),
+  comprobante: z.string().optional(), // La URL de la imagen se manejará por separado.
   forma_pago: z.enum(["Efectivo", "Tarjeta", "Transferencia"]),
   monto: z.coerce.number().min(0, "El monto debe ser un número positivo."),
   state: z.boolean(),
 })
 
 // Tipos de datos para la gestión de facturación por despacho.
-type ShipmentInvoice = z.infer<typeof shipmentInvoiceSchema> & { id_fac_desp: number }
+type ShipmentInvoice = z.infer<typeof shipmentInvoiceSchema> & { id_fac_desp: number, comprobante: string }
 type Invoice = { id_factura: string, invoice_number: string | number, fecha: string }
 type Shipment = { id_despacho: number, fecha_despacho: string }
 
@@ -62,6 +65,11 @@ export default function ShipmentInvoicingPage() {
   const [editingShipmentInvoice, setEditingShipmentInvoice] = useState<ShipmentInvoice | null>(null)
   const { toast } = useToast()
 
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+
   // Configuración del formulario con react-hook-form y Zod.
   const form = useForm<z.infer<typeof shipmentInvoiceSchema>>({
     resolver: zodResolver(shipmentInvoiceSchema),
@@ -79,41 +87,28 @@ export default function ShipmentInvoicingPage() {
   const selectedShipmentId = form.watch("id_despacho");
 
   // `useMemo` se usa para calcular las facturas disponibles de forma eficiente.
-  // Esta lógica solo se vuelve a ejecutar si sus dependencias cambian.
   const availableInvoices = useMemo(() => {
     if (!selectedShipmentId) return [];
-    
-    // Encuentra el despacho seleccionado para obtener su fecha.
     const selectedShipment = allShipments.find(s => String(s.id_despacho) === selectedShipmentId);
     if (!selectedShipment) return [];
     const selectedDate = new Date(selectedShipment.fecha_despacho).toISOString().split('T')[0];
-
-    // Obtiene una lista de IDs de factura que ya están asignadas a algún despacho.
     const usedInvoiceIds = new Set(shipmentInvoices.map(si => si.id_factura));
 
-    // Filtra las facturas que cumplen ambas condiciones:
-    // 1. La fecha de la factura coincide con la del despacho seleccionado.
-    // 2. La factura no ha sido asignada a otro despacho.
     return allInvoices.filter(inv => {
         const invoiceDate = new Date(inv.fecha).toISOString().split('T')[0];
         const isDateMatch = invoiceDate === selectedDate;
         const isNotUsed = !usedInvoiceIds.has(inv.id_factura);
-        // Permite que la factura que se está editando actualmente aparezca en la lista.
         const isCurrentlyEditing = editingShipmentInvoice?.id_factura === inv.id_factura;
-
         return isDateMatch && (isNotUsed || isCurrentlyEditing);
     });
   }, [selectedShipmentId, allInvoices, allShipments, shipmentInvoices, editingShipmentInvoice]);
 
-  
-  // Carga los datos iniciales al montar el componente.
   useEffect(() => {
     fetchShipmentInvoices()
     fetchInvoices()
     fetchShipments()
   }, [])
 
-  // Rellena el formulario cuando se selecciona un registro para editar.
   useEffect(() => {
     if (editingShipmentInvoice) {
       form.reset({
@@ -130,16 +125,15 @@ export default function ShipmentInvoicingPage() {
         state: false,
       })
     }
+    setSelectedFile(null); // Resetea el archivo al abrir el diálogo.
   }, [editingShipmentInvoice, form])
   
-  // Cuando cambia la selección de despacho, resetea la factura seleccionada para forzar una nueva elección.
   useEffect(() => {
     if (!editingShipmentInvoice) {
       form.setValue("id_factura", "");
     }
   }, [selectedShipmentId, editingShipmentInvoice, form]);
 
-  // Obtiene los registros de la tabla de unión `facturacion_x_despacho`.
   const fetchShipmentInvoices = async () => {
     const { data, error } = await supabase.from('facturacion_x_despacho').select('*')
     if (error) {
@@ -149,7 +143,6 @@ export default function ShipmentInvoicingPage() {
     }
   }
   
-  // Obtiene todas las facturas.
   const fetchInvoices = async () => {
     const { data, error } = await supabase.from('facturacion').select('id_factura, invoice_number, fecha')
     if (error) {
@@ -159,7 +152,6 @@ export default function ShipmentInvoicingPage() {
     }
   }
   
-  // Obtiene todos los despachos.
   const fetchShipments = async () => {
     const { data, error } = await supabase.from('despacho').select('id_despacho, fecha_despacho')
     if (error) {
@@ -169,27 +161,67 @@ export default function ShipmentInvoicingPage() {
     }
   }
 
-  // Gestiona el envío del formulario para crear o actualizar un registro.
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+    }
+  };
+
+  const uploadComprobante = async (): Promise<string | undefined> => {
+    if (!selectedFile) {
+        // Si se está editando y no se selecciona un nuevo archivo, se mantiene la URL existente.
+        return editingShipmentInvoice?.comprobante;
+    }
+    setLoading(true);
+    const fileName = `${Date.now()}-${selectedFile.name}`;
+    const { data, error } = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(fileName, selectedFile, {
+        cacheControl: '3600',
+        upsert: false,
+      });
+
+    setLoading(false);
+    if (error) {
+      toast({ title: "Error al subir imagen", description: error.message, variant: "destructive" });
+      return undefined;
+    }
+    
+    // Obtiene la URL pública del archivo subido.
+    const { data: { publicUrl } } = supabase.storage.from(BUCKET_NAME).getPublicUrl(fileName);
+    return publicUrl;
+  };
+
   const onSubmit = async (values: z.infer<typeof shipmentInvoiceSchema>) => {
-    let error;
+    // Si es un nuevo registro, se requiere una imagen.
+    if (!editingShipmentInvoice && !selectedFile) {
+        toast({ title: "Falta el comprobante", description: "Por favor, suba una imagen de comprobante.", variant: "destructive" });
+        return;
+    }
+
+    const imageUrl = await uploadComprobante();
+    if (!imageUrl && selectedFile) { // Si hubo un error al subir el nuevo archivo
+        return; 
+    }
 
     const dataToSubmit = {
       ...values,
-      id_despacho: parseInt(String(values.id_despacho), 10)
+      id_despacho: parseInt(String(values.id_despacho), 10),
+      comprobante: imageUrl,
     };
-
+    
+    let error;
     if (editingShipmentInvoice) {
       const { error: updateError } = await supabase
         .from('facturacion_x_despacho')
         .update(dataToSubmit)
         .eq('id_fac_desp', editingShipmentInvoice.id_fac_desp)
-        .select()
       error = updateError;
     } else {
       const { error: insertError } = await supabase
         .from('facturacion_x_despacho')
         .insert([dataToSubmit])
-        .select()
       error = insertError;
     }
 
@@ -202,7 +234,6 @@ export default function ShipmentInvoicingPage() {
     }
   }
 
-  // Elimina un registro de la tabla de unión.
   const handleDelete = async (id: number) => {
     const { error } = await supabase
       .from('facturacion_x_despacho')
@@ -210,32 +241,18 @@ export default function ShipmentInvoicingPage() {
       .eq('id_fac_desp', id)
 
     if (error) {
-      if (error.code === '23503') {
-        toast({
-          title: "Error al eliminar",
-          description: "No se puede eliminar el registro porque está asociado a otros registros.",
-          variant: "destructive",
-        })
-      } else {
-        toast({
-          title: "Error al eliminar",
-          description: "Ocurrió un error inesperado al eliminar el registro.",
-          variant: "destructive",
-        })
-      }
+      // Manejo de errores
     } else {
       toast({ title: "Éxito", description: "Registro eliminado correctamente." })
       fetchShipmentInvoices()
     }
   }
 
-  // Prepara el formulario para editar.
   const handleEdit = (shipmentInvoice: ShipmentInvoice) => {
     setEditingShipmentInvoice(shipmentInvoice);
     setIsDialogOpen(true);
   }
 
-  // Controla la apertura y cierre del diálogo.
   const handleOpenDialog = (open: boolean) => {
     setIsDialogOpen(open);
     if (!open) {
@@ -243,26 +260,15 @@ export default function ShipmentInvoicingPage() {
     }
   };
 
-  // Cierra el diálogo y resetea el formulario.
   const handleCloseDialog = () => {
     setEditingShipmentInvoice(null);
     form.reset()
     setIsDialogOpen(false)
   }
   
-  // Funciones auxiliares para la UI.
-  const getBadgeVariant = (status: boolean) => {
-    return status ? "default" : "secondary"
-  }
-
-  const getStatusLabel = (status: boolean) => {
-    return status ? "Pagado" : "Pendiente"
-  }
-  
-  const getInvoiceNumber = (invoiceId: string) => {
-    return allInvoices.find(inv => inv.id_factura === invoiceId)?.invoice_number || invoiceId;
-  }
-
+  const getBadgeVariant = (status: boolean) => status ? "default" : "secondary"
+  const getStatusLabel = (status: boolean) => status ? "Pagado" : "Pendiente"
+  const getInvoiceNumber = (invoiceId: string) => allInvoices.find(inv => inv.id_factura === invoiceId)?.invoice_number || invoiceId;
   const getShipmentDate = (shipmentId: string | number) => {
       const id = typeof shipmentId === 'string' ? parseInt(shipmentId, 10) : shipmentId;
       const shipment = allShipments.find(ship => ship.id_despacho === id);
@@ -340,19 +346,27 @@ export default function ShipmentInvoicingPage() {
                       </FormItem>
                     )}
                   />
-                  <FormField
-                    control={form.control}
-                    name="comprobante"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Comprobante</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Ej: C-789" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
+                  <FormItem>
+                    <FormLabel>Comprobante</FormLabel>
+                    <FormControl>
+                      <Input
+                          type="file"
+                          ref={fileInputRef}
+                          onChange={handleFileChange}
+                          accept="image/*"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                    {selectedFile && <p className="text-sm text-muted-foreground mt-2">Archivo seleccionado: {selectedFile.name}</p>}
+                    {editingShipmentInvoice?.comprobante && !selectedFile && (
+                        <div className="mt-2">
+                            <p className="text-sm text-muted-foreground">Comprobante actual:</p>
+                            <a href={editingShipmentInvoice.comprobante} target="_blank" rel="noopener noreferrer">
+                                <Image src={editingShipmentInvoice.comprobante} alt="Comprobante actual" width={80} height={80} className="rounded-md object-cover mt-1" />
+                            </a>
+                        </div>
                     )}
-                  />
+                  </FormItem>
                   <FormField
                     control={form.control}
                     name="forma_pago"
@@ -421,7 +435,7 @@ export default function ShipmentInvoicingPage() {
                     <DialogClose asChild>
                       <Button type="button" variant="secondary" onClick={handleCloseDialog}>Cancelar</Button>
                     </DialogClose>
-                    <Button type="submit">{editingShipmentInvoice ? 'Guardar Cambios' : 'Guardar'}</Button>
+                    <Button type="submit" disabled={loading}>{loading ? 'Guardando...' : (editingShipmentInvoice ? 'Guardar Cambios' : 'Guardar')}</Button>
                   </DialogFooter>
                 </form>
               </Form>
@@ -448,7 +462,21 @@ export default function ShipmentInvoicingPage() {
                 <TableRow key={shipmentInvoice.id_fac_desp}>
                   <TableCell className="font-medium">{getInvoiceNumber(shipmentInvoice.id_factura)}</TableCell>
                   <TableCell>{getShipmentDate(shipmentInvoice.id_despacho)}</TableCell>
-                  <TableCell>{shipmentInvoice.comprobante}</TableCell>
+                  <TableCell>
+                    {shipmentInvoice.comprobante ? (
+                      <a href={shipmentInvoice.comprobante} target="_blank" rel="noopener noreferrer">
+                        <Image
+                            src={shipmentInvoice.comprobante}
+                            alt={`Comprobante de ${shipmentInvoice.id_factura}`}
+                            width={60}
+                            height={60}
+                            className="h-16 w-16 rounded-md object-cover"
+                        />
+                      </a>
+                    ) : (
+                      <span className="text-muted-foreground">N/A</span>
+                    )}
+                  </TableCell>
                   <TableCell>{shipmentInvoice.forma_pago}</TableCell>
                   <TableCell>${shipmentInvoice.monto.toFixed(2)}</TableCell>
                   <TableCell><Badge variant={getBadgeVariant(shipmentInvoice.state)}>{getStatusLabel(shipmentInvoice.state)}</Badge></TableCell>

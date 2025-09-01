@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
+import Image from "next/image"
 
 // Esquema para el formulario de edición de la factura del despacho
 const shipmentInvoiceEditSchema = (maxAmount: number) => z.object({
@@ -109,7 +110,6 @@ export default function ShipmentDetailPage() {
     if (!id) return;
     setLoading(true)
     
-    // Se realizan múltiples consultas en paralelo para mejorar el rendimiento.
     const [
       shipmentRes,
       usersRes,
@@ -204,9 +204,16 @@ export default function ShipmentDetailPage() {
   const handleUpdateInvoice = async (values: z.infer<ReturnType<typeof shipmentInvoiceEditSchema>>) => {
     if (!editingShipmentInvoice) return;
 
+    // Nota: La lógica de subida de imagen no se maneja aquí, solo la edición de datos.
+    // La URL del comprobante se actualiza en el formulario principal de 'facturación por despacho'.
     const { error } = await supabase
       .from('facturacion_x_despacho')
-      .update(values)
+      .update({
+          // El campo 'comprobante' no se edita aquí, ya que no hay input de archivo.
+          forma_pago: values.forma_pago,
+          monto: values.monto,
+          state: values.state
+      })
       .eq('id_fac_desp', editingShipmentInvoice.id_fac_desp);
     
     if (error) {
@@ -271,7 +278,21 @@ export default function ShipmentDetailPage() {
             {invoiceList.length > 0 ? invoiceList.map((invoice) => (
               <TableRow key={invoice.id_fac_desp}>
                 <TableCell className="font-medium">{String(invoice.invoice_number || invoice.id_factura)}</TableCell>
-                <TableCell>{invoice.comprobante}</TableCell>
+                <TableCell>
+                    {invoice.comprobante ? (
+                      <a href={invoice.comprobante} target="_blank" rel="noopener noreferrer">
+                        <Image
+                            src={invoice.comprobante}
+                            alt={`Comprobante de ${invoice.id_factura}`}
+                            width={60}
+                            height={60}
+                            className="h-16 w-16 rounded-md object-cover"
+                        />
+                      </a>
+                    ) : (
+                      <span className="text-muted-foreground">N/A</span>
+                    )}
+                </TableCell>
                 <TableCell>${(invoice.grand_total ?? 0).toFixed(2)}</TableCell>
                 <TableCell>{invoice.forma_pago}</TableCell>
                 <TableCell>${invoice.monto.toFixed(2)}</TableCell>
@@ -375,24 +396,23 @@ export default function ShipmentDetailPage() {
           <DialogHeader>
             <DialogTitle>Editar Factura del Despacho</DialogTitle>
             <DialogDescription>
-              Modifique los detalles de la factura para este despacho.
+              Modifique los detalles de la factura para este despacho. El comprobante no se puede cambiar desde aquí.
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(handleUpdateInvoice)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="comprobante"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Comprobante</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Ej: C-789" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+               {/* Campo de comprobante deshabilitado para edición visual */}
+               <FormItem>
+                  <FormLabel>Comprobante</FormLabel>
+                   <FormControl>
+                      {editingShipmentInvoice?.comprobante ? (
+                          <Image src={editingShipmentInvoice.comprobante} alt="Comprobante" width={80} height={80} className="rounded-md object-cover" />
+                      ) : (
+                          <Input value="No hay imagen" disabled />
+                      )}
+                  </FormControl>
+              </FormItem>
+              
               <FormField
                 control={form.control}
                 name="forma_pago"
@@ -470,3 +490,5 @@ export default function ShipmentDetailPage() {
     </div>
   )
 }
+
+    
