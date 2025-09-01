@@ -223,20 +223,34 @@ export default function CustomersPage() {
             const workbook = xlsx.read(data, { type: 'array' });
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
-            const json: any[] = xlsx.utils.sheet_to_json(worksheet);
-
-            // Filtra las filas vacías que el lector de Excel pueda haber recogido.
-            const filteredJson = json.filter(row => row.code_customer);
-
-            const mappedData = filteredJson.map(row => ({
-                code_customer: String(row.code_customer || ''),
-                customer_name: String(row.customer_name || ''),
-                id_impuesto: String(row.id_impuesto || ''),
-                id_term: String(row.id_term || ''),
-                ruta: String(row.ruta || ''),
+            
+            // Convierte la hoja a un array de arrays, ignorando encabezados.
+            const rows: any[][] = xlsx.utils.sheet_to_json(worksheet, { header: 1 });
+            
+            // Se salta la primera fila (encabezados) y se mapean los datos por posición.
+            const dataToValidate = rows.slice(1).map(row => ({
+                code_customer: String(row[0] || ''), // Columna A
+                customer_name: String(row[1] || ''), // Columna B
+                ruta: String(row[2] || ''),          // Columna C
+                id_impuesto: String(row[3] || ''),   // Columna D
+                id_term: String(row[4] || ''),       // Columna E
             }));
+            
+            // Filtra las filas que puedan estar completamente vacías para evitar errores.
+            const nonEmptyData = dataToValidate.filter(
+              row => row.code_customer && row.customer_name
+            );
 
-            const validatedCustomers = z.array(customerSchema).safeParse(mappedData);
+            if (nonEmptyData.length === 0) {
+              toast({
+                title: "Archivo vacío o inválido",
+                description: "No se encontraron datos válidos para importar en el archivo. Verifique el formato.",
+                variant: "destructive",
+              });
+              return;
+            }
+
+            const validatedCustomers = z.array(customerSchema).safeParse(nonEmptyData);
 
             if (!validatedCustomers.success) {
                 const errorIssues = validatedCustomers.error.issues;
@@ -263,10 +277,13 @@ export default function CustomersPage() {
               return;
             }
             
-            const { error: insertError } = await supabase.from('customer').upsert(validatedCustomers.data);
+            // Usamos 'upsert' para insertar nuevos clientes o actualizar los existentes basados en 'code_customer'.
+            const { error: upsertError } = await supabase.from('customer').upsert(validatedCustomers.data, {
+              onConflict: 'code_customer' 
+            });
 
-            if (insertError) {
-                toast({ title: "Error al importar", description: insertError.message, variant: "destructive" });
+            if (upsertError) {
+                toast({ title: "Error al importar", description: upsertError.message, variant: "destructive" });
             } else {
                 toast({ title: "Éxito", description: `${validatedCustomers.data.length} clientes importados/actualizados correctamente.` });
                 fetchCustomers();
