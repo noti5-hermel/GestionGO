@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useState, useEffect, useRef } from "react"
@@ -12,7 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
-import { ArrowLeft, Pencil, Upload, Camera } from "lucide-react"
+import { ArrowLeft, Pencil, Upload, Camera, X } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
@@ -677,44 +676,60 @@ export default function ShipmentDetailPage() {
 
       {/* Dialog for Camera */}
       <Dialog open={isCameraDialogOpen} onOpenChange={closeCameraDialog}>
-        <DialogContent className="sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Capturar Comprobante</DialogTitle>
-            <DialogDescription>
-              Apunta la cámara al comprobante y toma la foto.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-             {capturedImage ? (
-               <div className="space-y-4">
-                  <Image src={capturedImage} alt="Comprobante capturado" width={400} height={300} className="w-full h-auto rounded-md" />
-               </div>
+        <DialogContent className="p-0 border-0 bg-black max-w-full h-full sm:h-auto sm:max-w-3xl flex flex-col">
+           <div className="relative flex-1 w-full h-full">
+            {capturedImage ? (
+                <Image src={capturedImage} alt="Comprobante capturado" layout="fill" className="object-contain" />
             ) : (
-              <div className="space-y-4">
-                <video ref={videoRef} className="w-full aspect-video rounded-md bg-muted" autoPlay muted playsInline />
+              <>
+                <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
                 {!hasCameraPermission && (
-                  <Alert variant="destructive">
-                    <AlertTitle>Se requiere acceso a la cámara</AlertTitle>
-                    <AlertDescription>
-                      Por favor, permite el acceso a la cámara para usar esta función.
-                    </AlertDescription>
-                  </Alert>
+                    <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-75">
+                        <Alert variant="destructive" className="w-4/5 max-w-md">
+                            <AlertTitle>Se requiere acceso a la cámara</AlertTitle>
+                            <AlertDescription>
+                            Por favor, permite el acceso a la cámara para usar esta función.
+                            </AlertDescription>
+                        </Alert>
+                    </div>
                 )}
-              </div>
+              </>
             )}
             <canvas ref={canvasRef} className="hidden" />
+
+            {/* Controls */}
+            <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
+                <div className="flex justify-center items-center gap-4">
+                     {capturedImage ? (
+                        <>
+                           <Button variant="outline" onClick={() => setCapturedImage(null)} className="bg-white/20 backdrop-blur-sm border-white/30 text-white hover:bg-white/30">
+                                Tomar de nuevo
+                           </Button>
+                           <Button onClick={saveCapturedPhoto} disabled={loading} className="bg-primary/80 backdrop-blur-sm text-primary-foreground hover:bg-primary">
+                               {loading ? "Guardando..." : "Guardar Foto"}
+                           </Button>
+                        </>
+                    ) : (
+                        <button 
+                            onClick={takePhoto} 
+                            disabled={!hasCameraPermission}
+                            className="h-20 w-20 rounded-full border-4 border-white bg-white/30 backdrop-blur-sm ring-4 ring-black/30 transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                            aria-label="Tomar Foto"
+                        />
+                    )}
+                </div>
+            </div>
+            
+            {/* Close Button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={closeCameraDialog}
+              className="absolute top-4 right-4 text-white bg-black/30 hover:bg-black/50 h-10 w-10 rounded-full"
+            >
+              <X className="h-6 w-6" />
+            </Button>
           </div>
-          <DialogFooter>
-            <Button variant="secondary" onClick={closeCameraDialog}>Cancelar</Button>
-            {capturedImage ? (
-                <>
-                    <Button variant="outline" onClick={() => setCapturedImage(null)}>Tomar de nuevo</Button>
-                    <Button onClick={saveCapturedPhoto} disabled={loading}>{loading ? "Guardando..." : "Guardar Foto"}</Button>
-                </>
-            ) : (
-                <Button onClick={takePhoto} disabled={!hasCameraPermission}>Tomar Foto</Button>
-            )}
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
