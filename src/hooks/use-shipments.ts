@@ -22,9 +22,9 @@ const shipmentSchema = z.object({
     (val) => String(val),
     z.string().min(1, { message: "ID de auxiliar es requerido." })
   ),
-  total_contado: z.coerce.number().min(0),
-  total_credito: z.coerce.number().min(0),
-  total_general: z.coerce.number().min(0),
+  total_contado: z.coerce.number().min(0).optional(),
+  total_credito: z.coerce.number().min(0).optional(),
+  total_general: z.coerce.number().min(0).optional(),
   fecha_despacho: z.string().min(1, "La fecha es requerida."),
   facturacion: z.boolean().default(true),
   bodega: z.boolean().default(false),
@@ -265,17 +265,30 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
   const onSubmit = async (values: z.infer<typeof shipmentSchema>) => {
     let error;
 
+    const dataToSubmit = {
+      id_ruta: values.id_ruta,
+      id_motorista: values.id_motorista,
+      id_auxiliar: values.id_auxiliar,
+      fecha_despacho: values.fecha_despacho,
+      facturacion: values.facturacion,
+      bodega: values.bodega,
+      reparto: values.reparto,
+      asist_admon: values.asist_admon,
+      gerente_admon: values.gerente_admon,
+      cobros: values.cobros,
+    };
+
     if (editingShipment) {
       const { error: updateError } = await supabase
         .from('despacho')
-        .update(values)
+        .update(dataToSubmit)
         .eq('id_despacho', editingShipment.id_despacho)
         .select()
       error = updateError;
     } else {
        const { error: insertError } = await supabase
         .from('despacho')
-        .insert([values])
+        .insert([dataToSubmit])
         .select()
       error = insertError;
     }
@@ -415,3 +428,5 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
     setReviewFilter
   }
 }
+
+    

@@ -109,12 +109,10 @@ export const generateShipmentPDF = (
   }
 
   // 5. Resumen de Totales (Cálculos dinámicos)
-  const totalContadoCalculado = invoices
-    .filter(inv => inv.state === true) // Suma de montos pagados
+  const totalContadoCalculado = finalConsumerInvoices
     .reduce((acc, inv) => acc + inv.monto, 0);
   
-  const totalCreditoCalculado = invoices
-    .filter(inv => inv.state === false) // Suma de montos pendientes
+  const totalCreditoCalculado = fiscalCreditInvoices
     .reduce((acc, inv) => acc + (inv.grand_total || 0), 0);
 
   doc.setFontSize(14);
@@ -149,3 +147,4 @@ export const generateShipmentPDF = (
   };
 };
 
+    

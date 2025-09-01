@@ -26,9 +26,9 @@ const shipmentSchema = z.object({
     (val) => String(val),
     z.string().min(1, { message: "ID de auxiliar es requerido." })
   ),
-  total_contado: z.coerce.number().min(0),
-  total_credito: z.coerce.number().min(0),
-  total_general: z.coerce.number().min(0),
+  total_contado: z.coerce.number().min(0).optional(),
+  total_credito: z.coerce.number().min(0).optional(),
+  total_general: z.coerce.number().min(0).optional(),
   fecha_despacho: z.string().min(1, "La fecha es requerida."),
   facturacion: z.boolean().default(false),
   bodega: z.boolean().default(false),
@@ -156,45 +156,6 @@ export function ShipmentForm({
                         searchPlaceholder="Buscar auxiliar..."
                         emptyText="No se encontró el auxiliar."
                       />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="total_contado"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Total Contado</FormLabel>
-                    <FormControl>
-                      <Input type="number" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="total_credito"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Total Crédito</FormLabel>
-                    <FormControl>
-                      <Input type="number" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="total_general"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Total General</FormLabel>
-                    <FormControl>
-                      <Input type="number" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -347,3 +308,5 @@ export function ShipmentForm({
     </Dialog>
   )
 }
+
+    

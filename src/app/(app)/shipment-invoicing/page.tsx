@@ -195,6 +195,19 @@ export default function ShipmentInvoicingPage() {
     const { data: { publicUrl } } = supabase.storage.from(BUCKET_NAME).getPublicUrl(fileName);
     return publicUrl;
   };
+  
+  const triggerUpdateShipmentTotals = async (shipmentId: number) => {
+    const { error } = await supabase.rpc('update_shipment_totals', {
+      p_id_despacho: shipmentId
+    })
+    if (error) {
+      toast({
+        title: "Error de Sincronización",
+        description: `No se pudieron actualizar los totales del despacho: ${error.message}`,
+        variant: "destructive",
+      })
+    }
+  }
 
   const onSubmit = async (values: z.infer<typeof shipmentInvoiceSchema>) => {
     const imageUrl = await uploadComprobante();
@@ -226,21 +239,28 @@ export default function ShipmentInvoicingPage() {
       toast({ title: "Error al guardar", description: error.message, variant: "destructive" })
     } else {
       toast({ title: "Éxito", description: `Registro ${editingShipmentInvoice ? 'actualizado' : 'creado'} correctamente.` })
+      // Después de guardar, actualiza los totales
+      await triggerUpdateShipmentTotals(dataToSubmit.id_despacho);
       fetchShipmentInvoices()
       handleCloseDialog()
     }
   }
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (shipmentInvoice: ShipmentInvoice) => {
     const { error } = await supabase
       .from('facturacion_x_despacho')
       .delete()
-      .eq('id_fac_desp', id)
+      .eq('id_fac_desp', shipmentInvoice.id_fac_desp)
 
     if (error) {
-      // Manejo de errores
+       toast({
+        title: "Error al eliminar",
+        description: "Ocurrió un error inesperado al eliminar el registro.",
+        variant: "destructive",
+      })
     } else {
       toast({ title: "Éxito", description: "Registro eliminado correctamente." })
+      await triggerUpdateShipmentTotals(shipmentInvoice.id_despacho);
       fetchShipmentInvoices()
     }
   }
@@ -507,7 +527,7 @@ export default function ShipmentInvoicingPage() {
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDelete(shipmentInvoice.id_fac_desp)}>
+                            <AlertDialogAction onClick={() => handleDelete(shipmentInvoice)}>
                               Eliminar
                             </AlertDialogAction>
                           </AlertDialogFooter>
@@ -529,9 +549,12 @@ export default function ShipmentInvoicingPage() {
       
       <Dialog open={imageModalOpen} onOpenChange={setImageModalOpen}>
         <DialogContent className="max-w-3xl">
-          <DialogHeader>
-              <DialogTitle>Vista Previa del Comprobante</DialogTitle>
-          </DialogHeader>
+           <DialogHeader>
+                <DialogTitle>Vista Previa del Comprobante</DialogTitle>
+                <DialogDescription>
+                  Esta es una vista previa de la imagen del comprobante de pago.
+                </DialogDescription>
+            </DialogHeader>
           <Image
               src={selectedImage}
               alt="Comprobante"
@@ -544,3 +567,5 @@ export default function ShipmentInvoicingPage() {
     </Card>
   )
 }
+
+    
