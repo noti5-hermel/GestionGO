@@ -12,12 +12,14 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
-import { ArrowLeft, Pencil, Upload } from "lucide-react"
+import { ArrowLeft, Pencil, Upload, Camera } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import Image from "next/image"
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
+
 
 const BUCKET_NAME = 'comprobante';
 
@@ -98,6 +100,14 @@ export default function ShipmentDetailPage() {
   const [editingShipmentInvoice, setEditingShipmentInvoice] = useState<ShipmentInvoice | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Estados para la cámara
+  const [isCameraDialogOpen, setIsCameraDialogOpen] = useState(false);
+  const [invoiceForCamera, setInvoiceForCamera] = useState<ShipmentInvoice | null>(null);
+  const [hasCameraPermission, setHasCameraPermission] = useState(false);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const form = useForm<z.infer<ReturnType<typeof shipmentInvoiceEditSchema>>>({
     resolver: zodResolver(shipmentInvoiceEditSchema(editingShipmentInvoice?.grand_total || Number.MAX_SAFE_INTEGER)),
@@ -201,6 +211,36 @@ export default function ShipmentDetailPage() {
     setSelectedFile(null);
   }, [editingShipmentInvoice, form]);
 
+  useEffect(() => {
+    const getCameraPermission = async () => {
+      if (!isCameraDialogOpen) return;
+      setHasCameraPermission(false); // Reset on open
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+        setHasCameraPermission(true);
+      } catch (error) {
+        console.error('Error accessing camera:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Acceso a la cámara denegado',
+          description: 'Por favor, habilite los permisos de la cámara en su navegador.',
+        });
+        closeCameraDialog();
+      }
+    };
+    getCameraPermission();
+
+    return () => { // Cleanup on unmount or when dialog closes
+      if (videoRef.current && videoRef.current.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+      }
+    }
+  }, [isCameraDialogOpen, toast]);
+
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -277,6 +317,75 @@ export default function ShipmentDetailPage() {
     form.reset();
   };
 
+  const openCameraDialog = (invoice: ShipmentInvoice) => {
+    setInvoiceForCamera(invoice);
+    setIsCameraDialogOpen(true);
+  };
+
+  const closeCameraDialog = () => {
+    setIsCameraDialogOpen(false);
+    setInvoiceForCamera(null);
+    setCapturedImage(null);
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+    }
+  };
+
+  const takePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const context = canvas.getContext('2d');
+      context?.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+      setCapturedImage(dataUrl);
+    }
+  };
+
+  const saveCapturedPhoto = async () => {
+    if (!capturedImage || !invoiceForCamera) return;
+
+    setLoading(true);
+    // Convert data URL to Blob
+    const response = await fetch(capturedImage);
+    const blob = await response.blob();
+    const fileName = `${Date.now()}-comprobante.jpg`;
+    const file = new File([blob], fileName, { type: 'image/jpeg' });
+
+    // Upload to Supabase
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(fileName, file, { upsert: false });
+
+    if (uploadError) {
+      setLoading(false);
+      toast({ title: "Error al subir imagen", description: uploadError.message, variant: "destructive" });
+      return;
+    }
+
+    const { data: { publicUrl } } = supabase.storage.from(BUCKET_NAME).getPublicUrl(fileName);
+
+    // Update the database
+    const { error: dbError } = await supabase
+      .from('facturacion_x_despacho')
+      .update({ comprobante: publicUrl })
+      .eq('id_fac_desp', invoiceForCamera.id_fac_desp);
+
+    setLoading(false);
+
+    if (dbError) {
+      toast({ title: "Error al guardar", description: "No se pudo actualizar la factura.", variant: "destructive" });
+    } else {
+      toast({ title: "Éxito", description: "Comprobante guardado correctamente." });
+      fetchData();
+      closeCameraDialog();
+    }
+  };
+
+
   const getRouteDescription = (routeId: string) => routes.find(route => String(route.id_ruta) === String(routeId))?.ruta_desc || routeId
   const getUserName = (userId: string) => users.find(user => String(user.id_user) === String(userId))?.name || userId
   const getStatusLabel = (status: boolean) => status ? "Pagado" : "Pendiente"
@@ -286,7 +395,7 @@ export default function ShipmentDetailPage() {
   const finalConsumerInvoices = invoices.filter(inv => inv.tax_type === 'Consumidor Final');
   const otherInvoices = invoices.filter(inv => inv.tax_type !== 'Crédito Fiscal' && inv.tax_type !== 'Consumidor Final');
 
-  if (loading) {
+  if (loading && !shipment) {
     return <p>Cargando detalles del despacho...</p>
   }
 
@@ -341,9 +450,14 @@ export default function ShipmentDetailPage() {
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right">
-                  <Button variant="ghost" size="icon" onClick={() => handleEditInvoice(invoice)}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
+                  <div className="flex justify-end items-center gap-2">
+                    <Button variant="ghost" size="icon" onClick={() => handleEditInvoice(invoice)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => openCameraDialog(invoice)}>
+                      <Camera className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             )) : (
@@ -536,8 +650,49 @@ export default function ShipmentDetailPage() {
           </Form>
         </DialogContent>
       </Dialog>
+      
+      {/* Dialog for Camera */}
+      <Dialog open={isCameraDialogOpen} onOpenChange={closeCameraDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Capturar Comprobante</DialogTitle>
+            <DialogDescription>
+              Apunta la cámara al comprobante y toma la foto.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+             {capturedImage ? (
+               <div className="space-y-4">
+                  <Image src={capturedImage} alt="Comprobante capturado" width={400} height={300} className="w-full h-auto rounded-md" />
+               </div>
+            ) : (
+              <div className="space-y-4">
+                <video ref={videoRef} className="w-full aspect-video rounded-md bg-muted" autoPlay muted playsInline />
+                {!hasCameraPermission && (
+                  <Alert variant="destructive">
+                    <AlertTitle>Se requiere acceso a la cámara</AlertTitle>
+                    <AlertDescription>
+                      Por favor, permite el acceso a la cámara para usar esta función.
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            )}
+            <canvas ref={canvasRef} className="hidden" />
+          </div>
+          <DialogFooter>
+            <Button variant="secondary" onClick={closeCameraDialog}>Cancelar</Button>
+            {capturedImage ? (
+                <>
+                    <Button variant="outline" onClick={() => setCapturedImage(null)}>Tomar de nuevo</Button>
+                    <Button onClick={saveCapturedPhoto} disabled={loading}>{loading ? "Guardando..." : "Guardar Foto"}</Button>
+                </>
+            ) : (
+                <Button onClick={takePhoto} disabled={!hasCameraPermission}>Tomar Foto</Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
-
-    
