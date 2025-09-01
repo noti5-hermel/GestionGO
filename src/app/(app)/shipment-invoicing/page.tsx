@@ -194,14 +194,8 @@ export default function ShipmentInvoicingPage() {
   };
 
   const onSubmit = async (values: z.infer<typeof shipmentInvoiceSchema>) => {
-    // Si es un nuevo registro, se requiere una imagen.
-    if (!editingShipmentInvoice && !selectedFile) {
-        toast({ title: "Falta el comprobante", description: "Por favor, suba una imagen de comprobante.", variant: "destructive" });
-        return;
-    }
-
     const imageUrl = await uploadComprobante();
-    if (!imageUrl && selectedFile) { // Si hubo un error al subir el nuevo archivo
+    if (!imageUrl && selectedFile) { // Si hubo un error al subir un archivo seleccionado
         return; 
     }
 
@@ -522,5 +516,3 @@ export default function ShipmentInvoicingPage() {
     </Card>
   )
 }
-
-    
