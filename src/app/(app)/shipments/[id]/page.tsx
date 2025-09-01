@@ -677,6 +677,10 @@ export default function ShipmentDetailPage() {
       {/* Dialog for Camera */}
       <Dialog open={isCameraDialogOpen} onOpenChange={closeCameraDialog}>
         <DialogContent className="p-0 border-0 bg-black max-w-full h-full sm:h-auto sm:max-w-3xl flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="sr-only">Capturar Comprobante</DialogTitle>
+            <DialogDescription className="sr-only">Use su cámara para tomar una foto del comprobante.</DialogDescription>
+          </DialogHeader>
            <div className="relative flex-1 w-full h-full">
             {capturedImage ? (
                 <Image src={capturedImage} alt="Comprobante capturado" layout="fill" className="object-contain" />
