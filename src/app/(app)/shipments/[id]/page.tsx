@@ -677,7 +677,7 @@ export default function ShipmentDetailPage() {
 
       {/* Dialog for Camera */}
       <Dialog open={isCameraDialogOpen} onOpenChange={closeCameraDialog}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>Capturar Comprobante</DialogTitle>
             <DialogDescription>
