@@ -662,6 +662,9 @@ export default function ShipmentDetailPage() {
       
       <Dialog open={imageModalOpen} onOpenChange={setImageModalOpen}>
         <DialogContent className="max-w-3xl">
+            <DialogHeader>
+                <DialogTitle>Vista Previa del Comprobante</DialogTitle>
+            </DialogHeader>
             <Image
                 src={selectedImage}
                 alt="Comprobante"
@@ -717,5 +720,3 @@ export default function ShipmentDetailPage() {
     </div>
   )
 }
-
-    

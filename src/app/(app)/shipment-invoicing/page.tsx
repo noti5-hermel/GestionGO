@@ -529,17 +529,18 @@ export default function ShipmentInvoicingPage() {
       
       <Dialog open={imageModalOpen} onOpenChange={setImageModalOpen}>
         <DialogContent className="max-w-3xl">
-            <Image
-                src={selectedImage}
-                alt="Comprobante"
-                width={800}
-                height={600}
-                className="w-full h-auto rounded-md object-contain"
-            />
+          <DialogHeader>
+              <DialogTitle>Vista Previa del Comprobante</DialogTitle>
+          </DialogHeader>
+          <Image
+              src={selectedImage}
+              alt="Comprobante"
+              width={800}
+              height={600}
+              className="w-full h-auto rounded-md object-contain"
+          />
         </DialogContent>
       </Dialog>
     </Card>
   )
 }
-
-    
