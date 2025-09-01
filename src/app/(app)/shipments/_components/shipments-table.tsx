@@ -15,9 +15,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { Pencil, Trash2, Eye } from "lucide-react"
+import { Pencil, Trash2, Eye, FileText } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import type { Shipment } from "@/hooks/use-shipments"
+import { supabase } from "@/lib/supabase"
+import { useToast } from "@/hooks/use-toast"
+import { generateShipmentPDF } from "@/lib/generate-shipment-pdf"
+import type { Shipment, User, Route } from "@/hooks/use-shipments"
+
 
 // Componente para mostrar un badge de estado de forma consistente.
 const StatusBadge = ({ checked }: { checked: boolean }) => {
@@ -34,6 +38,8 @@ interface ShipmentsTableProps {
   getUserName: (userId: string) => string;
   isMotoristaOrAuxiliar?: boolean;
   reviewRole: ReviewRole | null;
+  routes: Route[];
+  users: User[];
 }
 
 export function ShipmentsTable({
@@ -44,10 +50,55 @@ export function ShipmentsTable({
   getUserName,
   isMotoristaOrAuxiliar,
   reviewRole,
+  routes,
+  users,
 }: ShipmentsTableProps) {
   
   const canEdit = reviewRole || !isMotoristaOrAuxiliar;
   const canDelete = !isMotoristaOrAuxiliar && !reviewRole;
+  const { toast } = useToast();
+
+  const handleGeneratePdf = async (shipment: Shipment) => {
+    // 1. Obtener las facturas asociadas a este despacho
+    const { data: shipmentInvoices, error: invoicesError } = await supabase
+      .from('facturacion_x_despacho')
+      .select('*')
+      .eq('id_despacho', shipment.id_despacho);
+
+    if (invoicesError) {
+      toast({ title: "Error", description: "No se pudieron cargar las facturas para el PDF.", variant: "destructive" });
+      return;
+    }
+
+    // 2. Obtener detalles de las facturas (opcional, pero mejora el informe)
+     const invoiceIds = shipmentInvoices.map(inv => inv.id_factura);
+     let enrichedInvoices = [...shipmentInvoices];
+
+     if (invoiceIds.length > 0) {
+       const { data: invoicesData, error: facturasError } = await supabase
+         .from('facturacion')
+         .select('id_factura, invoice_number, grand_total')
+         .in('id_factura', invoiceIds);
+
+       if (facturasError) {
+         toast({ title: "Advertencia", description: "No se pudieron cargar detalles de facturas para el PDF." });
+       } else if (invoicesData) {
+         const invoiceDetailsMap = new Map(invoicesData.map(i => [i.id_factura, { invoice_number: i.invoice_number, grand_total: i.grand_total }]));
+         enrichedInvoices = shipmentInvoices.map(si => ({
+           ...si,
+           ...invoiceDetailsMap.get(si.id_factura),
+         }));
+       }
+     }
+    
+    // 3. Obtener descripciones de ruta y nombres de usuario
+    const route = routes.find(r => r.id_ruta === shipment.id_ruta) || { ruta_desc: 'N/A' };
+    const motorista = users.find(u => u.id_user === shipment.id_motorista) || { name: 'N/A' };
+    const auxiliar = users.find(u => u.id_user === shipment.id_auxiliar) || { name: 'N/A' };
+
+    // 4. Llamar a la función de generación de PDF
+    generateShipmentPDF(shipment, enrichedInvoices, route, motorista, auxiliar);
+  };
 
   return (
     <div className="w-full overflow-x-auto">
@@ -93,6 +144,9 @@ export function ShipmentsTable({
                   <Link href={`/shipments/${shipment.id_despacho}`}>
                     <Eye className="h-4 w-4" />
                   </Link>
+                </Button>
+                <Button variant="ghost" size="icon" onClick={() => handleGeneratePdf(shipment)}>
+                  <FileText className="h-4 w-4" />
                 </Button>
                 {canEdit && (
                   <Button variant="ghost" size="icon" onClick={() => handleEdit(shipment)}>

@@ -11,13 +11,14 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
-import { ArrowLeft, Pencil, Upload, Camera, X } from "lucide-react"
+import { ArrowLeft, Pencil, Upload, Camera, X, FileText } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import Image from "next/image"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
+import { generateShipmentPDF } from "@/lib/generate-shipment-pdf"
 
 
 const BUCKET_NAME = 'comprobante';
@@ -411,6 +412,18 @@ export default function ShipmentDetailPage() {
     return <p>Despacho no encontrado.</p>
   }
 
+  const handleGeneratePdf = () => {
+    if (shipment) {
+      generateShipmentPDF(
+        shipment,
+        invoices,
+        routes.find(r => r.id_ruta === shipment.id_ruta) || { ruta_desc: 'N/A' },
+        users.find(u => u.id_user === shipment.id_motorista) || { name: 'N/A' },
+        users.find(u => u.id_user === shipment.id_auxiliar) || { name: 'N/A' }
+      );
+    }
+  };
+
   const renderInvoicesTable = (invoiceList: ShipmentInvoice[], title: string, description: string) => (
     <Card className="mt-6">
       <CardHeader>
@@ -495,9 +508,14 @@ export default function ShipmentDetailPage() {
                 Información detallada del despacho y su estado actual.
               </CardDescription>
             </div>
-            <Button variant="outline" onClick={() => router.back()}>
-              <ArrowLeft className="mr-2 h-4 w-4" /> Volver a Despachos
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={handleGeneratePdf}>
+                <FileText className="mr-2 h-4 w-4" /> Ver Informe
+              </Button>
+              <Button variant="outline" onClick={() => router.back()}>
+                <ArrowLeft className="mr-2 h-4 w-4" /> Volver a Despachos
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -677,9 +695,9 @@ export default function ShipmentDetailPage() {
       {/* Dialog for Camera */}
       <Dialog open={isCameraDialogOpen} onOpenChange={closeCameraDialog}>
         <DialogContent className="p-0 border-0 bg-black max-w-full h-full sm:h-auto sm:max-w-3xl flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="sr-only">Capturar Comprobante</DialogTitle>
-            <DialogDescription className="sr-only">Use su cámara para tomar una foto del comprobante.</DialogDescription>
+          <DialogHeader className="sr-only">
+            <DialogTitle>Capturar Comprobante</DialogTitle>
+            <DialogDescription>Use su cámara para tomar una foto del comprobante.</DialogDescription>
           </DialogHeader>
            <div className="relative flex-1 w-full h-full">
             {capturedImage ? (

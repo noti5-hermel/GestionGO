@@ -92,6 +92,8 @@ export default function ShipmentsPage() {
           getUserName={getUserName}
           isMotoristaOrAuxiliar={isMotoristaOrAuxiliar}
           reviewRole={reviewRole}
+          routes={routes}
+          users={users}
         />
       </CardContent>
       <CardFooter className="pt-6 flex justify-between items-center">
