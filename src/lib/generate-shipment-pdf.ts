@@ -1,3 +1,4 @@
+
 'use client'
 
 import jsPDF from 'jspdf'
@@ -24,12 +25,13 @@ type User = { name: string }
 type Route = { ruta_desc: string }
 
 /**
- * Genera un documento PDF para un informe de despacho.
+ * Genera un documento PDF para un informe de despacho y devuelve su data URI.
  * @param shipment - El objeto del despacho principal.
  * @param invoices - Un array de las facturas asociadas al despacho.
  * @param route - El objeto de la ruta.
  * @param motorista - El objeto del usuario motorista.
  * @param auxiliar - El objeto del usuario auxiliar.
+ * @returns El contenido del PDF como un Data URI string.
  */
 export const generateShipmentPDF = (
   shipment: Shipment,
@@ -37,7 +39,7 @@ export const generateShipmentPDF = (
   route: Route,
   motorista: User,
   auxiliar: User
-) => {
+): { dataUri: string, fileName: string } => {
   // 1. Inicializa el documento PDF.
   const doc = new jsPDF() as jsPDFWithAutoTable;
   const pageHeight = doc.internal.pageSize.height;
@@ -131,6 +133,9 @@ export const generateShipmentPDF = (
     doc.text(`Página ${i} de ${pageCount}`, doc.internal.pageSize.width - 35, doc.internal.pageSize.height - 10);
   }
   
-  // 7. Genera y guarda el archivo PDF.
-  doc.save(`despacho_${shipment.id_despacho}.pdf`);
+  // 7. Genera el data URI y el nombre del archivo.
+  return {
+    dataUri: doc.output('datauristring'),
+    fileName: `despacho_${shipment.id_despacho}.pdf`
+  };
 };

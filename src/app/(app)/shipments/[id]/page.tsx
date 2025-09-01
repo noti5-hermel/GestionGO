@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useState, useEffect, useRef } from "react"
@@ -19,6 +20,7 @@ import { Input } from "@/components/ui/input"
 import Image from "next/image"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 import { generateShipmentPDF } from "@/lib/generate-shipment-pdf"
+import { PdfPreviewModal } from "@/components/pdf-preview-modal"
 
 
 const BUCKET_NAME = 'comprobante';
@@ -112,6 +114,10 @@ export default function ShipmentDetailPage() {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  
+  // Estados para la previsualización del PDF
+  const [pdfData, setPdfData] = useState<{ dataUri: string; fileName: string } | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   const form = useForm<z.infer<ReturnType<typeof shipmentInvoiceEditSchema>>>({
     resolver: zodResolver(shipmentInvoiceEditSchema(editingShipmentInvoice?.grand_total || Number.MAX_SAFE_INTEGER)),
@@ -414,13 +420,15 @@ export default function ShipmentDetailPage() {
 
   const handleGeneratePdf = () => {
     if (shipment) {
-      generateShipmentPDF(
+      const pdfOutput = generateShipmentPDF(
         shipment,
         invoices,
         routes.find(r => r.id_ruta === shipment.id_ruta) || { ruta_desc: 'N/A' },
         users.find(u => u.id_user === shipment.id_motorista) || { name: 'N/A' },
         users.find(u => u.id_user === shipment.id_auxiliar) || { name: 'N/A' }
       );
+      setPdfData(pdfOutput);
+      setIsPreviewOpen(true);
     }
   };
 
@@ -754,6 +762,15 @@ export default function ShipmentDetailPage() {
           </div>
         </DialogContent>
       </Dialog>
+      
+      {pdfData && (
+        <PdfPreviewModal
+          isOpen={isPreviewOpen}
+          setIsOpen={setIsPreviewOpen}
+          pdfDataUri={pdfData.dataUri}
+          fileName={pdfData.fileName}
+        />
+      )}
     </div>
   )
 }
