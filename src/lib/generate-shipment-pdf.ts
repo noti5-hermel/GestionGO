@@ -146,5 +146,3 @@ export const generateShipmentPDF = (
     fileName: `despacho_${shipment.id_despacho}.pdf`
   };
 };
-
-    
