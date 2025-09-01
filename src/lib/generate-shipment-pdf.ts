@@ -2,6 +2,7 @@
 
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
+import type { ShipmentInvoice } from '@/app/(app)/shipments/[id]/page'
 
 // Define un tipo extendido para jsPDF si autotable no está en la definición oficial.
 interface jsPDFWithAutoTable extends jsPDF {
@@ -15,15 +16,8 @@ type Shipment = {
   fecha_despacho: string;
   total_contado: number;
   total_credito: number;
-  total_general: number;
-}
 
-type ShipmentInvoice = {
-  invoice_number?: string | number;
-  grand_total?: number;
-  forma_pago: "Efectivo" | "Tarjeta" | "Transferencia";
-  monto: number;
-  state: boolean;
+  total_general: number;
 }
 
 type User = { name: string }
@@ -63,33 +57,50 @@ export const generateShipmentPDF = (
   doc.text(`Motorista: ${motorista.name}`, 14, yPos);
   yPos += 7;
   doc.text(`Auxiliar: ${auxiliar.name}`, 14, yPos);
-  yPos += 15;
+  yPos += 10;
 
-  // 4. Tabla de Facturas
-  // Define las columnas y las filas para la tabla de facturas.
-  const tableColumn = ["No. Factura", "Total Factura", "Forma de Pago", "Monto Pagado", "Estado"];
-  const tableRows = invoices.map(inv => [
-    String(inv.invoice_number || ''),
-    `$${(inv.grand_total || 0).toFixed(2)}`,
-    inv.forma_pago,
-    `$${inv.monto.toFixed(2)}`,
-    inv.state ? "Pagado" : "Pendiente"
-  ]);
-
-  // Añade la tabla al documento.
-  doc.autoTable({
-    head: [tableColumn],
-    body: tableRows,
-    startY: yPos,
-    theme: 'striped',
-    headStyles: { fillColor: [3, 166, 166] }, // Color del encabezado (similar al de la app)
-  });
+  const fiscalCreditInvoices = invoices.filter(inv => inv.tax_type === 'Crédito Fiscal');
+  const finalConsumerInvoices = invoices.filter(inv => inv.tax_type === 'Consumidor Final');
   
-  // Actualiza la posición 'y' después de la tabla.
-  yPos = doc.autoTable.previous.finalY + 15;
+  const generateInvoiceTable = (title: string, invoiceList: ShipmentInvoice[]) => {
+      if (invoiceList.length === 0) return;
+
+      if (yPos > pageHeight - 60) {
+        doc.addPage();
+        yPos = 20;
+      }
+      
+      yPos += 5;
+      doc.setFontSize(14);
+      doc.text(title, 14, yPos);
+      yPos += 8;
+
+      const tableColumn = ["No. Factura", "Total Factura", "Forma de Pago", "Monto Pagado", "Estado"];
+      const tableRows = invoiceList.map(inv => [
+        String(inv.invoice_number || ''),
+        `$${(inv.grand_total || 0).toFixed(2)}`,
+        inv.forma_pago,
+        `$${inv.monto.toFixed(2)}`,
+        inv.state ? "Pagado" : "Pendiente"
+      ]);
+
+      doc.autoTable({
+        head: [tableColumn],
+        body: tableRows,
+        startY: yPos,
+        theme: 'striped',
+        headStyles: { fillColor: [3, 166, 166] }, // Color del encabezado
+      });
+
+      yPos = doc.autoTable.previous.finalY + 10;
+  }
+  
+  generateInvoiceTable("Facturas de Crédito Fiscal", fiscalCreditInvoices);
+  generateInvoiceTable("Facturas de Consumidor Final", finalConsumerInvoices);
+
 
   // Si el contenido excede la página, crea una nueva.
-  if (yPos > pageHeight - 30) {
+  if (yPos > pageHeight - 40) {
     doc.addPage();
     yPos = 20;
   }

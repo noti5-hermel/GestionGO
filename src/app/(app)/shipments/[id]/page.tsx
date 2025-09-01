@@ -49,7 +49,7 @@ type Shipment = {
   gerente_admon: boolean
 }
 
-type ShipmentInvoice = {
+export type ShipmentInvoice = {
   id_fac_desp: number
   id_factura: string
   comprobante: string
