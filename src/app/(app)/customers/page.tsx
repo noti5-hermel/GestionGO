@@ -33,11 +33,11 @@ const customerSchema = z.object({
   code_customer: z.string().min(1, { message: "El código es requerido." }),
   customer_name: z.string().min(1, { message: "El nombre es requerido." }),
   id_impuesto: z.preprocess(
-    (val) => String(val), // Convierte explícitamente a string
+    (val) => String(val),
     z.string().min(1, { message: "El ID de impuesto es requerido." })
   ),
   id_term: z.preprocess(
-    (val) => String(val), // Convierte explícitamente a string
+    (val) => String(val),
     z.string().min(1, { message: "El término de pago es requerido." })
   ),
   ruta: z.string().min(1, { message: "La ruta es requerida." }),
@@ -236,11 +236,17 @@ export default function CustomersPage() {
             const validatedCustomers = z.array(customerSchema).safeParse(mappedData);
 
             if (!validatedCustomers.success) {
+                const errorIssues = validatedCustomers.error.issues;
+                const errorMessage = errorIssues
+                    .map(issue => `Fila ${Number(issue.path[0]) + 2}: En columna '${issue.path[1]}', ${issue.message}`)
+                    .join(' | ');
+
                 console.error("Error de validación Zod:", validatedCustomers.error.flatten());
                 toast({
                     title: "Error de validación",
-                    description: "Algunos datos del archivo Excel no son correctos o están incompletos. Revisa la consola para más detalles.",
-                    variant: "destructive"
+                    description: errorMessage || "Algunos datos del archivo Excel no son correctos o están incompletos.",
+                    variant: "destructive",
+                    duration: 9000,
                 });
                 return;
             }
@@ -518,3 +524,5 @@ export default function CustomersPage() {
     </Card>
   )
 }
+
+    
