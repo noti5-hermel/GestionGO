@@ -68,6 +68,9 @@ export default function ShipmentInvoicingPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const [imageModalOpen, setImageModalOpen] = useState(false);
+  const [selectedImage, setSelectedImage] = useState('');
 
 
   // Configuración del formulario con react-hook-form y Zod.
@@ -195,8 +198,8 @@ export default function ShipmentInvoicingPage() {
 
   const onSubmit = async (values: z.infer<typeof shipmentInvoiceSchema>) => {
     const imageUrl = await uploadComprobante();
-    if (!imageUrl && selectedFile) { // Si hubo un error al subir un archivo seleccionado
-        return; 
+    if (!imageUrl && selectedFile) {
+        return;
     }
 
     const dataToSubmit = {
@@ -246,6 +249,12 @@ export default function ShipmentInvoicingPage() {
     setEditingShipmentInvoice(shipmentInvoice);
     setIsDialogOpen(true);
   }
+  
+  const handleOpenImageModal = (imageUrl: string) => {
+    setSelectedImage(imageUrl);
+    setImageModalOpen(true);
+  }
+
 
   const handleOpenDialog = (open: boolean) => {
     setIsDialogOpen(open);
@@ -355,9 +364,14 @@ export default function ShipmentInvoicingPage() {
                     {editingShipmentInvoice?.comprobante && !selectedFile && (
                         <div className="mt-2">
                             <p className="text-sm text-muted-foreground">Comprobante actual:</p>
-                            <a href={editingShipmentInvoice.comprobante} target="_blank" rel="noopener noreferrer">
-                                <Image src={editingShipmentInvoice.comprobante} alt="Comprobante actual" width={80} height={80} className="rounded-md object-cover mt-1" />
-                            </a>
+                             <Image 
+                                src={editingShipmentInvoice.comprobante} 
+                                alt="Comprobante actual" 
+                                width={80} 
+                                height={80} 
+                                className="rounded-md object-cover mt-1 cursor-pointer"
+                                onClick={() => handleOpenImageModal(editingShipmentInvoice.comprobante)}
+                              />
                         </div>
                     )}
                   </FormItem>
@@ -458,15 +472,14 @@ export default function ShipmentInvoicingPage() {
                   <TableCell>{getShipmentDate(shipmentInvoice.id_despacho)}</TableCell>
                   <TableCell>
                     {shipmentInvoice.comprobante ? (
-                      <a href={shipmentInvoice.comprobante} target="_blank" rel="noopener noreferrer">
-                        <Image
-                            src={shipmentInvoice.comprobante}
-                            alt={`Comprobante de ${shipmentInvoice.id_factura}`}
-                            width={60}
-                            height={60}
-                            className="h-16 w-16 rounded-md object-cover"
-                        />
-                      </a>
+                       <Image
+                          src={shipmentInvoice.comprobante}
+                          alt={`Comprobante de ${shipmentInvoice.id_factura}`}
+                          width={60}
+                          height={60}
+                          className="h-16 w-16 rounded-md object-cover cursor-pointer"
+                          onClick={() => handleOpenImageModal(shipmentInvoice.comprobante)}
+                      />
                     ) : (
                       <span className="text-muted-foreground">N/A</span>
                     )}
@@ -513,6 +526,20 @@ export default function ShipmentInvoicingPage() {
           Mostrando <strong>1-{shipmentInvoices.length}</strong> de <strong>{shipmentInvoices.length}</strong> registros.
         </div>
       </CardFooter>
+      
+      <Dialog open={imageModalOpen} onOpenChange={setImageModalOpen}>
+        <DialogContent className="max-w-3xl">
+            <Image
+                src={selectedImage}
+                alt="Comprobante"
+                width={800}
+                height={600}
+                className="w-full h-auto rounded-md object-contain"
+            />
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }
+
+    

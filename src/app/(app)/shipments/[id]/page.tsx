@@ -100,6 +100,10 @@ export default function ShipmentDetailPage() {
   const [editingShipmentInvoice, setEditingShipmentInvoice] = useState<ShipmentInvoice | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Estados para el modal de visualización de imagen
+  const [imageModalOpen, setImageModalOpen] = useState(false);
+  const [selectedImage, setSelectedImage] = useState('');
 
   // Estados para la cámara
   const [isCameraDialogOpen, setIsCameraDialogOpen] = useState(false);
@@ -316,6 +320,11 @@ export default function ShipmentDetailPage() {
     setSelectedFile(null);
     form.reset();
   };
+  
+  const handleOpenImageModal = (imageUrl: string) => {
+    setSelectedImage(imageUrl);
+    setImageModalOpen(true);
+  }
 
   const openCameraDialog = (invoice: ShipmentInvoice) => {
     setInvoiceForCamera(invoice);
@@ -428,7 +437,7 @@ export default function ShipmentDetailPage() {
                 <TableCell className="font-medium">{String(invoice.invoice_number || invoice.id_factura)}</TableCell>
                 <TableCell>
                     {invoice.comprobante ? (
-                      <a href={invoice.comprobante} target="_blank" rel="noopener noreferrer">
+                      <button onClick={() => handleOpenImageModal(invoice.comprobante)}>
                         <Image
                             src={invoice.comprobante}
                             alt={`Comprobante de ${invoice.id_factura}`}
@@ -436,7 +445,7 @@ export default function ShipmentDetailPage() {
                             height={60}
                             className="h-16 w-16 rounded-md object-cover"
                         />
-                      </a>
+                      </button>
                     ) : (
                       <span className="text-muted-foreground">N/A</span>
                     )}
@@ -569,9 +578,9 @@ export default function ShipmentDetailPage() {
                   {editingShipmentInvoice?.comprobante && !selectedFile && (
                       <div className="mt-2">
                           <p className="text-sm text-muted-foreground">Comprobante actual:</p>
-                          <a href={editingShipmentInvoice.comprobante} target="_blank" rel="noopener noreferrer">
-                              <Image src={editingShipmentInvoice.comprobante} alt="Comprobante actual" width={80} height={80} className="rounded-md object-cover mt-1" />
-                          </a>
+                          <button type="button" onClick={() => handleOpenImageModal(editingShipmentInvoice.comprobante)}>
+                            <Image src={editingShipmentInvoice.comprobante} alt="Comprobante actual" width={80} height={80} className="rounded-md object-cover mt-1" />
+                          </button>
                       </div>
                   )}
               </FormItem>
@@ -651,6 +660,18 @@ export default function ShipmentDetailPage() {
         </DialogContent>
       </Dialog>
       
+      <Dialog open={imageModalOpen} onOpenChange={setImageModalOpen}>
+        <DialogContent className="max-w-3xl">
+            <Image
+                src={selectedImage}
+                alt="Comprobante"
+                width={800}
+                height={600}
+                className="w-full h-auto rounded-md object-contain"
+            />
+        </DialogContent>
+      </Dialog>
+
       {/* Dialog for Camera */}
       <Dialog open={isCameraDialogOpen} onOpenChange={closeCameraDialog}>
         <DialogContent>
@@ -696,3 +717,5 @@ export default function ShipmentDetailPage() {
     </div>
   )
 }
+
+    
