@@ -32,13 +32,14 @@ import { useToast } from "@/hooks/use-toast"
 const customerSchema = z.object({
   code_customer: z.string().min(1, { message: "El código es requerido." }),
   customer_name: z.string().min(1, { message: "El nombre es requerido." }),
+  // Para la importación, se validará como número. Para el formulario, se maneja como string.
   id_impuesto: z.preprocess(
-    (val) => String(val),
-    z.string().min(1, { message: "El ID de impuesto es requerido." })
+    (val) => (typeof val === 'string' && val.trim() !== '' ? Number(val) : val),
+    z.number({ required_error: "El ID de impuesto es requerido.", invalid_type_error: "El ID de impuesto debe ser un número." })
   ),
   id_term: z.preprocess(
-    (val) => String(val),
-    z.string().min(1, { message: "El término de pago es requerido." })
+    (val) => (typeof val === 'string' && val.trim() !== '' ? Number(val) : val),
+    z.number({ required_error: "El término de pago es requerido.", invalid_type_error: "El término de pago debe ser un número." })
   ),
   ruta: z.string().min(1, { message: "La ruta es requerida." }),
 })
@@ -67,8 +68,8 @@ export default function CustomersPage() {
     defaultValues: {
       code_customer: "",
       customer_name: "",
-      id_impuesto: "",
-      id_term: "",
+      id_impuesto: undefined,
+      id_term: undefined,
       ruta: "",
     },
   })
@@ -85,16 +86,16 @@ export default function CustomersPage() {
     if (editingCustomer) {
       form.reset({
         ...editingCustomer,
-        id_impuesto: String(editingCustomer.id_impuesto),
-        id_term: String(editingCustomer.id_term),
+        id_impuesto: Number(editingCustomer.id_impuesto),
+        id_term: Number(editingCustomer.id_term),
         ruta: String(editingCustomer.ruta),
       });
     } else {
       form.reset({
         code_customer: "",
         customer_name: "",
-        id_impuesto: "",
-        id_term: "",
+        id_impuesto: undefined,
+        id_term: undefined,
         ruta: "",
       });
     }
@@ -227,13 +228,13 @@ export default function CustomersPage() {
             // Convierte la hoja a un array de arrays, ignorando encabezados.
             const rows: any[][] = xlsx.utils.sheet_to_json(worksheet, { header: 1 });
             
-            // Se salta la primera fila (encabezados) y se mapean los datos por posición, asegurando que sean string.
+            // Se salta la primera fila (encabezados) y se mapean los datos por posición, convirtiendo a los tipos correctos.
             const dataToValidate = rows.slice(1).map(row => ({
-                code_customer: String(row[0] || ''), // Columna A
-                customer_name: String(row[1] || ''), // Columna B
-                ruta: String(row[2] || ''),          // Columna C
-                id_impuesto: String(row[3] || ''),   // Columna D
-                id_term: String(row[4] || ''),       // Columna E
+                code_customer: String(row[0] || ''),
+                customer_name: String(row[1] || ''),
+                ruta: String(row[2] || ''),
+                id_impuesto: row[3] !== null && row[3] !== '' ? Number(row[3]) : undefined,
+                id_term: row[4] !== null && row[4] !== '' ? Number(row[4]) : undefined,
             }));
             
             // Filtra las filas que puedan estar completamente vacías para evitar errores.
@@ -410,11 +411,11 @@ export default function CustomersPage() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Impuesto</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value} defaultValue={String(field.value)}>
+                          <Select onValueChange={(value) => field.onChange(Number(value))} value={String(field.value ?? '')} defaultValue={String(field.value ?? '')}>
                               <FormControl>
                                   <SelectTrigger>
                                       <SelectValue placeholder="Seleccione un impuesto">
-                                          {getTaxDescription(field.value)}
+                                          {getTaxDescription(field.value ?? '')}
                                       </SelectValue>
                                   </SelectTrigger>
                               </FormControl>
@@ -436,11 +437,11 @@ export default function CustomersPage() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Término de Pago</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value} defaultValue={String(field.value)}>
+                          <Select onValueChange={(value) => field.onChange(Number(value))} value={String(field.value ?? '')} defaultValue={String(field.value ?? '')}>
                             <FormControl>
                               <SelectTrigger>
                                   <SelectValue placeholder="Seleccione un término de pago">
-                                      {getTermDescription(field.value)}
+                                      {getTermDescription(field.value ?? '')}
                                   </SelectValue>
                               </SelectTrigger>
                             </FormControl>
@@ -553,5 +554,3 @@ export default function CustomersPage() {
     </Card>
   )
 }
-
-    
