@@ -303,7 +303,7 @@ export default function InvoicingPage() {
               code_customer: header.indexOf('code')
             };
 
-            const customerMap = new Map(customers.map(c => [c.code_customer, c]));
+            const customerMap = new Map(customers.map(c => [String(c.code_customer).trim(), c]));
             const paymentTermMap = new Map(paymentTerms.map(pt => [pt.id_term, pt.term_desc]));
 
             const mappedDataPromises = dataRows.map(async (row) => {
@@ -313,7 +313,7 @@ export default function InvoicingPage() {
                   return isNaN(date.getTime()) ? new Date().toISOString().split('T')[0] : date.toISOString().split('T')[0];
                 };
 
-                const code_customer = String(row[colIndices.code_customer]);
+                const code_customer = String(row[colIndices.code_customer]).trim();
                 if (!code_customer) return null;
 
                 const customer = customerMap.get(code_customer);
