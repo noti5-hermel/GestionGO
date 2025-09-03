@@ -227,7 +227,7 @@ export default function CustomersPage() {
             // Convierte la hoja a un array de arrays, ignorando encabezados.
             const rows: any[][] = xlsx.utils.sheet_to_json(worksheet, { header: 1 });
             
-            // Se salta la primera fila (encabezados) y se mapean los datos por posición.
+            // Se salta la primera fila (encabezados) y se mapean los datos por posición, asegurando que sean string.
             const dataToValidate = rows.slice(1).map(row => ({
                 code_customer: String(row[0] || ''), // Columna A
                 customer_name: String(row[1] || ''), // Columna B
