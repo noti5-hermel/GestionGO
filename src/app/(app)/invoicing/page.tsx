@@ -313,6 +313,11 @@ export default function InvoicingPage() {
                   return isNaN(date.getTime()) ? new Date().toISOString().split('T')[0] : date.toISOString().split('T')[0];
                 };
 
+                const getNumericValue = (value: any): number => {
+                    const num = parseFloat(String(value));
+                    return isNaN(num) ? 0 : num;
+                };
+
                 const code_customer = String(row[colIndices.code_customer]).trim();
                 if (!code_customer) return null;
 
@@ -330,11 +335,11 @@ export default function InvoicingPage() {
                     fecha: getDate(row[colIndices.transaction_date]),
                     customer_name: customer.customer_name,
                     tax_id_number: String(row[colIndices.tax_id_number]),
-                    subtotal: parseFloat(String(row[colIndices.subtotal] || 0)),
-                    total_sale: parseFloat(String(row[colIndices.total_sale] || 0)),
-                    grand_total: parseFloat(String(row[colIndices.grand_total] || 0)),
-                    payment: parseFloat(String(row[colIndices.payment] || 0)),
-                    net_to_pay: parseFloat(String(row[colIndices.net_to_pay] || 0)),
+                    subtotal: getNumericValue(row[colIndices.subtotal]),
+                    total_sale: getNumericValue(row[colIndices.total_sale]),
+                    grand_total: getNumericValue(row[colIndices.grand_total]),
+                    payment: getNumericValue(row[colIndices.payment]),
+                    net_to_pay: getNumericValue(row[colIndices.net_to_pay]),
                     ruta: String(customer.ruta),
                     term_description: term_description,
                     id_factura: String(row[colIndices.id_factura]),
