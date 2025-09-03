@@ -42,11 +42,11 @@ const invoiceSchema = z.object({
     (val) => String(val),
     z.string().min(1, "El NIF es requerido.")
   ),
-  subtotal: z.coerce.number().min(0, "Subtotal debe ser positivo."),
-  total_sale: z.coerce.number().min(0, "Venta total debe ser positivo."),
-  grand_total: z.coerce.number().min(0, "Total general debe ser positivo."),
-  payment: z.coerce.number().min(0, "El pago debe ser positivo."),
-  net_to_pay: z.coerce.number().min(0, "Neto a pagar debe ser positivo."),
+  subtotal: z.coerce.number(),
+  total_sale: z.coerce.number(),
+  grand_total: z.coerce.number(),
+  payment: z.coerce.number(),
+  net_to_pay: z.coerce.number(),
   term_description: z.string().min(1, "La descripción del término es requerida."),
   fecha: z.string().min(1, "La fecha es requerida."),
   state: z.preprocess(
