@@ -34,15 +34,15 @@ const customerSchema = z.object({
   customer_name: z.string().min(1, { message: "El nombre es requerido." }),
   id_impuesto: z.preprocess(
     (val) => (val === '' ? undefined : Number(val)),
-    z.number({ required_error: "El ID de impuesto es requerido.", invalid_type_error: "El ID de impuesto debe ser un número." })
+    z.number({ required_error: "El ID de impuesto es requerido.", invalid_type_error: "El ID de impuesto debe ser un número." }).optional().nullable()
   ),
   id_term: z.preprocess(
     (val) => (val === '' ? undefined : Number(val)),
-    z.number({ required_error: "El término de pago es requerido.", invalid_type_error: "El término de pago debe ser un número." })
+    z.number({ required_error: "El término de pago es requerido.", invalid_type_error: "El término de pago debe ser un número." }).optional().nullable()
   ),
   ruta: z.preprocess(
     (val) => (val === '' ? undefined : Number(val)),
-    z.number({ required_error: "La ruta es requerida.", invalid_type_error: "La ruta debe ser un número." })
+    z.number({ required_error: "La ruta es requerida.", invalid_type_error: "La ruta debe ser un número." }).optional().nullable()
   ),
 })
 
@@ -50,9 +50,9 @@ const customerSchema = z.object({
 type Customer = {
   code_customer: string;
   customer_name: string;
-  id_impuesto: number;
-  id_term: number;
-  ruta: number;
+  id_impuesto: number | null;
+  id_term: number | null;
+  ruta: number | null;
 }
 type PaymentTerm = { id_term: string | number; term_desc: string }
 type Tax = { id_impuesto: string | number; impt_desc: string }
@@ -97,9 +97,9 @@ export default function CustomersPage() {
     if (editingCustomer) {
       form.reset({
         ...editingCustomer,
-        id_impuesto: Number(editingCustomer.id_impuesto),
-        id_term: Number(editingCustomer.id_term),
-        ruta: Number(editingCustomer.ruta),
+        id_impuesto: editingCustomer.id_impuesto !== null ? Number(editingCustomer.id_impuesto) : undefined,
+        id_term: editingCustomer.id_term !== null ? Number(editingCustomer.id_term) : undefined,
+        ruta: editingCustomer.ruta !== null ? Number(editingCustomer.ruta) : undefined,
       });
     } else {
       form.reset({
@@ -240,13 +240,23 @@ export default function CustomersPage() {
             
             const dataToValidate = rows
               .slice(1) // Omitir la fila de encabezados
-              .map(row => ({
-                code_customer: String(row[0] || ''),
-                customer_name: String(row[1] || ''),
-                ruta: row[2] !== null && row[2] !== '' ? Number(row[2]) : undefined,
-                id_impuesto: row[3] !== null && row[3] !== '' ? Number(row[3]) : undefined,
-                id_term: row[4] !== null && row[4] !== '' ? Number(row[4]) : undefined,
-            }));
+              .map(row => {
+                  const parseNumberOrNull = (val: any): number | null => {
+                    if (val === null || val === '' || val === undefined || String(val).toUpperCase() === 'N/A') {
+                        return null;
+                    }
+                    const num = Number(val);
+                    return isNaN(num) ? null : num;
+                  };
+
+                  return {
+                    code_customer: String(row[0] || ''),
+                    customer_name: String(row[1] || ''),
+                    ruta: parseNumberOrNull(row[2]),
+                    id_impuesto: parseNumberOrNull(row[3]),
+                    id_term: parseNumberOrNull(row[4]),
+                  }
+              });
             
             const nonEmptyData = dataToValidate.filter(
               row => row.code_customer && row.customer_name
@@ -350,11 +360,13 @@ export default function CustomersPage() {
   }, [customers, filterRuta, filterTerm, filterTax]);
 
   // Funciones para obtener descripciones legibles a partir de IDs.
-  const getTaxDescription = (taxId: string | number) => {
+  const getTaxDescription = (taxId: string | number | null) => {
+    if (taxId === null) return 'N/A';
     return taxes.find(tax => String(tax.id_impuesto) === String(taxId))?.impt_desc || taxId;
   }
   
-  const getTermDescription = (termId: string | number) => {
+  const getTermDescription = (termId: string | number | null) => {
+    if (termId === null) return 'N/A';
       return paymentTerms.find(term => String(term.id_term) === String(termId))?.term_desc || termId;
   }
 
@@ -384,7 +396,7 @@ export default function CustomersPage() {
   };
   
   const uniqueRoutes = useMemo(() => {
-    const routes = new Set(customers.map(c => c.ruta));
+    const routes = new Set(customers.map(c => c.ruta).filter(r => r !== null));
     return Array.from(routes);
   }, [customers]);
 
@@ -532,7 +544,7 @@ export default function CustomersPage() {
                 </SelectTrigger>
                 <SelectContent>
                     {uniqueRoutes.map(ruta => (
-                        <SelectItem key={ruta} value={String(ruta)}>{ruta}</SelectItem>
+                        <SelectItem key={String(ruta)} value={String(ruta)}>{ruta}</SelectItem>
                     ))}
                 </SelectContent>
             </Select>
@@ -580,7 +592,7 @@ export default function CustomersPage() {
                 <TableRow key={customer.code_customer}>
                   <TableCell className="font-medium">{customer.code_customer}</TableCell>
                   <TableCell>{customer.customer_name}</TableCell>
-                  <TableCell>{customer.ruta}</TableCell>
+                  <TableCell>{customer.ruta ?? 'N/A'}</TableCell>
                   <TableCell>{getTaxDescription(customer.id_impuesto)}</TableCell>
                   <TableCell>{getTermDescription(customer.id_term)}</TableCell>
                   <TableCell>
@@ -660,7 +672,7 @@ export default function CustomersPage() {
                 variant="outline"
                 className="h-8 w-8 p-0"
                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
+                disabled={currentPage === totalPages || totalPages === 0}
             >
                 <span className="sr-only">Siguiente página</span>
                 <ChevronRight className="h-4 w-4" />
@@ -669,18 +681,16 @@ export default function CustomersPage() {
                 variant="outline"
                 className="h-8 w-8 p-0"
                 onClick={() => setCurrentPage(totalPages)}
-                disabled={currentPage === totalPages}
+                disabled={currentPage === totalPages || totalPages === 0}
             >
                 <span className="sr-only">Última página</span>
                 <ChevronsRight className="h-4 w-4" />
             </Button>
         </div>
         <div className="text-xs text-muted-foreground">
-          Página <strong>{currentPage}</strong> de <strong>{totalPages}</strong>
+          Página <strong>{currentPage}</strong> de <strong>{totalPages || 1}</strong>
         </div>
       </CardFooter>
     </Card>
   )
 }
-
-    
