@@ -157,9 +157,9 @@ export function ShipmentsTable({
                 <TableCell>{getUserName(shipment.id_motorista)}</TableCell>
                 <TableCell>{getUserName(shipment.id_auxiliar)}</TableCell>
                 <TableCell>{new Date(shipment.fecha_despacho).toLocaleDateString()}</TableCell>
-                <TableCell>${shipment.total_contado.toFixed(2)}</TableCell>
-                <TableCell>${shipment.total_credito.toFixed(2)}</TableCell>
-                <TableCell>${shipment.total_general.toFixed(2)}</TableCell>
+                <TableCell>${(shipment.total_contado ?? 0).toFixed(2)}</TableCell>
+                <TableCell>${(shipment.total_credito ?? 0).toFixed(2)}</TableCell>
+                <TableCell>${(shipment.total_general ?? 0).toFixed(2)}</TableCell>
                 <TableCell><StatusBadge checked={shipment.facturacion} /></TableCell>
                 <TableCell><StatusBadge checked={shipment.bodega} /></TableCell>
                 <TableCell><StatusBadge checked={shipment.reparto} /></TableCell>
