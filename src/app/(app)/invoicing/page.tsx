@@ -295,12 +295,12 @@ export default function InvoicingPage() {
               transaction_date: header.indexOf('transaction date'),
               tax_id_number: header.indexOf('tax id number'),
               subtotal: header.indexOf('subtotal'),
-              total_sale: header.indexOf('total sale'),
-              grand_total: header.indexOf('grand total') || header.indexOf('grant total'),
-              payment: header.indexOf('payment'),
+              total_sale: header.indexOf('total sales tax'),
+              grand_total: header.indexOf('grand total'),
+              payment: header.indexOf('payment total'),
               net_to_pay: header.indexOf('net to pay'),
-              id_factura: header.indexOf('id factura'),
-              code_customer: header.indexOf('codigo cliente')
+              id_factura: header.indexOf('your reference'),
+              code_customer: header.indexOf('code')
             };
 
             const customerMap = new Map(customers.map(c => [c.code_customer, c]));
@@ -807,5 +807,3 @@ export default function InvoicingPage() {
     </Card>
   )
 }
-
-    
