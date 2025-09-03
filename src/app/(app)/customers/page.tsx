@@ -32,7 +32,6 @@ import { useToast } from "@/hooks/use-toast"
 const customerSchema = z.object({
   code_customer: z.string().min(1, { message: "El código es requerido." }),
   customer_name: z.string().min(1, { message: "El nombre es requerido." }),
-  // Para la importación, se validará como número. Para el formulario, se maneja como string.
   id_impuesto: z.preprocess(
     (val) => (typeof val === 'string' && val.trim() !== '' ? Number(val) : val),
     z.number({ required_error: "El ID de impuesto es requerido.", invalid_type_error: "El ID de impuesto debe ser un número." })
@@ -41,7 +40,10 @@ const customerSchema = z.object({
     (val) => (typeof val === 'string' && val.trim() !== '' ? Number(val) : val),
     z.number({ required_error: "El término de pago es requerido.", invalid_type_error: "El término de pago debe ser un número." })
   ),
-  ruta: z.string().min(1, { message: "La ruta es requerida." }),
+  ruta: z.preprocess(
+    (val) => (typeof val === 'string' && val.trim() !== '' ? Number(val) : val),
+    z.number({ required_error: "La ruta es requerida.", invalid_type_error: "La ruta debe ser un número." })
+  ),
 })
 
 // Tipos de datos para la gestión de clientes.
@@ -70,7 +72,7 @@ export default function CustomersPage() {
       customer_name: "",
       id_impuesto: undefined,
       id_term: undefined,
-      ruta: "",
+      ruta: undefined,
     },
   })
 
@@ -88,7 +90,7 @@ export default function CustomersPage() {
         ...editingCustomer,
         id_impuesto: Number(editingCustomer.id_impuesto),
         id_term: Number(editingCustomer.id_term),
-        ruta: String(editingCustomer.ruta),
+        ruta: Number(editingCustomer.ruta),
       });
     } else {
       form.reset({
@@ -96,7 +98,7 @@ export default function CustomersPage() {
         customer_name: "",
         id_impuesto: undefined,
         id_term: undefined,
-        ruta: "",
+        ruta: undefined,
       });
     }
   }, [editingCustomer, form]);
@@ -232,7 +234,7 @@ export default function CustomersPage() {
             const dataToValidate = rows.slice(1).map(row => ({
                 code_customer: String(row[0] || ''),
                 customer_name: String(row[1] || ''),
-                ruta: String(row[2] || ''),
+                ruta: row[2] !== null && row[2] !== '' ? Number(row[2]) : undefined,
                 id_impuesto: row[3] !== null && row[3] !== '' ? Number(row[3]) : undefined,
                 id_term: row[4] !== null && row[4] !== '' ? Number(row[4]) : undefined,
             }));
@@ -399,7 +401,7 @@ export default function CustomersPage() {
                         <FormItem>
                           <FormLabel>Ruta</FormLabel>
                           <FormControl>
-                            <Input placeholder="Ej: Ruta 15" {...field} />
+                            <Input type="number" placeholder="Ej: 15" {...field} onChange={e => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -554,3 +556,5 @@ export default function CustomersPage() {
     </Card>
   )
 }
+
+    
