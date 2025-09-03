@@ -66,7 +66,7 @@ type Invoice = Omit<z.infer<typeof invoiceSchema>, 'state' | 'invoice_number' | 
   tax_id_number: string | number,
   ruta: string | number,
 }
-type Customer = { code_customer: string, customer_name: string, ruta: string, id_term: number }
+type Customer = { code_customer: string, customer_name: string, ruta: string | number, id_term: number }
 type PaymentTerm = { id_term: number, term_desc: string }
 
 // Opciones disponibles para el estado de la factura en el UI
@@ -280,45 +280,42 @@ export default function InvoicingPage() {
             const workbook = xlsx.read(data, { type: 'array', cellDates: true });
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
-            const json: any[] = xlsx.utils.sheet_to_json(worksheet, { header: 1, defval: "" }); // Leer como array de arrays
+            const json: any[] = xlsx.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
 
             if (json.length < 2) {
                 toast({ title: "Error", description: "El archivo Excel está vacío o no tiene datos.", variant: "destructive" });
                 return;
             }
 
-            const header = (json[0] as string[]).map(h => h.toLowerCase());
+            const header = (json[0] as string[]).map(h => h.toLowerCase().trim());
             const dataRows = json.slice(1);
             
-            // Indices de las columnas según el usuario
             const colIndices = {
               invoice_number: header.indexOf('invoice number'),
-              fecha: header.indexOf('transaction date'),
-              customer_name_excel: header.indexOf('customer name'),
+              transaction_date: header.indexOf('transaction date'),
               tax_id_number: header.indexOf('tax id number'),
               subtotal: header.indexOf('subtotal'),
               total_sale: header.indexOf('total sale'),
-              grand_total: header.indexOf('grant total'),
+              grand_total: header.indexOf('grand total') || header.indexOf('grant total'),
               payment: header.indexOf('payment'),
               net_to_pay: header.indexOf('net to pay'),
-              ruta_excel: header.indexOf('ruta'),
-              term_description_excel: header.indexOf('descripcion de termino'),
               id_factura: header.indexOf('id factura'),
               code_customer: header.indexOf('codigo cliente')
             };
-            
+
             const customerMap = new Map(customers.map(c => [c.code_customer, c]));
             const paymentTermMap = new Map(paymentTerms.map(pt => [pt.id_term, pt.term_desc]));
 
             const mappedDataPromises = dataRows.map(async (row) => {
                 const getDate = (dateValue: any) => {
                   if (!dateValue) return new Date().toISOString().split('T')[0];
-                  // Intenta parsear la fecha, si falla, devuelve la fecha actual.
                   const date = new Date(dateValue);
                   return isNaN(date.getTime()) ? new Date().toISOString().split('T')[0] : date.toISOString().split('T')[0];
                 };
 
                 const code_customer = String(row[colIndices.code_customer]);
+                if (!code_customer) return null;
+
                 const customer = customerMap.get(code_customer);
 
                 if (!customer) {
@@ -330,7 +327,7 @@ export default function InvoicingPage() {
 
                 return {
                     invoice_number: String(row[colIndices.invoice_number]),
-                    fecha: getDate(row[colIndices.fecha]),
+                    fecha: getDate(row[colIndices.transaction_date]),
                     customer_name: customer.customer_name,
                     tax_id_number: String(row[colIndices.tax_id_number]),
                     subtotal: parseFloat(String(row[colIndices.subtotal] || 0)),
@@ -342,46 +339,53 @@ export default function InvoicingPage() {
                     term_description: term_description,
                     id_factura: String(row[colIndices.id_factura]),
                     code_customer: code_customer,
-                    state: false, // Por defecto, las facturas importadas estarán pendientes
+                    state: false, 
                 };
             });
 
-            const mappedData = (await Promise.all(mappedDataPromises)).filter(d => d && d.id_factura); // Filtrar nulos y filas sin ID de factura
+            const mappedData = (await Promise.all(mappedDataPromises)).filter(d => d && d.id_factura);
 
             if(mappedData.length === 0) {
-              toast({ title: "Advertencia", description: "No se encontraron filas válidas para importar. Verifica los códigos de cliente.", variant: "destructive" });
+              toast({ title: "Advertencia", description: "No se encontraron filas válidas para importar. Verifica los códigos de cliente y los ID de factura.", variant: "destructive" });
+              if(event.target) event.target.value = '';
               return;
             }
 
             const validatedInvoices = z.array(invoiceSchema).safeParse(mappedData);
             
             if (!validatedInvoices.success) {
-                console.error("Error de validación Zod:", validatedInvoices.error.flatten().fieldErrors);
+                console.error("Error de validación Zod:", validatedInvoices.error.flatten());
+                const errorMessage = validatedInvoices.error.issues
+                    .map(issue => `Fila ${Number(issue.path[0]) + 2}: En columna '${issue.path[1]}', ${issue.message}`)
+                    .join(' | ');
+
                 toast({
                     title: "Error de validación",
-                    description: "Algunos datos del archivo Excel no son correctos o están incompletos. Revisa la consola para más detalles.",
-                    variant: "destructive"
+                    description: errorMessage || "Algunos datos del archivo Excel no son correctos o están incompletos.",
+                    variant: "destructive",
+                    duration: 9000,
                 });
+                if(event.target) event.target.value = '';
                 return;
             }
 
-            const { error: insertError } = await supabase.from('facturacion').insert(validatedInvoices.data);
+            const { error: insertError } = await supabase.from('facturacion').upsert(validatedInvoices.data, {
+              onConflict: 'id_factura'
+            });
 
             if (insertError) {
                 toast({ title: "Error al importar", description: insertError.message, variant: "destructive" });
             } else {
-                toast({ title: "Éxito", description: `${validatedInvoices.data.length} facturas importadas correctamente.` });
+                toast({ title: "Éxito", description: `${validatedInvoices.data.length} facturas importadas/actualizadas correctamente.` });
                 fetchInvoices();
             }
         } catch (error) {
             console.error("Error al procesar el archivo:", error);
             toast({ title: "Error", description: "No se pudo procesar el archivo Excel.", variant: "destructive" });
         }
+        if(event.target) event.target.value = '';
     };
     reader.readAsArrayBuffer(file);
-    
-    // Resetea el input para permitir seleccionar el mismo archivo de nuevo.
-    if(event.target) event.target.value = '';
   };
   
   const handleImportClick = () => {
@@ -422,7 +426,6 @@ export default function InvoicingPage() {
             <CardDescription>Cree y visualice facturas.</CardDescription>
           </div>
           <div className="flex gap-2">
-            {/* Botón para importar desde Excel */}
             <Button onClick={handleImportClick} variant="outline">
                 <Upload className="mr-2 h-4 w-4" /> Importar desde Excel
             </Button>
@@ -433,7 +436,6 @@ export default function InvoicingPage() {
                 className="hidden"
                 accept=".xlsx, .xls"
             />
-          {/* Diálogo para crear una nueva factura */}
           <Dialog open={isDialogOpen} onOpenChange={handleOpenDialog}>
             <DialogTrigger asChild>
               <Button onClick={() => { setEditingInvoice(null); form.reset(); setIsDialogOpen(true); }}>
@@ -447,7 +449,6 @@ export default function InvoicingPage() {
                   {editingInvoice ? 'Modifique los detalles de la factura.' : 'Complete todos los campos para generar una nueva factura.'}
                 </DialogDescription>
               </DialogHeader>
-              {/* Formulario de creación de factura */}
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
