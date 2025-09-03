@@ -314,6 +314,9 @@ export default function InvoicingPage() {
                 };
 
                 const getNumericValue = (value: any): number => {
+                    if (typeof value === 'string' && value.toUpperCase() === 'N/A') {
+                        return 0;
+                    }
                     const num = parseFloat(String(value));
                     return isNaN(num) ? 0 : num;
                 };
@@ -812,3 +815,5 @@ export default function InvoicingPage() {
     </Card>
   )
 }
+
+    
