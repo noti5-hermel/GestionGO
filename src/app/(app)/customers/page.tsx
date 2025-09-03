@@ -24,7 +24,7 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { PlusCircle, Trash2, Pencil, Upload, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from "lucide-react"
+import { PlusCircle, Trash2, Pencil, Upload, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, FilterX } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 
@@ -47,7 +47,13 @@ const customerSchema = z.object({
 })
 
 // Tipos de datos para la gestión de clientes.
-type Customer = z.infer<typeof customerSchema> & { id_term: string | number, id_impuesto: string | number, ruta: string | number }
+type Customer = {
+  code_customer: string;
+  customer_name: string;
+  id_impuesto: number;
+  id_term: number;
+  ruta: number;
+}
 type PaymentTerm = { id_term: string | number; term_desc: string }
 type Tax = { id_impuesto: string | number; impt_desc: string }
 
@@ -63,6 +69,9 @@ export default function CustomersPage() {
   const { toast } = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [filterRuta, setFilterRuta] = useState('');
+  const [filterTerm, setFilterTerm] = useState('');
+  const [filterTax, setFilterTax] = useState('');
 
   // Configuración del formulario con react-hook-form y Zod.
   const form = useForm<z.infer<typeof customerSchema>>({
@@ -229,7 +238,9 @@ export default function CustomersPage() {
             
             const rows: any[][] = xlsx.utils.sheet_to_json(worksheet, { header: 1 });
             
-            const dataToValidate = rows.slice(1).map(row => ({
+            const dataToValidate = rows
+              .slice(1) // Omitir la fila de encabezados
+              .map(row => ({
                 code_customer: String(row[0] || ''),
                 customer_name: String(row[1] || ''),
                 ruta: row[2] !== null && row[2] !== '' ? Number(row[2]) : undefined,
@@ -314,6 +325,29 @@ export default function CustomersPage() {
       setEditingCustomer(null);
     }
   };
+  
+  const clearFilters = () => {
+    setFilterRuta('');
+    setFilterTerm('');
+    setFilterTax('');
+    setCurrentPage(1);
+  };
+  
+  const filteredCustomers = useMemo(() => {
+    let filtered = customers;
+
+    if (filterRuta) {
+      filtered = filtered.filter(customer => String(customer.ruta) === filterRuta);
+    }
+    if (filterTerm) {
+      filtered = filtered.filter(customer => String(customer.id_term) === filterTerm);
+    }
+    if (filterTax) {
+      filtered = filtered.filter(customer => String(customer.id_impuesto) === filterTax);
+    }
+
+    return filtered;
+  }, [customers, filterRuta, filterTerm, filterTax]);
 
   // Funciones para obtener descripciones legibles a partir de IDs.
   const getTaxDescription = (taxId: string | number) => {
@@ -324,8 +358,8 @@ export default function CustomersPage() {
       return paymentTerms.find(term => String(term.id_term) === String(termId))?.term_desc || termId;
   }
 
-  const totalPages = Math.ceil(customers.length / ITEMS_PER_PAGE);
-  const paginatedCustomers = customers.slice(
+  const totalPages = Math.ceil(filteredCustomers.length / ITEMS_PER_PAGE);
+  const paginatedCustomers = filteredCustomers.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
@@ -348,6 +382,11 @@ export default function CustomersPage() {
     }
     return pages;
   };
+  
+  const uniqueRoutes = useMemo(() => {
+    const routes = new Set(customers.map(c => c.ruta));
+    return Array.from(routes);
+  }, [customers]);
 
   return (
     <Card className="h-full flex flex-col">
@@ -357,9 +396,9 @@ export default function CustomersPage() {
             <CardTitle>Clientes</CardTitle>
             <CardDescription>Gestione su base de clientes.</CardDescription>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button onClick={handleImportClick} variant="outline">
-                <Upload className="mr-2 h-4 w-4" /> Importar desde Excel
+                <Upload className="mr-2 h-4 w-4" /> Importar
             </Button>
             <input
                 type="file"
@@ -486,6 +525,42 @@ export default function CustomersPage() {
             </Dialog>
           </div>
         </div>
+        <div className="flex flex-wrap items-center gap-2 mt-4">
+            <Select value={filterRuta} onValueChange={setFilterRuta}>
+                <SelectTrigger className="w-full sm:w-[180px]">
+                    <SelectValue placeholder="Filtrar por Ruta" />
+                </SelectTrigger>
+                <SelectContent>
+                    {uniqueRoutes.map(ruta => (
+                        <SelectItem key={ruta} value={String(ruta)}>{ruta}</SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+            <Select value={filterTerm} onValueChange={setFilterTerm}>
+                <SelectTrigger className="w-full sm:w-[180px]">
+                    <SelectValue placeholder="Filtrar por Término" />
+                </SelectTrigger>
+                <SelectContent>
+                    {paymentTerms.map(term => (
+                        <SelectItem key={String(term.id_term)} value={String(term.id_term)}>{term.term_desc}</SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+            <Select value={filterTax} onValueChange={setFilterTax}>
+                <SelectTrigger className="w-full sm:w-[180px]">
+                    <SelectValue placeholder="Filtrar por Impuesto" />
+                </SelectTrigger>
+                <SelectContent>
+                    {taxes.map(tax => (
+                        <SelectItem key={String(tax.id_impuesto)} value={String(tax.id_impuesto)}>{tax.impt_desc}</SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+            <Button variant="ghost" onClick={clearFilters} className="text-sm">
+                <FilterX className="mr-2 h-4 w-4"/>
+                Limpiar Filtros
+            </Button>
+        </div>
       </CardHeader>
       <CardContent className="flex-1 overflow-auto">
         <div className="relative w-full overflow-auto">
@@ -544,7 +619,7 @@ export default function CustomersPage() {
       </CardContent>
       <CardFooter className="pt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
         <div className="text-xs text-muted-foreground">
-          Mostrando <strong>{paginatedCustomers.length}</strong> de <strong>{customers.length}</strong> clientes.
+          Mostrando <strong>{paginatedCustomers.length}</strong> de <strong>{filteredCustomers.length}</strong> clientes.
         </div>
         <div className="flex items-center space-x-2">
             <Button
