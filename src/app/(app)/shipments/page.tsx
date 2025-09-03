@@ -4,7 +4,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { PlusCircle } from "lucide-react"
+import { PlusCircle, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { useShipments } from "@/hooks/use-shipments"
 import { ShipmentsTable } from "./_components/shipments-table"
@@ -46,6 +46,25 @@ export default function ShipmentsPage() {
   } = useShipments({ itemsPerPage: ITEMS_PER_PAGE });
 
   const showReviewFilters = reviewRole && !isMotoristaOrAuxiliar;
+
+  const getPaginationNumbers = () => {
+    const pages = [];
+    const totalVisiblePages = 5;
+    if (totalPages <= totalVisiblePages) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      if (currentPage <= 3) {
+        pages.push(1, 2, 3, 4, '...', totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+      } else {
+        pages.push(1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages);
+      }
+    }
+    return pages;
+  };
 
   return (
     <Card className="h-full flex flex-col">
@@ -96,30 +115,66 @@ export default function ShipmentsPage() {
           users={users}
         />
       </CardContent>
-      <CardFooter className="pt-6 flex justify-between items-center">
+      <CardFooter className="pt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
         <div className="text-xs text-muted-foreground">
-          Página <strong>{currentPage}</strong> de <strong>{totalPages}</strong>
+          Mostrando <strong>{paginatedShipments.length}</strong> de <strong>{filteredShipments.length}</strong> despachos.
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center space-x-2">
             <Button
                 variant="outline"
-                size="sm"
+                className="h-8 w-8 p-0"
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+            >
+                <span className="sr-only">Primera página</span>
+                <ChevronsLeft className="h-4 w-4" />
+            </Button>
+            <Button
+                variant="outline"
+                className="h-8 w-8 p-0"
                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
             >
-                Anterior
+                <span className="sr-only">Página anterior</span>
+                <ChevronLeft className="h-4 w-4" />
             </Button>
+            <div className="flex items-center gap-2">
+                {getPaginationNumbers().map((page, index) =>
+                    typeof page === 'number' ? (
+                        <Button
+                            key={index}
+                            variant={currentPage === page ? 'default' : 'outline'}
+                            className="h-8 w-8 p-0"
+                            onClick={() => setCurrentPage(page)}
+                        >
+                            {page}
+                        </Button>
+                    ) : (
+                        <span key={index} className="px-1.5">...</span>
+                    )
+                )}
+            </div>
             <Button
                 variant="outline"
-                size="sm"
+                className="h-8 w-8 p-0"
                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                 disabled={currentPage === totalPages}
             >
-                Siguiente
+                <span className="sr-only">Siguiente página</span>
+                <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button
+                variant="outline"
+                className="h-8 w-8 p-0"
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+            >
+                <span className="sr-only">Última página</span>
+                <ChevronsRight className="h-4 w-4" />
             </Button>
         </div>
         <div className="text-xs text-muted-foreground">
-          Mostrando <strong>{paginatedShipments.length}</strong> de <strong>{filteredShipments.length}</strong> despachos.
+          Página <strong>{currentPage}</strong> de <strong>{totalPages}</strong>
         </div>
       </CardFooter>
 
@@ -140,3 +195,5 @@ export default function ShipmentsPage() {
     </Card>
   )
 }
+
+    

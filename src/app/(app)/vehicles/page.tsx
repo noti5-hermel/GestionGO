@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { PlusCircle, Trash2, Pencil } from "lucide-react"
+import { PlusCircle, Trash2, Pencil, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 
@@ -169,6 +169,25 @@ export default function VehiclesPage() {
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
+  
+  const getPaginationNumbers = () => {
+    const pages = [];
+    const totalVisiblePages = 5;
+    if (totalPages <= totalVisiblePages) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      if (currentPage <= 3) {
+        pages.push(1, 2, 3, 4, '...', totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+      } else {
+        pages.push(1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages);
+      }
+    }
+    return pages;
+  };
 
   return (
     <Card className="h-full flex flex-col">
@@ -280,32 +299,70 @@ export default function VehiclesPage() {
           </Table>
         </div>
       </CardContent>
-      <CardFooter className="pt-6 flex justify-between items-center">
+      <CardFooter className="pt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
         <div className="text-xs text-muted-foreground">
-          Página <strong>{currentPage}</strong> de <strong>{totalPages}</strong>
+          Mostrando <strong>{paginatedVehicles.length}</strong> de <strong>{vehicles.length}</strong> vehículos.
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center space-x-2">
             <Button
                 variant="outline"
-                size="sm"
+                className="h-8 w-8 p-0"
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+            >
+                <span className="sr-only">Primera página</span>
+                <ChevronsLeft className="h-4 w-4" />
+            </Button>
+            <Button
+                variant="outline"
+                className="h-8 w-8 p-0"
                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
             >
-                Anterior
+                <span className="sr-only">Página anterior</span>
+                <ChevronLeft className="h-4 w-4" />
             </Button>
+            <div className="flex items-center gap-2">
+                {getPaginationNumbers().map((page, index) =>
+                    typeof page === 'number' ? (
+                        <Button
+                            key={index}
+                            variant={currentPage === page ? 'default' : 'outline'}
+                            className="h-8 w-8 p-0"
+                            onClick={() => setCurrentPage(page)}
+                        >
+                            {page}
+                        </Button>
+                    ) : (
+                        <span key={index} className="px-1.5">...</span>
+                    )
+                )}
+            </div>
             <Button
                 variant="outline"
-                size="sm"
+                className="h-8 w-8 p-0"
                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                 disabled={currentPage === totalPages}
             >
-                Siguiente
+                <span className="sr-only">Siguiente página</span>
+                <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button
+                variant="outline"
+                className="h-8 w-8 p-0"
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+            >
+                <span className="sr-only">Última página</span>
+                <ChevronsRight className="h-4 w-4" />
             </Button>
         </div>
         <div className="text-xs text-muted-foreground">
-          Mostrando <strong>{paginatedVehicles.length}</strong> de <strong>{vehicles.length}</strong> vehículos.
+          Página <strong>{currentPage}</strong> de <strong>{totalPages}</strong>
         </div>
       </CardFooter>
     </Card>
   )
 }
+
+    

@@ -1,7 +1,7 @@
 
 'use client'
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -24,7 +24,7 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { PlusCircle, Trash2, Pencil, Upload } from "lucide-react"
+import { PlusCircle, Trash2, Pencil, Upload, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 
@@ -33,15 +33,15 @@ const customerSchema = z.object({
   code_customer: z.string().min(1, { message: "El código es requerido." }),
   customer_name: z.string().min(1, { message: "El nombre es requerido." }),
   id_impuesto: z.preprocess(
-    (val) => (typeof val === 'string' && val.trim() !== '' ? Number(val) : val),
+    (val) => (val === '' ? undefined : Number(val)),
     z.number({ required_error: "El ID de impuesto es requerido.", invalid_type_error: "El ID de impuesto debe ser un número." })
   ),
   id_term: z.preprocess(
-    (val) => (typeof val === 'string' && val.trim() !== '' ? Number(val) : val),
+    (val) => (val === '' ? undefined : Number(val)),
     z.number({ required_error: "El término de pago es requerido.", invalid_type_error: "El término de pago debe ser un número." })
   ),
   ruta: z.preprocess(
-    (val) => (typeof val === 'string' && val.trim() !== '' ? Number(val) : val),
+    (val) => (val === '' ? undefined : Number(val)),
     z.number({ required_error: "La ruta es requerida.", invalid_type_error: "La ruta debe ser un número." })
   ),
 })
@@ -227,10 +227,8 @@ export default function CustomersPage() {
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
             
-            // Convierte la hoja a un array de arrays, ignorando encabezados.
             const rows: any[][] = xlsx.utils.sheet_to_json(worksheet, { header: 1 });
             
-            // Se salta la primera fila (encabezados) y se mapean los datos por posición, convirtiendo a los tipos correctos.
             const dataToValidate = rows.slice(1).map(row => ({
                 code_customer: String(row[0] || ''),
                 customer_name: String(row[1] || ''),
@@ -239,7 +237,6 @@ export default function CustomersPage() {
                 id_term: row[4] !== null && row[4] !== '' ? Number(row[4]) : undefined,
             }));
             
-            // Filtra las filas que puedan estar completamente vacías para evitar errores.
             const nonEmptyData = dataToValidate.filter(
               row => row.code_customer && row.customer_name
             );
@@ -280,7 +277,6 @@ export default function CustomersPage() {
               return;
             }
             
-            // Usamos 'upsert' para insertar nuevos clientes o actualizar los existentes basados en 'code_customer'.
             const { error: upsertError } = await supabase.from('customer').upsert(validatedCustomers.data, {
               onConflict: 'code_customer' 
             });
@@ -333,6 +329,25 @@ export default function CustomersPage() {
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
+  
+  const getPaginationNumbers = () => {
+    const pages = [];
+    const totalVisiblePages = 5;
+    if (totalPages <= totalVisiblePages) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      if (currentPage <= 3) {
+        pages.push(1, 2, 3, 4, '...', totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+      } else {
+        pages.push(1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages);
+      }
+    }
+    return pages;
+  };
 
   return (
     <Card className="h-full flex flex-col">
@@ -527,30 +542,66 @@ export default function CustomersPage() {
           </Table>
         </div>
       </CardContent>
-      <CardFooter className="pt-6 flex justify-between items-center">
+      <CardFooter className="pt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
         <div className="text-xs text-muted-foreground">
-          Página <strong>{currentPage}</strong> de <strong>{totalPages}</strong>
+          Mostrando <strong>{paginatedCustomers.length}</strong> de <strong>{customers.length}</strong> clientes.
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center space-x-2">
             <Button
                 variant="outline"
-                size="sm"
+                className="h-8 w-8 p-0"
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+            >
+                <span className="sr-only">Primera página</span>
+                <ChevronsLeft className="h-4 w-4" />
+            </Button>
+            <Button
+                variant="outline"
+                className="h-8 w-8 p-0"
                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
             >
-                Anterior
+                <span className="sr-only">Página anterior</span>
+                <ChevronLeft className="h-4 w-4" />
             </Button>
+            <div className="flex items-center gap-2">
+                {getPaginationNumbers().map((page, index) =>
+                    typeof page === 'number' ? (
+                        <Button
+                            key={index}
+                            variant={currentPage === page ? 'default' : 'outline'}
+                            className="h-8 w-8 p-0"
+                            onClick={() => setCurrentPage(page)}
+                        >
+                            {page}
+                        </Button>
+                    ) : (
+                        <span key={index} className="px-1.5">...</span>
+                    )
+                )}
+            </div>
             <Button
                 variant="outline"
-                size="sm"
+                className="h-8 w-8 p-0"
                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                 disabled={currentPage === totalPages}
             >
-                Siguiente
+                <span className="sr-only">Siguiente página</span>
+                <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button
+                variant="outline"
+                className="h-8 w-8 p-0"
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+            >
+                <span className="sr-only">Última página</span>
+                <ChevronsRight className="h-4 w-4" />
             </Button>
         </div>
         <div className="text-xs text-muted-foreground">
-          Mostrando <strong>{paginatedCustomers.length}</strong> de <strong>{customers.length}</strong> clientes.
+          Página <strong>{currentPage}</strong> de <strong>{totalPages}</strong>
         </div>
       </CardFooter>
     </Card>
