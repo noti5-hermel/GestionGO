@@ -355,14 +355,17 @@ export default function InvoicingPage() {
             });
 
             const mappedData = (await Promise.all(mappedDataPromises)).filter(d => d && d.id_factura);
+            
+            // Filtra los duplicados basándose en id_factura.
+            const uniqueMappedData = Array.from(new Map(mappedData.map(item => [item.id_factura, item])).values());
 
-            if(mappedData.length === 0) {
-              toast({ title: "Advertencia", description: "No se encontraron filas válidas para importar. Verifica los códigos de cliente y los ID de factura.", variant: "destructive" });
+            if(uniqueMappedData.length === 0) {
+              toast({ title: "Advertencia", description: "No se encontraron filas válidas o únicas para importar. Verifica los códigos de cliente y los ID de factura.", variant: "destructive" });
               if(event.target) event.target.value = '';
               return;
             }
 
-            const validatedInvoices = z.array(invoiceSchema).safeParse(mappedData);
+            const validatedInvoices = z.array(invoiceSchema).safeParse(uniqueMappedData);
             
             if (!validatedInvoices.success) {
                 console.error("Error de validación Zod:", validatedInvoices.error.flatten());
