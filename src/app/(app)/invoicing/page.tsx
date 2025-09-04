@@ -332,12 +332,15 @@ export default function InvoicingPage() {
                 }
 
                 const term_description = paymentTermMap.get(customer.id_term) || "";
+                
+                const taxIdValue = String(row[colIndices.tax_id_number]).trim();
+
 
                 return {
                     invoice_number: String(row[colIndices.invoice_number]),
                     fecha: getDate(row[colIndices.transaction_date]),
                     customer_name: customer.customer_name,
-                    tax_id_number: String(row[colIndices.tax_id_number]),
+                    tax_id_number: (taxIdValue.toUpperCase() === 'N/A' || taxIdValue === '') ? '0' : taxIdValue,
                     subtotal: getNumericValue(row[colIndices.subtotal]),
                     total_sale: getNumericValue(row[colIndices.total_sale]),
                     grand_total: getNumericValue(row[colIndices.grand_total]),
@@ -793,7 +796,7 @@ export default function InvoicingPage() {
                 variant="outline"
                 className="h-8 w-8 p-0"
                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
+                disabled={currentPage === totalPages || totalPages === 0}
             >
                 <span className="sr-only">Siguiente página</span>
                 <ChevronRight className="h-4 w-4" />
@@ -802,14 +805,14 @@ export default function InvoicingPage() {
                 variant="outline"
                 className="h-8 w-8 p-0"
                 onClick={() => setCurrentPage(totalPages)}
-                disabled={currentPage === totalPages}
+                disabled={currentPage === totalPages || totalPages === 0}
             >
                 <span className="sr-only">Última página</span>
                 <ChevronsRight className="h-4 w-4" />
             </Button>
         </div>
         <div className="text-xs text-muted-foreground">
-          Página <strong>{currentPage}</strong> de <strong>{totalPages}</strong>
+          Página <strong>{currentPage}</strong> de <strong>{totalPages || 1}</strong>
         </div>
       </CardFooter>
     </Card>
