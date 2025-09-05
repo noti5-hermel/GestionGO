@@ -30,7 +30,15 @@ import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 import { Label } from "@/components/ui/label"
 
-// Esquema de validación para la factura usando Zod
+/**
+ * @file invoicing/page.tsx
+ * @description Página para la gestión completa (CRUD) de facturas.
+ * Permite crear, editar, eliminar, buscar y filtrar facturas.
+ * Incluye importación masiva desde Excel y paginación del lado del servidor para un rendimiento óptimo.
+ */
+
+// Esquema de validación para la factura usando Zod.
+// Se ajusta a la nueva estructura de la base de datos.
 const invoiceSchema = z.object({
   id_factura: z.preprocess(
     (val) => String(val),
@@ -63,7 +71,7 @@ const invoiceSchema = z.object({
   ),
 })
 
-// Tipo inferido del esquema de Zod. 'state' en la BD es booleano.
+// Tipos de datos para la gestión de facturas.
 type Invoice = Omit<z.infer<typeof invoiceSchema>, 'state' | 'id_factura' | 'reference_number' | 'tax_id_number' | 'ruta'> & { 
   state: boolean,
   id_factura: string | number,
@@ -74,11 +82,16 @@ type Invoice = Omit<z.infer<typeof invoiceSchema>, 'state' | 'id_factura' | 'ref
 type Customer = { code_customer: string, customer_name: string, ruta: string | number, id_term: number }
 type PaymentTerm = { id_term: number, term_desc: string }
 
-// Opciones disponibles para el estado de la factura en el UI
+// Opciones estáticas para la interfaz de usuario.
 const statusOptions = ["Pagada", "Pendiente"]
 const ITEMS_PER_PAGE = 10;
 
+/**
+ * Componente principal de la página de facturación.
+ * Gestiona el estado, la lógica de negocio y la renderización de la interfaz.
+ */
 export default function InvoicingPage() {
+  // --- ESTADOS ---
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [paymentTerms, setPaymentTerms] = useState<PaymentTerm[]>([])
@@ -86,12 +99,15 @@ export default function InvoicingPage() {
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null)
   const { toast } = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // --- ESTADOS DE FILTRADO Y PAGINACIÓN ---
   const [currentPage, setCurrentPage] = useState(1);
   const [totalInvoices, setTotalInvoices] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDate, setFilterDate] = useState('');
 
-  // Configuración del formulario con react-hook-form y Zod
+  // --- FORMULARIO ---
+  // Configuración del formulario con react-hook-form y Zod.
   const form = useForm<z.infer<typeof invoiceSchema>>({
     resolver: zodResolver(invoiceSchema),
     defaultValues: {
@@ -106,12 +122,18 @@ export default function InvoicingPage() {
       payment: 0,
       net_to_pay: 0,
       term_description: "",
-      fecha: new Date().toISOString().split('T')[0], // Establece la fecha actual por defecto
+      fecha: new Date().toISOString().split('T')[0], // Fecha actual por defecto.
       state: false,
       ruta: "",
     },
   })
 
+  // --- LÓGICA DE DATOS ---
+
+  /**
+   * Obtiene la lista de facturas desde Supabase aplicando paginación y filtros del lado del servidor.
+   * Se ejecuta cada vez que cambia la página, la búsqueda o el filtro de fecha.
+   */
   const fetchInvoices = useCallback(async () => {
     const from = (currentPage - 1) * ITEMS_PER_PAGE;
     const to = from + ITEMS_PER_PAGE - 1;
@@ -120,15 +142,17 @@ export default function InvoicingPage() {
       .from('facturacion')
       .select('*', { count: 'exact' });
 
+    // Aplica el filtro de búsqueda. Se convierte 'id_factura' a texto para poder usar 'ilike'.
     if (searchQuery) {
-      // La columna 'invoice_number' se convierte a texto para poder usar 'ilike'
       query = query.or(`id_factura::text.ilike.%${searchQuery}%,reference_number.ilike.%${searchQuery}%,code_customer.ilike.%${searchQuery}%`);
     }
 
+    // Aplica el filtro de fecha.
     if (filterDate) {
       query = query.eq('fecha', filterDate);
     }
     
+    // Aplica el rango de paginación y ordena por fecha descendente.
     query = query.range(from, to).order('fecha', { ascending: false });
 
     const { data, error, count } = await query;
@@ -136,19 +160,28 @@ export default function InvoicingPage() {
       toast({ title: "Error", description: "No se pudieron cargar las facturas.", variant: "destructive" });
     } else {
       setInvoices(data as Invoice[]);
-      setTotalInvoices(count ?? 0);
+      setTotalInvoices(count ?? 0); // Actualiza el conteo total para la paginación.
     }
   }, [currentPage, searchQuery, filterDate, toast]);
   
+  /**
+   * Efecto para cargar los datos estáticos (clientes, términos de pago) al montar el componente.
+   */
   useEffect(() => {
     fetchCustomers()
     fetchPaymentTerms()
   }, [])
   
+  /**
+   * Efecto para obtener las facturas cada vez que los filtros o la página cambian.
+   */
   useEffect(() => {
     fetchInvoices();
   }, [fetchInvoices]);
   
+  /**
+   * Efecto que resetea el formulario y lo rellena si se está editando una factura.
+   */
   useEffect(() => {
     if (editingInvoice) {
       form.reset({
@@ -180,6 +213,7 @@ export default function InvoicingPage() {
     }
   }, [editingInvoice, form]);
 
+  /** Obtiene la lista completa de clientes para el selector del formulario. */
   const fetchCustomers = async () => {
     const { data, error } = await supabase.from('customer').select('code_customer, customer_name, ruta, id_term')
     if (error) {
@@ -189,6 +223,7 @@ export default function InvoicingPage() {
     }
   }
   
+  /** Obtiene la lista de términos de pago para el formulario. */
   const fetchPaymentTerms = async () => {
     const { data, error } = await supabase.from('terminos_pago').select('id_term, term_desc')
     if (error) {
@@ -198,21 +233,23 @@ export default function InvoicingPage() {
     }
   }
 
-  // Función para manejar el envío del formulario
+  /**
+   * Gestiona el envío del formulario para crear o actualizar una factura.
+   * @param values Los datos del formulario validados por Zod.
+   */
   const onSubmit = async (values: z.infer<typeof invoiceSchema>) => {
     let error;
-
-    const dataToSubmit = {
-        ...values
-    };
+    const dataToSubmit = { ...values };
 
     if (editingInvoice) {
+      // Actualiza una factura existente.
       const { error: updateError } = await supabase
         .from('facturacion')
         .update(dataToSubmit)
         .eq('id_factura', editingInvoice.id_factura)
       error = updateError;
     } else {
+      // Inserta una nueva factura.
       const { error: insertError } = await supabase
         .from('facturacion')
         .insert([dataToSubmit])
@@ -228,6 +265,10 @@ export default function InvoicingPage() {
     }
   }
   
+  /**
+   * Elimina una factura de la base de datos.
+   * @param invoiceId El ID de la factura a eliminar.
+   */
   const handleDelete = async (invoiceId: string) => {
     const { error } = await supabase
       .from('facturacion')
@@ -254,52 +295,11 @@ export default function InvoicingPage() {
     }
   }
 
-  const handleEdit = (invoice: Invoice) => {
-    setEditingInvoice(invoice);
-    setIsDialogOpen(true);
-  }
-
-  const handleOpenDialog = (open: boolean) => {
-    setIsDialogOpen(open);
-    if (!open) {
-      setEditingInvoice(null);
-    }
-  };
-  
-  const handleCloseDialog = () => {
-    setEditingInvoice(null);
-    form.reset();
-    setIsDialogOpen(false);
-  }
-
-  const handleCustomerChange = (code: string) => {
-    const customer = customers.find(c => c.code_customer === code);
-    if (customer) {
-      form.setValue('customer_name', customer.customer_name);
-      form.setValue('ruta', String(customer.ruta || ''));
-      const term = paymentTerms.find(t => t.id_term === customer.id_term);
-      if (term) {
-        form.setValue('term_description', term.term_desc);
-      }
-    }
-  }
-
-  const getStatusLabel = (status: boolean): "Pagada" | "Pendiente" => {
-    return status ? "Pagada" : "Pendiente";
-  };
-
-  // Función para obtener la variante del Badge según el estado
-  const getBadgeVariant = (status: "Pagada" | "Pendiente") => {
-    switch (status) {
-      case "Pagada":
-        return "default"
-      case "Pendiente":
-        return "secondary"
-      default:
-        return "outline"
-    }
-  }
-  
+  /**
+   * Procesa un archivo Excel para importar facturas masivamente.
+   * Realiza una búsqueda individual de cada cliente para ser más eficiente.
+   * @param event El evento del cambio del input de archivo.
+   */
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -307,6 +307,7 @@ export default function InvoicingPage() {
     const reader = new FileReader();
     reader.onload = async (e) => {
         try {
+            // Lee y parsea el archivo Excel.
             const data = new Uint8Array(e.target?.result as ArrayBuffer);
             const workbook = xlsx.read(data, { type: 'array', cellDates: true });
             const sheetName = workbook.SheetNames[0];
@@ -321,9 +322,10 @@ export default function InvoicingPage() {
             const header = (json[0] as string[]).map(h => h.toLowerCase().trim());
             const dataRows = json.slice(1);
             
+            // Mapea los nombres de las columnas del Excel a los campos de la base de datos.
             const colIndices = {
-              id_factura: header.indexOf('invoice number'), // Mapea 'invoice number' a id_factura
-              reference_number: header.indexOf('your reference'), // Mapea 'your reference' a reference_number
+              id_factura: header.indexOf('invoice number'),
+              reference_number: header.indexOf('your reference'),
               transaction_date: header.indexOf('transaction date'),
               tax_id_number: header.indexOf('tax id number'),
               subtotal: header.indexOf('subtotal'),
@@ -336,6 +338,7 @@ export default function InvoicingPage() {
               
             const paymentTermMap = new Map(paymentTerms.map(pt => [pt.id_term, pt.term_desc]));
 
+            // Procesa cada fila del Excel de forma asíncrona.
             const mappedDataPromises = dataRows.map(async (row) => {
                 const getDate = (dateValue: any) => {
                   if (!dateValue) return new Date().toISOString().split('T')[0];
@@ -345,16 +348,16 @@ export default function InvoicingPage() {
 
                 const getNumericValue = (value: any): number => {
                     const strValue = String(value).toUpperCase();
-                    if (strValue === 'N/A' || strValue.trim() === '') {
-                        return 0;
-                    }
+                    if (strValue === 'N/A' || strValue.trim() === '') return 0;
                     const num = parseFloat(String(value));
                     return isNaN(num) ? 0 : num;
                 };
 
+                // Limpia el código de cliente de espacios en blanco.
                 const code_customer = String(row[colIndices.code_customer]).trim();
                 if (!code_customer) return null;
 
+                // Realiza una consulta individual por cada cliente para ser más eficiente.
                 const { data: customer, error: customerError } = await supabase
                     .from('customer')
                     .select('customer_name, ruta, id_term')
@@ -369,6 +372,7 @@ export default function InvoicingPage() {
                 const term_description = paymentTermMap.get(customer.id_term) || "";
                 const taxIdValue = String(row[colIndices.tax_id_number]).trim();
 
+                // Construye el objeto de la factura a insertar/actualizar.
                 return {
                     id_factura: String(row[colIndices.id_factura]),
                     reference_number: String(row[colIndices.reference_number]),
@@ -387,7 +391,9 @@ export default function InvoicingPage() {
                 };
             });
 
+            // Espera a que todas las búsquedas de clientes terminen y filtra los resultados nulos.
             const mappedData = (await Promise.all(mappedDataPromises)).filter(d => d && d.id_factura);
+            // Asegura que no haya facturas duplicadas en el archivo Excel.
             const uniqueMappedData = Array.from(new Map(mappedData.map(item => [item.id_factura, item])).values());
 
             if(uniqueMappedData.length === 0) {
@@ -395,7 +401,8 @@ export default function InvoicingPage() {
               if(event.target) event.target.value = '';
               return;
             }
-
+            
+            // Valida los datos finales con Zod.
             const validatedInvoices = z.array(invoiceSchema).safeParse(uniqueMappedData);
             
             if (!validatedInvoices.success) {
@@ -414,6 +421,7 @@ export default function InvoicingPage() {
                 return;
             }
 
+            // Sube los datos a Supabase usando 'upsert'.
             const { error: insertError } = await supabase.from('facturacion').upsert(validatedInvoices.data, {
               onConflict: 'id_factura'
             });
@@ -433,10 +441,68 @@ export default function InvoicingPage() {
     reader.readAsArrayBuffer(file);
   };
   
+  // --- FUNCIONES AUXILIARES DE LA UI ---
+
+  /** Prepara el formulario para editar una factura. */
+  const handleEdit = (invoice: Invoice) => {
+    setEditingInvoice(invoice);
+    setIsDialogOpen(true);
+  }
+
+  /** Controla la apertura y cierre del diálogo, reseteando el estado de edición. */
+  const handleOpenDialog = (open: boolean) => {
+    setIsDialogOpen(open);
+    if (!open) {
+      setEditingInvoice(null);
+    }
+  };
+  
+  /** Cierra el diálogo de edición/creación y resetea el formulario. */
+  const handleCloseDialog = () => {
+    setEditingInvoice(null);
+    form.reset();
+    setIsDialogOpen(false);
+  }
+
+  /**
+   * Actualiza los campos del formulario cuando se selecciona un cliente.
+   * @param code El código del cliente seleccionado.
+   */
+  const handleCustomerChange = (code: string) => {
+    const customer = customers.find(c => c.code_customer === code);
+    if (customer) {
+      form.setValue('customer_name', customer.customer_name);
+      form.setValue('ruta', String(customer.ruta || ''));
+      const term = paymentTerms.find(t => t.id_term === customer.id_term);
+      if (term) {
+        form.setValue('term_description', term.term_desc);
+      }
+    }
+  }
+
+  /** Obtiene la etiqueta del estado ("Pagada" o "Pendiente") a partir de un booleano. */
+  const getStatusLabel = (status: boolean): "Pagada" | "Pendiente" => {
+    return status ? "Pagada" : "Pendiente";
+  };
+
+  /** Obtiene la variante de color del Badge según el estado. */
+  const getBadgeVariant = (status: "Pagada" | "Pendiente") => {
+    switch (status) {
+      case "Pagada":
+        return "default"
+      case "Pendiente":
+        return "secondary"
+      default:
+        return "outline"
+    }
+  }
+  
+  /** Simula un clic en el input de archivo (que está oculto). */
   const handleImportClick = () => {
     fileInputRef.current?.click();
   };
   
+  /** Resetea todos los filtros y vuelve a la primera página. */
   const clearFilters = () => {
     setSearchQuery('');
     setFilterDate('');
@@ -445,6 +511,7 @@ export default function InvoicingPage() {
 
   const totalPages = Math.ceil(totalInvoices / ITEMS_PER_PAGE);
   
+  /** Genera los números de página para mostrar en la paginación. */
   const getPaginationNumbers = () => {
     const pages = [];
     const totalVisiblePages = 5;
@@ -464,6 +531,7 @@ export default function InvoicingPage() {
     return pages;
   };
 
+  // --- RENDERIZADO DEL COMPONENTE ---
   return (
     <Card className="h-full flex flex-col">
       <CardHeader>
@@ -880,5 +948,3 @@ export default function InvoicingPage() {
     </Card>
   )
 }
-
-    

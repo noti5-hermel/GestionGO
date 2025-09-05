@@ -10,17 +10,18 @@ GestiónGo es una aplicación web completa construida con Next.js y Supabase, di
 - **UI**: [Shadcn/ui](https://ui.shadcn.com/)
 - **Estilos**: [Tailwind CSS](https://tailwindcss.com/)
 - **Gestión de Formularios**: [React Hook Form](https://react-hook-form.com/) y [Zod](https://zod.dev/)
-- **Inteligencia Artificial**: [Genkit](https://firebase.google.com/docs/genkit)
+- **Inteligencia Artificial**: [Genkit](https://firebase.google.com/docs/genkit) (para futuras integraciones)
 
 ## Características Principales
 
-- **Autenticación y Roles de Usuario**: Sistema de login seguro con gestión de roles (Admin, Motorista, Auxiliar, etc.).
-- **Gestión de Clientes**: CRUD completo para la base de clientes.
-- **Gestión de Facturación**: Creación y seguimiento de facturas.
-- **Gestión de Despachos**: Planificación, seguimiento y revisión de despachos por etapas.
+- **Autenticación y Roles de Usuario**: Sistema de login seguro con gestión de roles (Admin, Motorista, Auxiliar, etc.). La interfaz se adapta según los permisos del rol.
+- **Gestión de Clientes (CRUD)**: Creación, lectura, actualización y eliminación de clientes con paginación del lado del servidor para un rendimiento óptimo.
+- **Gestión de Facturación (CRUD)**: Creación, lectura, actualización y eliminación de facturas con paginación y búsqueda del lado del servidor.
+- **Gestión de Despachos**: Planificación y seguimiento de despachos por etapas (Bodega, Reparto, Cobros, etc.), con vistas personalizadas según el rol del usuario.
 - **Configuraciones**: Módulos para gestionar entidades como Rutas, Vehículos, Términos de Pago e Impuestos.
-- **Carga de Archivos**: Funcionalidad para subir imágenes y otros archivos a Supabase Storage.
-- **Importación de Datos**: Capacidad para importar datos masivamente desde archivos Excel.
+- **Carga de Archivos**: Funcionalidad para subir imágenes (comprobantes de pago) a Supabase Storage.
+- **Importación de Datos**: Capacidad para importar datos masivamente desde archivos Excel en los módulos de Clientes y Facturación, con validación de datos robusta.
+- **Generación de PDF**: Creación de informes de despacho en formato PDF listos para descargar o imprimir.
 
 ---
 

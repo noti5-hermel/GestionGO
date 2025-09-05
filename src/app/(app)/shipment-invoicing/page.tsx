@@ -29,6 +29,12 @@ import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 import Image from "next/image"
 
+/**
+ * @file shipment-invoicing/page.tsx
+ * @description Página para asociar facturas a un despacho específico, registrar pagos
+ * y subir comprobantes.
+ */
+
 const BUCKET_NAME = 'comprobante';
 
 // Esquema de validación para el formulario de facturación por despacho.
@@ -38,7 +44,7 @@ const shipmentInvoiceSchema = z.object({
     (val) => String(val),
     z.string().min(1, "El ID de despacho es requerido.")
   ),
-  comprobante: z.string().optional(), // La URL de la imagen se manejará por separado.
+  comprobante: z.string().optional(), // La URL de la imagen se maneja por separado.
   forma_pago: z.enum(["Efectivo", "Tarjeta", "Transferencia"]),
   monto: z.coerce.number().min(0, "El monto debe ser un número positivo."),
   state: z.boolean(),
@@ -56,8 +62,11 @@ const statusOptions: { label: string; value: boolean }[] = [
   { label: "Pendiente", value: false },
 ]
 
+/**
+ * Componente principal de la página de Facturación por Despacho.
+ */
 export default function ShipmentInvoicingPage() {
-  // Estados para gestionar los datos de la página.
+  // --- ESTADOS ---
   const [shipmentInvoices, setShipmentInvoices] = useState<ShipmentInvoice[]>([])
   const [allInvoices, setAllInvoices] = useState<Invoice[]>([])
   const [allShipments, setAllShipments] = useState<Shipment[]>([])
@@ -73,7 +82,7 @@ export default function ShipmentInvoicingPage() {
   const [selectedImage, setSelectedImage] = useState('');
 
 
-  // Configuración del formulario con react-hook-form y Zod.
+  // --- FORMULARIO ---
   const form = useForm<z.infer<typeof shipmentInvoiceSchema>>({
     resolver: zodResolver(shipmentInvoiceSchema),
     defaultValues: {
@@ -86,19 +95,26 @@ export default function ShipmentInvoicingPage() {
     },
   })
   
+  // --- LÓGICA DE DATOS Y EFECTOS ---
+  
   // Observa el valor del campo 'id_despacho' para actualizar dinámicamente las opciones de factura.
   const selectedShipmentId = form.watch("id_despacho");
 
-  // `useMemo` se usa para calcular las facturas disponibles de forma eficiente.
+  /**
+   * `useMemo` se usa para calcular las facturas disponibles de forma eficiente.
+   * Filtra las facturas que coinciden con la fecha del despacho seleccionado y que no han sido
+   * asociadas a otro despacho.
+   */
   const availableInvoices = useMemo(() => {
     if (!selectedShipmentId) return [];
     const selectedShipment = allShipments.find(s => String(s.id_despacho) === selectedShipmentId);
     if (!selectedShipment) return [];
-    const selectedDate = new Date(selectedShipment.fecha_despacho).toISOString().split('T')[0];
+    // Compara las fechas ignorando la zona horaria.
+    const selectedDate = new Date(selectedShipment.fecha_despacho + 'T00:00:00Z').toISOString().split('T')[0];
     const usedInvoiceIds = new Set(shipmentInvoices.map(si => si.id_factura));
 
     return allInvoices.filter(inv => {
-        const invoiceDate = new Date(inv.fecha).toISOString().split('T')[0];
+        const invoiceDate = new Date(inv.fecha + 'T00:00:00Z').toISOString().split('T')[0];
         const isDateMatch = invoiceDate === selectedDate;
         const isNotUsed = !usedInvoiceIds.has(inv.id_factura);
         const isCurrentlyEditing = editingShipmentInvoice?.id_factura === inv.id_factura;
@@ -106,12 +122,14 @@ export default function ShipmentInvoicingPage() {
     });
   }, [selectedShipmentId, allInvoices, allShipments, shipmentInvoices, editingShipmentInvoice]);
 
+  // Carga los datos iniciales al montar el componente.
   useEffect(() => {
     fetchShipmentInvoices()
     fetchInvoices()
     fetchShipments()
   }, [])
 
+  // Rellena el formulario cuando se selecciona un registro para editar.
   useEffect(() => {
     if (editingShipmentInvoice) {
       form.reset({
@@ -131,12 +149,14 @@ export default function ShipmentInvoicingPage() {
     setSelectedFile(null); // Resetea el archivo al abrir el diálogo.
   }, [editingShipmentInvoice, form])
   
+  // Resetea la selección de factura si cambia el despacho seleccionado y no se está editando.
   useEffect(() => {
     if (!editingShipmentInvoice) {
       form.setValue("id_factura", "");
     }
   }, [selectedShipmentId, editingShipmentInvoice, form]);
 
+  /** Obtiene los registros de facturación por despacho desde Supabase. */
   const fetchShipmentInvoices = async () => {
     const { data, error } = await supabase.from('facturacion_x_despacho').select('*')
     if (error) {
@@ -146,6 +166,7 @@ export default function ShipmentInvoicingPage() {
     }
   }
   
+  /** Obtiene todas las facturas para el selector. */
   const fetchInvoices = async () => {
     const { data, error } = await supabase.from('facturacion').select('id_factura, reference_number, fecha')
     if (error) {
@@ -155,6 +176,7 @@ export default function ShipmentInvoicingPage() {
     }
   }
   
+  /** Obtiene todos los despachos para el selector. */
   const fetchShipments = async () => {
     const { data, error } = await supabase.from('despacho').select('id_despacho, fecha_despacho')
     if (error) {
@@ -164,13 +186,10 @@ export default function ShipmentInvoicingPage() {
     }
   }
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-    }
-  };
-
+  /**
+   * Sube un archivo de imagen (comprobante) a Supabase Storage.
+   * @returns La URL pública de la imagen subida, o la URL existente si no se sube un nuevo archivo.
+   */
   const uploadComprobante = async (): Promise<string | undefined> => {
     if (!selectedFile) {
         // Si se está editando y no se selecciona un nuevo archivo, se mantiene la URL existente.
@@ -196,8 +215,13 @@ export default function ShipmentInvoicingPage() {
     return publicUrl;
   };
   
+  /**
+   * Recalcula y actualiza los totales (contado, crédito, general) en la tabla `despacho`
+   * después de agregar, editar o eliminar una factura del despacho.
+   * @param shipmentId El ID del despacho a actualizar.
+   */
   const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
-    // 1. Obtener todas las facturas asociadas a este despacho
+    // 1. Obtener todas las facturas asociadas a este despacho.
     const { data: shipmentInvoicesData, error: shipmentInvoicesError } = await supabase
       .from('facturacion_x_despacho')
       .select('id_factura')
@@ -210,12 +234,12 @@ export default function ShipmentInvoicingPage() {
   
     const invoiceIds = shipmentInvoicesData.map(si => si.id_factura);
     if (invoiceIds.length === 0) {
-      // Si no hay facturas, los totales son cero
+      // Si no hay facturas, los totales son cero.
       await supabase.from('despacho').update({ total_contado: 0, total_credito: 0, total_general: 0 }).eq('id_despacho', shipmentId);
       return;
     }
   
-    // 2. Obtener los detalles de esas facturas y los clientes asociados
+    // 2. Obtener los detalles de esas facturas y los clientes asociados para determinar el tipo de impuesto.
     const { data: invoicesDetails, error: invoicesDetailsError } = await supabase
       .from('facturacion')
       .select('grand_total, customer(id_impuesto, tipo_impuesto(impt_desc))')
@@ -226,11 +250,12 @@ export default function ShipmentInvoicingPage() {
       return;
     }
   
-    // 3. Calcular totales
+    // 3. Calcular totales basados en el tipo de impuesto del cliente.
     let totalContado = 0;
     let totalCredito = 0;
   
     invoicesDetails.forEach(inv => {
+      // La consulta devuelve un objeto anidado, por eso el casting a 'any'.
       const taxDesc = (inv.customer as any)?.tipo_impuesto?.impt_desc;
       if (taxDesc === 'Consumidor Final') {
         totalContado += inv.grand_total || 0;
@@ -241,7 +266,7 @@ export default function ShipmentInvoicingPage() {
   
     const totalGeneral = totalContado + totalCredito;
   
-    // 4. Actualizar el despacho
+    // 4. Actualizar el registro del despacho con los nuevos totales.
     const { error: updateError } = await supabase
       .from('despacho')
       .update({
@@ -258,10 +283,14 @@ export default function ShipmentInvoicingPage() {
     }
   };
 
+  /**
+   * Gestiona el envío del formulario para crear o actualizar una asociación factura-despacho.
+   * @param values Los datos del formulario validados por Zod.
+   */
   const onSubmit = async (values: z.infer<typeof shipmentInvoiceSchema>) => {
     const imageUrl = await uploadComprobante();
     if (!imageUrl && selectedFile) {
-        return;
+        return; // Detiene la ejecución si la carga de una nueva imagen falla.
     }
 
     const dataToSubmit = {
@@ -272,12 +301,14 @@ export default function ShipmentInvoicingPage() {
     
     let error;
     if (editingShipmentInvoice) {
+      // Actualiza un registro existente.
       const { error: updateError } = await supabase
         .from('facturacion_x_despacho')
         .update(dataToSubmit)
         .eq('id_fac_desp', editingShipmentInvoice.id_fac_desp)
       error = updateError;
     } else {
+      // Inserta un nuevo registro.
       const { error: insertError } = await supabase
         .from('facturacion_x_despacho')
         .insert([dataToSubmit])
@@ -295,6 +326,10 @@ export default function ShipmentInvoicingPage() {
     }
   }
 
+  /**
+   * Elimina una asociación factura-despacho.
+   * @param shipmentInvoice El objeto de la asociación a eliminar.
+   */
   const handleDelete = async (shipmentInvoice: ShipmentInvoice) => {
     const { error } = await supabase
       .from('facturacion_x_despacho')
@@ -314,18 +349,30 @@ export default function ShipmentInvoicingPage() {
       fetchShipmentInvoices()
     }
   }
+  
+  // --- FUNCIONES AUXILIARES DE LA UI ---
 
+  /** Maneja el cambio de archivo seleccionado. */
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+    }
+  };
+
+  /** Prepara el formulario para editar un registro. */
   const handleEdit = (shipmentInvoice: ShipmentInvoice) => {
     setEditingShipmentInvoice(shipmentInvoice);
     setIsDialogOpen(true);
   }
   
+  /** Abre el modal para visualizar una imagen de comprobante. */
   const handleOpenImageModal = (imageUrl: string) => {
     setSelectedImage(imageUrl);
     setImageModalOpen(true);
   }
 
-
+  /** Controla la apertura y cierre del diálogo principal. */
   const handleOpenDialog = (open: boolean) => {
     setIsDialogOpen(open);
     if (!open) {
@@ -333,6 +380,7 @@ export default function ShipmentInvoicingPage() {
     }
   };
 
+  /** Cierra el diálogo y resetea el formulario. */
   const handleCloseDialog = () => {
     setEditingShipmentInvoice(null);
     form.reset()
@@ -345,9 +393,10 @@ export default function ShipmentInvoicingPage() {
   const getShipmentDate = (shipmentId: string | number) => {
       const id = typeof shipmentId === 'string' ? parseInt(shipmentId, 10) : shipmentId;
       const shipment = allShipments.find(ship => ship.id_despacho === id);
-      return shipment ? new Date(shipment.fecha_despacho).toLocaleDateString() : shipmentId;
+      return shipment ? new Date(shipment.fecha_despacho + 'T00:00:00Z').toLocaleDateString() : shipmentId;
   }
 
+  // --- RENDERIZADO DEL COMPONENTE ---
   return (
     <Card className="h-full flex flex-col">
       <CardHeader>
@@ -386,7 +435,7 @@ export default function ShipmentInvoicingPage() {
                             <SelectContent>
                                 {allShipments.map((shipment) => (
                                     <SelectItem key={shipment.id_despacho} value={String(shipment.id_despacho)}>
-                                        ID: {shipment.id_despacho} - Fecha: {new Date(shipment.fecha_despacho).toLocaleDateString()}
+                                        ID: {shipment.id_despacho} - Fecha: {new Date(shipment.fecha_despacho + 'T00:00:00Z').toLocaleDateString()}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -617,5 +666,3 @@ export default function ShipmentInvoicingPage() {
     </Card>
   )
 }
-
-    

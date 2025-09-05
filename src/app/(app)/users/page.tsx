@@ -27,12 +27,19 @@ import { PlusCircle, Pencil, Trash2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 
+/**
+ * @file users/page.tsx
+ * @description Página para la gestión completa (CRUD) de usuarios.
+ * Permite crear, editar y eliminar usuarios, así como asignarles roles.
+ * Incluye hasheo de contraseñas para seguridad.
+ */
+
 // Esquema de validación para el formulario de usuario.
 const userSchema = z.object({
   id_user: z.string().optional(),
   name: z.string().min(1, { message: "El nombre es requerido." }),
   correo: z.string().email({ message: "Debe ser un correo electrónico válido." }),
-  // La contraseña es opcional durante la actualización.
+  // La contraseña es opcional durante la actualización para no forzar su cambio.
   contraseña: z.string().min(6, { message: "La contraseña debe tener al menos 6 caracteres." }).optional().or(z.literal('')),
   id_rol: z.preprocess(
     (val) => String(val),
@@ -68,15 +75,19 @@ function hashPassword(password: string): string {
   return crypto.createHmac('sha256', HMAC_SECRET_KEY).update(password).digest('hex');
 }
 
+/**
+ * Componente principal de la página de Usuarios.
+ * Gestiona el estado, la lógica y la interfaz para administrar usuarios.
+ */
 export default function UsersPage() {
-  // Estados para gestionar los datos de la página.
+  // --- ESTADOS ---
   const [users, setUsers] = useState<User[]>([])
   const [roles, setRoles] = useState<Role[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const { toast } = useToast()
 
-  // Configuración del formulario con react-hook-form y Zod.
+  // --- FORMULARIO ---
   const form = useForm<z.infer<typeof userSchema>>({
     resolver: zodResolver(userSchema),
     defaultValues: {
@@ -87,7 +98,9 @@ export default function UsersPage() {
     },
   })
 
-  // Carga los datos iniciales al montar el componente.
+  // --- LÓGICA DE DATOS Y EFECTOS ---
+
+  // Carga los datos iniciales (roles y usuarios) al montar el componente.
   useEffect(() => {
     fetchRoles()
     fetchUsers()
@@ -113,7 +126,7 @@ export default function UsersPage() {
     }
   }, [editingUser, form]);
 
-  // Obtiene los usuarios desde la base de datos.
+  /** Obtiene la lista de usuarios desde la base de datos. */
   const fetchUsers = async () => {
     let { data: usuario, error } = await supabase
       .from('usuario')
@@ -129,7 +142,7 @@ export default function UsersPage() {
     }
   }
 
-  // Obtiene los roles desde la base de datos para el menú desplegable.
+  /** Obtiene los roles desde la base de datos para el menú desplegable. */
   const fetchRoles = async () => {
     const { data, error } = await supabase.from('rol').select('id_rol, rol_desc')
     if (error) {
@@ -143,7 +156,10 @@ export default function UsersPage() {
     }
   }
 
-  // Lógica para crear un nuevo usuario.
+  /**
+   * Lógica para crear un nuevo usuario.
+   * @param values Los datos del formulario validados por Zod.
+   */
   const handleCreateUser = async (values: z.infer<typeof userSchema>) => {
     if (!values.contraseña) {
       toast({
@@ -179,7 +195,10 @@ export default function UsersPage() {
     }
   };
 
-  // Lógica para actualizar un usuario existente.
+  /**
+   * Lógica para actualizar un usuario existente.
+   * @param values Los datos del formulario validados por Zod.
+   */
   const handleUpdateUser = async (values: z.infer<typeof userSchema>) => {
     if (!editingUser) return;
 
@@ -215,7 +234,7 @@ export default function UsersPage() {
     }
   };
 
-  // Determina si se debe crear o actualizar un usuario al enviar el formulario.
+  /** Determina si se debe crear o actualizar un usuario al enviar el formulario. */
   const onSubmit = (values: z.infer<typeof userSchema>) => {
     if (editingUser) {
       handleUpdateUser(values);
@@ -224,7 +243,10 @@ export default function UsersPage() {
     }
   };
 
-  // Elimina un usuario.
+  /**
+   * Elimina un usuario de la base de datos.
+   * @param userId El ID del usuario a eliminar.
+   */
   const handleDelete = async (userId: string) => {
     const { error } = await supabase
         .from('usuario')
@@ -253,14 +275,16 @@ export default function UsersPage() {
         fetchUsers()
     }
   }
-
-  // Prepara el formulario para editar un usuario.
+  
+  // --- FUNCIONES AUXILIARES DE LA UI ---
+  
+  /** Prepara el formulario para editar un usuario. */
   const handleEdit = (user: User) => {
     setEditingUser(user);
     setIsDialogOpen(true);
   }
 
-  // Controla la apertura y cierre del diálogo, reseteando el estado de edición.
+  /** Controla la apertura y cierre del diálogo, reseteando el estado de edición. */
   const handleOpenDialog = (open: boolean) => {
     setIsDialogOpen(open);
     if (!open) {
@@ -268,18 +292,19 @@ export default function UsersPage() {
     }
   };
 
-  // Cierra el diálogo y resetea el formulario.
+  /** Cierra el diálogo y resetea el formulario. */
   const handleCloseDialog = () => {
     setEditingUser(null);
     form.reset({ name: "", correo: "", contraseña: "", id_rol: "" });
     setIsDialogOpen(false);
   }
 
-  // Obtiene el nombre del rol a partir de su ID para mostrarlo en la tabla.
+  /** Obtiene el nombre del rol a partir de su ID para mostrarlo en la tabla. */
   const getRoleName = (roleId: string | number) => {
     return roles.find(role => String(role.id_rol) === String(roleId))?.rol_desc || "N/A"
   }
 
+  // --- RENDERIZADO DEL COMPONENTE ---
   return (
     <Card className="h-full flex flex-col">
       <CardHeader>
@@ -461,5 +486,3 @@ export default function UsersPage() {
     </Card>
   )
 }
-
-    

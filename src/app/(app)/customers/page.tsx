@@ -28,6 +28,13 @@ import { PlusCircle, Trash2, Pencil, Upload, ChevronsLeft, ChevronLeft, ChevronR
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 
+/**
+ * @file customers/page.tsx
+ * @description Página para la gestión completa (CRUD) de clientes.
+ * Incluye funcionalidades de creación, edición, eliminación, búsqueda, filtrado,
+ * paginación del lado del servidor e importación masiva desde archivos Excel.
+ */
+
 // Esquema de validación para el formulario de cliente.
 const customerSchema = z.object({
   code_customer: z.string().min(1, { message: "El código es requerido." }),
@@ -60,24 +67,39 @@ type Route = { id_ruta: string | number; ruta_desc: string }
 
 const ITEMS_PER_PAGE = 10;
 
+/**
+ * Componente principal de la página de clientes.
+ * Gestiona el estado, la lógica de negocio y la renderización de la interfaz.
+ */
 export default function CustomersPage() {
-  // Estados para gestionar los datos de la página.
+  // --- ESTADOS ---
+  // Almacena la lista de clientes de la página actual.
   const [customers, setCustomers] = useState<Customer[]>([])
+  // Almacena los términos de pago para los filtros.
   const [paymentTerms, setPaymentTerms] = useState<PaymentTerm[]>([])
+  // Almacena los tipos de impuesto para los filtros.
   const [taxes, setTaxes] = useState<Tax[]>([])
+  // Almacena las rutas disponibles para los filtros.
+  const [uniqueRoutes, setUniqueRoutes] = useState<Route[]>([]);
+  // Controla la visibilidad del diálogo de creación/edición.
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  // Almacena el cliente que se está editando, o null si se está creando uno nuevo.
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  // Hook para mostrar notificaciones (toasts).
   const { toast } = useToast()
+  // Referencia al input de archivo para la importación desde Excel.
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // --- ESTADOS DE FILTRADO Y PAGINACIÓN ---
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCustomers, setTotalCustomers] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterRuta, setFilterRuta] = useState('');
   const [filterTerm, setFilterTerm] = useState('');
   const [filterTax, setFilterTax] = useState('');
-  const [uniqueRoutes, setUniqueRoutes] = useState<Route[]>([]);
 
-  // Configuración del formulario con react-hook-form y Zod.
+  // --- FORMULARIO ---
+  // Configuración del formulario con react-hook-form y Zod para validación.
   const form = useForm<z.infer<typeof customerSchema>>({
     resolver: zodResolver(customerSchema),
     defaultValues: {
@@ -89,17 +111,26 @@ export default function CustomersPage() {
     },
   })
 
+  // --- LÓGICA DE DATOS (Callbacks y Efectos) ---
+
+  /**
+   * Obtiene la lista de clientes desde Supabase, aplicando paginación y filtros del lado del servidor.
+   * Se ejecuta cada vez que cambia la página, la búsqueda o algún filtro.
+   */
   const fetchCustomers = useCallback(async () => {
     const from = (currentPage - 1) * ITEMS_PER_PAGE;
     const to = from + ITEMS_PER_PAGE - 1;
 
+    // Construye la consulta a Supabase de forma dinámica.
     let query = supabase
       .from('customer')
       .select('code_customer,customer_name,id_impuesto,id_term,ruta', { count: 'exact' });
 
+    // Aplica el filtro de búsqueda si existe.
     if (searchQuery) {
       query = query.or(`customer_name.ilike.%${searchQuery}%,code_customer.ilike.%${searchQuery}%`);
     }
+    // Aplica los filtros de selección si existen.
     if (filterRuta) {
       query = query.eq('ruta', filterRuta);
     }
@@ -110,8 +141,10 @@ export default function CustomersPage() {
       query = query.eq('id_impuesto', filterTax);
     }
 
+    // Aplica el rango de paginación.
     query = query.range(from, to);
 
+    // Ejecuta la consulta.
     const { data, error, count } = await query;
     
     if (error) {
@@ -122,15 +155,19 @@ export default function CustomersPage() {
       })
     } else {
       setCustomers(data as Customer[]);
-      setTotalCustomers(count ?? 0);
+      setTotalCustomers(count ?? 0); // Actualiza el conteo total para la paginación.
     }
   }, [currentPage, searchQuery, filterRuta, filterTerm, filterTax, toast]);
 
+  /**
+   * Obtiene datos estáticos necesarios para los filtros (términos de pago, impuestos, rutas).
+   * Se ejecuta solo una vez al cargar el componente.
+   */
   const fetchStaticData = useCallback(async () => {
     const [termsRes, taxesRes, routesRes] = await Promise.all([
       supabase.from('terminos_pago').select('id_term, term_desc'),
       supabase.from('tipo_impuesto').select('id_impuesto, impt_desc'),
-      supabase.from('rutas').select('id_ruta, ruta_desc')
+      supabase.from('rutas').select('id_ruta, ruta_desc') // Obtiene las rutas desde la tabla de rutas.
     ]);
     
     if (termsRes.error) {
@@ -146,21 +183,26 @@ export default function CustomersPage() {
     }
     
     if (routesRes.error) {
-      toast({ title: "Error", description: "No se pudieron cargar las rutas únicas.", variant: "destructive" });
+      toast({ title: "Error", description: "No se pudieron cargar las rutas.", variant: "destructive" });
     } else {
        setUniqueRoutes(routesRes.data.sort((a, b) => Number(a.id_ruta) - Number(b.id_ruta)) as Route[]);
     }
   }, [toast]);
   
+  // Efecto para cargar los datos estáticos al montar el componente.
   useEffect(() => {
     fetchStaticData();
   }, [fetchStaticData]);
 
+  // Efecto para cargar los clientes cada vez que los filtros o la página cambian.
   useEffect(() => {
     fetchCustomers();
   }, [fetchCustomers]);
   
-  // Rellena el formulario cuando se selecciona un cliente para editar.
+  /**
+   * Rellena el formulario con los datos de un cliente cuando se selecciona para editar.
+   * Resetea el formulario si se está creando un nuevo cliente.
+   */
   useEffect(() => {
     if (editingCustomer) {
       form.reset({
@@ -180,7 +222,10 @@ export default function CustomersPage() {
     }
   }, [editingCustomer, form]);
 
-  // Gestiona el envío del formulario para crear o actualizar un cliente.
+  /**
+   * Gestiona el envío del formulario para crear o actualizar un cliente.
+   * @param values Los datos del formulario validados por Zod.
+   */
   const onSubmit = async (values: z.infer<typeof customerSchema>) => {
     let error;
 
@@ -213,13 +258,14 @@ export default function CustomersPage() {
         description: `Cliente ${editingCustomer ? 'actualizado' : 'guardado'} correctamente.`,
       })
       fetchCustomers() // Recarga la lista de clientes.
-      form.reset()
-      setEditingCustomer(null)
-      setIsDialogOpen(false)
+      setIsDialogOpen(false) // Cierra el diálogo.
     }
   }
 
-  // Elimina un cliente de la base de datos.
+  /**
+   * Elimina un cliente de la base de datos.
+   * @param customerId El ID del cliente a eliminar.
+   */
   const handleDelete = async (customerId: string) => {
     const { error } = await supabase
       .from('customer')
@@ -250,6 +296,10 @@ export default function CustomersPage() {
     }
   }
   
+  /**
+   * Procesa el archivo Excel seleccionado para importar clientes masivamente.
+   * @param event El evento del cambio del input de archivo.
+   */
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -257,13 +307,14 @@ export default function CustomersPage() {
     const reader = new FileReader();
     reader.onload = async (e) => {
         try {
+            // Lee y parsea el archivo Excel.
             const data = new Uint8Array(e.target?.result as ArrayBuffer);
             const workbook = xlsx.read(data, { type: 'array' });
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
-            
             const rows: any[][] = xlsx.utils.sheet_to_json(worksheet, { header: 1 });
             
+            // Mapea y limpia los datos de cada fila.
             const dataToValidate = rows
               .slice(1) // Omitir la fila de encabezados
               .map(row => {
@@ -276,14 +327,15 @@ export default function CustomersPage() {
                   };
 
                   return {
-                    code_customer: String(row[0] || '').trim(),
-                    customer_name: String(row[1] || '').trim(),
+                    code_customer: String(row[0] || '').trim(), // Limpia espacios en blanco.
+                    customer_name: String(row[1] || '').trim(), // Limpia espacios en blanco.
                     ruta: parseNumberOrNull(row[2]),
                     id_impuesto: parseNumberOrNull(row[3]),
                     id_term: parseNumberOrNull(row[4]),
                   }
               });
             
+            // Filtra filas vacías.
             const nonEmptyData = dataToValidate.filter(
               row => row.code_customer && row.customer_name
             );
@@ -297,15 +349,16 @@ export default function CustomersPage() {
               return;
             }
 
+            // Valida los datos contra el esquema Zod.
             const validatedCustomers = z.array(customerSchema).safeParse(nonEmptyData);
 
             if (!validatedCustomers.success) {
+                // Muestra un mensaje de error detallado si la validación falla.
                 const errorIssues = validatedCustomers.error.issues;
                 const errorMessage = errorIssues
                     .map(issue => `Fila ${Number(issue.path[0]) + 2}: En columna '${issue.path[1]}', ${issue.message}`)
                     .join(' | ');
 
-                console.error("Error de validación Zod:", validatedCustomers.error.flatten());
                 toast({
                     title: "Error de validación",
                     description: errorMessage || "Algunos datos del archivo Excel no son correctos o están incompletos.",
@@ -324,6 +377,7 @@ export default function CustomersPage() {
               return;
             }
             
+            // Sube los datos a Supabase usando 'upsert' para actualizar o insertar.
             const { error: upsertError } = await supabase.from('customer').upsert(validatedCustomers.data, {
               onConflict: 'code_customer' 
             });
@@ -341,20 +395,23 @@ export default function CustomersPage() {
         }
     };
     reader.readAsArrayBuffer(file);
-    if(event.target) event.target.value = '';
+    if(event.target) event.target.value = ''; // Resetea el input para poder re-subir el mismo archivo.
   };
 
+  // --- FUNCIONES AUXILIARES DE LA UI ---
+
+  /** Simula un clic en el input de archivo (que está oculto). */
   const handleImportClick = () => {
     fileInputRef.current?.click();
   };
 
-  // Prepara el formulario para editar un cliente.
+  /** Prepara el formulario para editar un cliente. */
   const handleEdit = (customer: Customer) => {
     setEditingCustomer(customer);
     setIsDialogOpen(true);
   }
 
-  // Controla la apertura y cierre del diálogo, reseteando el estado de edición.
+  /** Controla la apertura y cierre del diálogo, reseteando el estado de edición. */
   const handleOpenDialog = (open: boolean) => {
     setIsDialogOpen(open);
     if (!open) {
@@ -362,6 +419,7 @@ export default function CustomersPage() {
     }
   };
   
+  /** Resetea todos los filtros a sus valores por defecto y vuelve a la primera página. */
   const clearFilters = () => {
     setSearchQuery('');
     setFilterRuta('');
@@ -370,12 +428,13 @@ export default function CustomersPage() {
     setCurrentPage(1);
   };
 
-  // Funciones para obtener descripciones legibles a partir de IDs.
+  /** Obtiene la descripción legible de un impuesto a partir de su ID. */
   const getTaxDescription = (taxId: string | number | null) => {
     if (taxId === null) return 'N/A';
     return taxes.find(tax => String(tax.id_impuesto) === String(taxId))?.impt_desc || taxId;
   }
   
+  /** Obtiene la descripción legible de un término de pago a partir de su ID. */
   const getTermDescription = (termId: string | number | null) => {
     if (termId === null) return 'N/A';
       return paymentTerms.find(term => String(term.id_term) === String(termId))?.term_desc || termId;
@@ -383,6 +442,7 @@ export default function CustomersPage() {
 
   const totalPages = Math.ceil(totalCustomers / ITEMS_PER_PAGE);
   
+  /** Genera los números de página para mostrar en la paginación. */
   const getPaginationNumbers = () => {
     const pages = [];
     const totalVisiblePages = 5;
@@ -402,6 +462,7 @@ export default function CustomersPage() {
     return pages;
   };
   
+  // --- RENDERIZADO DEL COMPONENTE ---
   return (
     <Card className="h-full flex flex-col">
       <CardHeader>
@@ -706,5 +767,3 @@ export default function CustomersPage() {
     </Card>
   )
 }
-
-    

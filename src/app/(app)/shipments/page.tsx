@@ -10,10 +10,21 @@ import { useShipments } from "@/hooks/use-shipments"
 import { ShipmentsTable } from "./_components/shipments-table"
 import { ShipmentForm } from "./_components/shipment-form"
 
-// Constante para el número de ítems por página en la paginación.
+/**
+ * @file shipments/page.tsx
+ * @description Página principal para la visualización y gestión de despachos.
+ * Utiliza el hook `useShipments` para encapsular la lógica de negocio.
+ * Presenta una tabla de despachos con filtros, paginación y acciones.
+ */
+
 const ITEMS_PER_PAGE = 10;
 
+/**
+ * Componente principal de la página de despachos.
+ * Renderiza la interfaz de usuario, incluyendo filtros, tabla de despachos y diálogo de formulario.
+ */
 export default function ShipmentsPage() {
+  // Hook personalizado que contiene toda la lógica de estado y manejo de datos para los despachos.
   const {
     filteredShipments,
     paginatedShipments,
@@ -45,8 +56,14 @@ export default function ShipmentsPage() {
     setReviewFilter,
   } = useShipments({ itemsPerPage: ITEMS_PER_PAGE });
 
+  // Determina si se deben mostrar los filtros de revisión (Pendiente/Revisado)
+  // en lugar de los filtros de fecha.
   const showReviewFilters = reviewRole && !isMotoristaOrAuxiliar;
 
+  /**
+   * Genera los números de página para mostrar en la paginación de forma inteligente,
+   * evitando mostrar todos los números si hay demasiadas páginas.
+   */
   const getPaginationNumbers = () => {
     const pages = [];
     const totalVisiblePages = 5;
@@ -75,6 +92,7 @@ export default function ShipmentsPage() {
             <CardDescription>Gestione la información de sus envíos y estados.</CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {/* Renderiza filtros de revisión o filtros de fecha según el rol del usuario */}
             {showReviewFilters ? (
               <div className="flex items-center gap-2">
                 <Label>Filtrar:</Label>
@@ -94,6 +112,7 @@ export default function ShipmentsPage() {
                 />
               </div>
             )}
+            {/* El botón de "Nuevo Despacho" solo se muestra a roles no restringidos */}
             {!isMotoristaOrAuxiliar && !reviewRole && (
               <Button onClick={() => { setEditingShipment(null); form.reset(); setIsDialogOpen(true); }}>
                 <PlusCircle className="mr-2 h-4 w-4" /> Nuevo Despacho
@@ -119,6 +138,7 @@ export default function ShipmentsPage() {
         <div className="text-xs text-muted-foreground">
           Mostrando <strong>{paginatedShipments.length}</strong> de <strong>{filteredShipments.length}</strong> despachos.
         </div>
+        {/* Controles de paginación */}
         <div className="flex items-center space-x-2">
             <Button
                 variant="outline"
@@ -178,6 +198,7 @@ export default function ShipmentsPage() {
         </div>
       </CardFooter>
 
+      {/* Diálogo para crear/editar despachos */}
       {isDialogOpen && (
           <ShipmentForm
             form={form}
@@ -195,5 +216,3 @@ export default function ShipmentsPage() {
     </Card>
   )
 }
-
-    

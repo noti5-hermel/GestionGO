@@ -22,10 +22,19 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 import { generateShipmentPDF } from "@/lib/generate-shipment-pdf"
 import { PdfPreviewModal } from "@/components/pdf-preview-modal"
 
+/**
+ * @file shipments/[id]/page.tsx
+ * @description Página de detalle para un despacho específico. Muestra la información del despacho,
+ * el estado del proceso, y una lista de todas las facturas asociadas. Permite editar
+ * los detalles de pago de cada factura y subir/capturar comprobantes.
+ */
 
 const BUCKET_NAME = 'comprobante';
 
-// Esquema para el formulario de edición de la factura del despacho
+/**
+ * Esquema de validación para el formulario de edición de la factura del despacho.
+ * El `maxAmount` se pasa dinámicamente para asegurar que el monto pagado no exceda el total de la factura.
+ */
 const shipmentInvoiceEditSchema = (maxAmount: number) => z.object({
   comprobante: z.string().optional(),
   forma_pago: z.enum(["Efectivo", "Tarjeta", "Transferencia"]),
@@ -58,9 +67,9 @@ export type ShipmentInvoice = {
   forma_pago: "Efectivo" | "Tarjeta" | "Transferencia"
   monto: number
   state: boolean
-  reference_number?: string | number // Opcional, se añade después
-  tax_type?: string // Opcional, se añade después
-  grand_total?: number // Opcional, se añade después
+  reference_number?: string | number // Opcional, se añade después desde la tabla `facturacion`
+  tax_type?: string // Opcional, se añade después a través de joins
+  grand_total?: number // Opcional, se añade después desde la tabla `facturacion`
 }
 
 type User = { id_user: string; name: string }
@@ -74,7 +83,7 @@ const statusOptions: { label: string; value: boolean }[] = [
   { label: "Pendiente", value: false },
 ]
 
-// Componente reutilizable para mostrar un badge de estado del proceso.
+/** Componente reutilizable para mostrar un badge de estado del proceso. */
 const StatusBadge = ({ checked, text }: { checked: boolean, text: string }) => {
     return (
         <div className="flex items-center gap-2">
@@ -84,30 +93,33 @@ const StatusBadge = ({ checked, text }: { checked: boolean, text: string }) => {
     )
 }
 
+/**
+ * Componente principal de la página de detalle de despacho.
+ */
 export default function ShipmentDetailPage() {
   const params = useParams()
   const router = useRouter()
   const { id } = params
   const { toast } = useToast()
 
-  // Estados para almacenar los datos de la página.
+  // --- ESTADOS ---
   const [shipment, setShipment] = useState<Shipment | null>(null)
   const [invoices, setInvoices] = useState<ShipmentInvoice[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [routes, setRoutes] = useState<Route[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Estados para el diálogo de edición de factura
+  // Estados para el diálogo de edición de factura.
   const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
   const [editingShipmentInvoice, setEditingShipmentInvoice] = useState<ShipmentInvoice | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // Estados para el modal de visualización de imagen
+  // Estados para el modal de visualización de imagen.
   const [imageModalOpen, setImageModalOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState('');
 
-  // Estados para la cámara
+  // Estados para la funcionalidad de la cámara.
   const [isCameraDialogOpen, setIsCameraDialogOpen] = useState(false);
   const [invoiceForCamera, setInvoiceForCamera] = useState<ShipmentInvoice | null>(null);
   const [hasCameraPermission, setHasCameraPermission] = useState(false);
@@ -115,11 +127,13 @@ export default function ShipmentDetailPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
-  // Estados para la previsualización del PDF
+  // Estados para la previsualización del PDF.
   const [pdfData, setPdfData] = useState<{ dataUri: string; fileName: string } | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
+  // --- FORMULARIO ---
   const form = useForm<z.infer<ReturnType<typeof shipmentInvoiceEditSchema>>>({
+    // El resolver se actualiza dinámicamente para obtener el `grand_total` de la factura que se está editando.
     resolver: zodResolver(shipmentInvoiceEditSchema(editingShipmentInvoice?.grand_total || Number.MAX_SAFE_INTEGER)),
     defaultValues: {
       comprobante: "",
@@ -129,11 +143,17 @@ export default function ShipmentDetailPage() {
     },
   });
 
-  // Función principal para obtener todos los datos necesarios para la página.
+  // --- LÓGICA DE DATOS Y EFECTOS ---
+
+  /**
+   * Función principal para obtener todos los datos necesarios para la página:
+   * detalles del despacho, usuarios, rutas y facturas asociadas (con datos enriquecidos).
+   */
   const fetchData = async () => {
     if (!id) return;
     setLoading(true)
     
+    // 1. Obtiene los datos principales en paralelo.
     const [
       shipmentRes,
       usersRes,
@@ -155,6 +175,7 @@ export default function ShipmentDetailPage() {
     if (routesRes.error) toast({ title: "Error", description: "No se pudieron cargar las rutas.", variant: "destructive" })
     else setRoutes(routesRes.data as Route[])
     
+    // 2. Si hay facturas asociadas, las enriquece con datos de otras tablas.
     if (shipmentInvoicesRes.error) {
       toast({ title: "Error", description: "No se pudieron cargar las facturas asociadas.", variant: "destructive" })
     } else {
@@ -162,20 +183,24 @@ export default function ShipmentDetailPage() {
       const invoiceIds = shipmentInvoicesData.map(inv => inv.id_factura)
 
       if (invoiceIds.length > 0) {
+          // Obtiene detalles de las facturas.
           const { data: invoicesData, error: invoicesError } = await supabase.from('facturacion').select('id_factura, reference_number, code_customer, grand_total').in('id_factura', invoiceIds)
           if (invoicesError) {
               toast({ title: "Error", description: "No se pudieron cargar los datos de facturas.", variant: "destructive" });
           } else {
+              // Obtiene detalles de los clientes para saber el tipo de impuesto.
               const customerCodes = (invoicesData || []).map(inv => inv.code_customer)
               const { data: customersData, error: customersError } = await supabase.from('customer').select('code_customer, id_impuesto').in('code_customer', customerCodes)
               if (customersError) {
                   toast({ title: "Error", description: "No se pudieron cargar los datos de clientes.", variant: "destructive" });
               } else {
+                  // Obtiene los tipos de impuesto.
                   const taxIds = (customersData || []).map(c => c.id_impuesto)
                   const { data: taxesData, error: taxesError } = await supabase.from('tipo_impuesto').select('id_impuesto, impt_desc').in('id_impuesto', taxIds)
                   if (taxesError) {
                       toast({ title: "Error", description: "No se pudieron cargar los tipos de impuesto.", variant: "destructive" });
                   } else {
+                      // Crea mapas para un acceso rápido y eficiente a los datos.
                       const taxMap = new Map((taxesData || []).map(t => [t.id_impuesto, t.impt_desc]))
                       const customerTaxMap = new Map((customersData || []).map(c => [c.code_customer, taxMap.get(c.id_impuesto)]))
                       const invoiceInfoMap = new Map((invoicesData || []).map(i => [i.id_factura, {
@@ -184,6 +209,7 @@ export default function ShipmentDetailPage() {
                         grand_total: i.grand_total,
                       }]));
 
+                      // Combina todos los datos en un solo array de facturas enriquecidas.
                       const enrichedInvoices = shipmentInvoicesData.map(si => {
                         const invoiceInfo = invoiceInfoMap.get(si.id_factura);
                         return {
@@ -205,10 +231,12 @@ export default function ShipmentDetailPage() {
     setLoading(false)
   }
 
+  // Efecto para cargar todos los datos cuando el ID del despacho cambia.
   useEffect(() => {
     fetchData()
   }, [id, toast])
   
+  // Efecto para rellenar el formulario de edición cuando se selecciona una factura.
   useEffect(() => {
     if (editingShipmentInvoice) {
       form.reset({
@@ -221,6 +249,7 @@ export default function ShipmentDetailPage() {
     setSelectedFile(null);
   }, [editingShipmentInvoice, form]);
 
+  // Efecto para manejar el acceso y la limpieza de la cámara.
   useEffect(() => {
     const getCameraPermission = async () => {
       if (!isCameraDialogOpen) return;
@@ -243,7 +272,7 @@ export default function ShipmentDetailPage() {
     };
     getCameraPermission();
 
-    return () => { // Cleanup on unmount or when dialog closes
+    return () => { // Cleanup: detiene la cámara al cerrar el diálogo.
       if (videoRef.current && videoRef.current.srcObject) {
         const stream = videoRef.current.srcObject as MediaStream;
         stream.getTracks().forEach(track => track.stop());
@@ -251,20 +280,17 @@ export default function ShipmentDetailPage() {
     }
   }, [isCameraDialogOpen, toast]);
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-    }
-  };
-
+  /**
+   * Sube un archivo de comprobante a Supabase Storage.
+   * @returns La URL pública de la imagen subida.
+   */
   const uploadComprobante = async (): Promise<string | undefined> => {
     if (!selectedFile) {
-      return editingShipmentInvoice?.comprobante;
+      return editingShipmentInvoice?.comprobante; // Mantiene la imagen existente si no se selecciona una nueva.
     }
     setLoading(true);
     const fileName = `${Date.now()}-${selectedFile.name}`;
-    const { data, error } = await supabase.storage
+    const { error } = await supabase.storage
       .from(BUCKET_NAME)
       .upload(fileName, selectedFile, {
         cacheControl: '3600',
@@ -281,17 +307,16 @@ export default function ShipmentDetailPage() {
     return publicUrl;
   };
 
-  const handleEditInvoice = (invoice: ShipmentInvoice) => {
-    setEditingShipmentInvoice(invoice);
-    setIsInvoiceDialogOpen(true);
-  };
-  
+  /**
+   * Actualiza los detalles de una factura asociada al despacho.
+   * @param values Los datos del formulario de edición.
+   */
   const handleUpdateInvoice = async (values: z.infer<ReturnType<typeof shipmentInvoiceEditSchema>>) => {
     if (!editingShipmentInvoice) return;
 
     const imageUrl = await uploadComprobante();
     if (!imageUrl && selectedFile) { 
-        return; 
+        return; // Detiene si la carga falla.
     }
 
     const { error } = await supabase
@@ -315,63 +340,26 @@ export default function ShipmentDetailPage() {
         title: "Éxito",
         description: "Factura del despacho actualizada correctamente.",
       });
-      fetchData();
+      fetchData(); // Recarga los datos para reflejar los cambios.
       closeInvoiceDialog();
     }
   };
 
-  const closeInvoiceDialog = () => {
-    setIsInvoiceDialogOpen(false);
-    setEditingShipmentInvoice(null);
-    setSelectedFile(null);
-    form.reset();
-  };
-  
-  const handleOpenImageModal = (imageUrl: string) => {
-    setSelectedImage(imageUrl);
-    setImageModalOpen(true);
-  }
-
-  const openCameraDialog = (invoice: ShipmentInvoice) => {
-    setInvoiceForCamera(invoice);
-    setIsCameraDialogOpen(true);
-  };
-
-  const closeCameraDialog = () => {
-    setIsCameraDialogOpen(false);
-    setInvoiceForCamera(null);
-    setCapturedImage(null);
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach(track => track.stop());
-    }
-  };
-
-  const takePhoto = () => {
-    if (videoRef.current && canvasRef.current) {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const context = canvas.getContext('2d');
-      context?.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-      setCapturedImage(dataUrl);
-    }
-  };
-
+  /**
+   * Guarda una foto capturada con la cámara como comprobante.
+   */
   const saveCapturedPhoto = async () => {
     if (!capturedImage || !invoiceForCamera) return;
 
     setLoading(true);
-    // Convert data URL to Blob
+    // Convierte la imagen en formato DataURL a un Blob para subirla.
     const response = await fetch(capturedImage);
     const blob = await response.blob();
     const fileName = `${Date.now()}-comprobante.jpg`;
     const file = new File([blob], fileName, { type: 'image/jpeg' });
 
-    // Upload to Supabase
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    // Sube el archivo a Supabase Storage.
+    const { error: uploadError } = await supabase.storage
       .from(BUCKET_NAME)
       .upload(fileName, file, { upsert: false });
 
@@ -383,7 +371,7 @@ export default function ShipmentDetailPage() {
 
     const { data: { publicUrl } } = supabase.storage.from(BUCKET_NAME).getPublicUrl(fileName);
 
-    // Update the database
+    // Actualiza el registro en la base de datos con la nueva URL del comprobante.
     const { error: dbError } = await supabase
       .from('facturacion_x_despacho')
       .update({ comprobante: publicUrl })
@@ -400,36 +388,58 @@ export default function ShipmentDetailPage() {
     }
   };
 
-
+  // --- FUNCIONES AUXILIARES DE LA UI ---
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) setSelectedFile(file);
+  };
+  const handleEditInvoice = (invoice: ShipmentInvoice) => {
+    setEditingShipmentInvoice(invoice);
+    setIsInvoiceDialogOpen(true);
+  };
+  const closeInvoiceDialog = () => {
+    setIsInvoiceDialogOpen(false);
+    setEditingShipmentInvoice(null);
+    setSelectedFile(null);
+    form.reset();
+  };
+  const handleOpenImageModal = (imageUrl: string) => {
+    setSelectedImage(imageUrl);
+    setImageModalOpen(true);
+  }
+  const openCameraDialog = (invoice: ShipmentInvoice) => {
+    setInvoiceForCamera(invoice);
+    setIsCameraDialogOpen(true);
+  };
+  const closeCameraDialog = () => {
+    setIsCameraDialogOpen(false);
+    setInvoiceForCamera(null);
+    setCapturedImage(null);
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+    }
+  };
+  const takePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const context = canvas.getContext('2d');
+      context?.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+      setCapturedImage(dataUrl);
+    }
+  };
   const getRouteDescription = (routeId: string) => routes.find(route => String(route.id_ruta) === String(routeId))?.ruta_desc || routeId
   const getUserName = (userId: string) => users.find(user => String(user.id_user) === String(userId))?.name || userId
   const getStatusLabel = (status: boolean) => status ? "Pagado" : "Pendiente"
   const getBadgeVariant = (status: boolean) => status ? "default" : "secondary"
-
-  const fiscalCreditInvoices = invoices.filter(inv => inv.tax_type === 'Crédito Fiscal');
-  const finalConsumerInvoices = invoices.filter(inv => inv.tax_type === 'Consumidor Final');
-  const otherInvoices = invoices.filter(inv => inv.tax_type !== 'Crédito Fiscal' && inv.tax_type !== 'Consumidor Final');
-
-  if (loading && !shipment) {
-    return <p>Cargando detalles del despacho...</p>
-  }
-
-  if (!shipment) {
-    return <p>Despacho no encontrado.</p>
-  }
-  
   const formatDate = (dateString: string) => {
-    // La fecha de Supabase es un string como '2023-09-10'. La zona horaria UTC se añade para evitar
-    // que el objeto Date la interprete en la zona horaria local, lo que podría cambiar el día.
     const date = new Date(`${dateString}T00:00:00Z`);
-    return date.toLocaleDateString('es-ES', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      timeZone: 'UTC' // Importante para que toLocaleDateString no vuelva a aplicar la zona horaria local.
-    });
+    return date.toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
   };
-
   const handleGeneratePdf = () => {
     if (shipment) {
       const pdfOutput = generateShipmentPDF(
@@ -443,7 +453,20 @@ export default function ShipmentDetailPage() {
       setIsPreviewOpen(true);
     }
   };
+  
+  // Separa las facturas por tipo de cliente para renderizarlas en tablas distintas.
+  const fiscalCreditInvoices = invoices.filter(inv => inv.tax_type === 'Crédito Fiscal');
+  const finalConsumerInvoices = invoices.filter(inv => inv.tax_type === 'Consumidor Final');
+  const otherInvoices = invoices.filter(inv => inv.tax_type !== 'Crédito Fiscal' && inv.tax_type !== 'Consumidor Final');
 
+  if (loading && !shipment) {
+    return <p>Cargando detalles del despacho...</p>
+  }
+  if (!shipment) {
+    return <p>Despacho no encontrado.</p>
+  }
+  
+  /** Renderiza una tabla de facturas para una categoría específica. */
   const renderInvoicesTable = (invoiceList: ShipmentInvoice[], title: string, description: string) => (
     <Card className="mt-6">
       <CardHeader>
@@ -517,6 +540,7 @@ export default function ShipmentDetailPage() {
     </Card>
   );
 
+  // --- RENDERIZADO DEL COMPONENTE ---
   return (
     <div className="space-y-6">
       <Card>
@@ -590,6 +614,7 @@ export default function ShipmentDetailPage() {
         {otherInvoices.length > 0 && renderInvoicesTable(otherInvoices, "Facturación - Otros", "Facturas sin un tipo de cliente especificado.")}
       </div>
 
+      {/* Diálogo para editar una factura del despacho */}
       <Dialog open={isInvoiceDialogOpen} onOpenChange={setIsInvoiceDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -697,6 +722,7 @@ export default function ShipmentDetailPage() {
         </DialogContent>
       </Dialog>
       
+      {/* Diálogo para visualizar la imagen del comprobante */}
       <Dialog open={imageModalOpen} onOpenChange={setImageModalOpen}>
         <DialogContent className="max-w-3xl">
             <DialogHeader>
@@ -712,7 +738,7 @@ export default function ShipmentDetailPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog for Camera */}
+      {/* Diálogo para capturar una foto con la cámara */}
       <Dialog open={isCameraDialogOpen} onOpenChange={closeCameraDialog}>
         <DialogContent className="p-0 border-0 bg-black max-w-full h-full sm:h-auto sm:max-w-3xl flex flex-col">
           <DialogHeader className="sr-only">
@@ -739,7 +765,7 @@ export default function ShipmentDetailPage() {
             )}
             <canvas ref={canvasRef} className="hidden" />
 
-            {/* Controls */}
+            {/* Controles de la cámara */}
             <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
                 <div className="flex justify-center items-center gap-4">
                      {capturedImage ? (
@@ -762,7 +788,6 @@ export default function ShipmentDetailPage() {
                 </div>
             </div>
             
-            {/* Close Button */}
             <Button
               variant="ghost"
               size="icon"
@@ -775,6 +800,7 @@ export default function ShipmentDetailPage() {
         </DialogContent>
       </Dialog>
       
+      {/* Modal para la previsualización del PDF */}
       {pdfData && (
         <PdfPreviewModal
           isOpen={isPreviewOpen}
