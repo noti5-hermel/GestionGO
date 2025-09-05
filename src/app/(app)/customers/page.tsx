@@ -1,7 +1,7 @@
 
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from "react"
+import { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -69,10 +69,12 @@ export default function CustomersPage() {
   const { toast } = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalCustomers, setTotalCustomers] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterRuta, setFilterRuta] = useState('');
   const [filterTerm, setFilterTerm] = useState('');
   const [filterTax, setFilterTax] = useState('');
+  const [uniqueRoutes, setUniqueRoutes] = useState<(number | null)[]>([]);
 
   // Configuración del formulario con react-hook-form y Zod.
   const form = useForm<z.infer<typeof customerSchema>>({
@@ -86,12 +88,77 @@ export default function CustomersPage() {
     },
   })
 
-  // Carga los datos iniciales al montar el componente.
+  const fetchCustomers = useCallback(async () => {
+    const from = (currentPage - 1) * ITEMS_PER_PAGE;
+    const to = from + ITEMS_PER_PAGE - 1;
+
+    let query = supabase
+      .from('customer')
+      .select('code_customer,customer_name,id_impuesto,id_term,ruta', { count: 'exact' });
+
+    if (searchQuery) {
+      query = query.or(`customer_name.ilike.%${searchQuery}%,code_customer.ilike.%${searchQuery}%`);
+    }
+    if (filterRuta) {
+      query = query.eq('ruta', filterRuta);
+    }
+    if (filterTerm) {
+      query = query.eq('id_term', filterTerm);
+    }
+    if (filterTax) {
+      query = query.eq('id_impuesto', filterTax);
+    }
+
+    query = query.range(from, to);
+
+    const { data, error, count } = await query;
+    
+    if (error) {
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los clientes.",
+        variant: "destructive",
+      })
+    } else {
+      setCustomers(data as Customer[]);
+      setTotalCustomers(count ?? 0);
+    }
+  }, [currentPage, searchQuery, filterRuta, filterTerm, filterTax, toast]);
+
+  const fetchStaticData = useCallback(async () => {
+    const [termsRes, taxesRes, routesRes] = await Promise.all([
+      supabase.from('terminos_pago').select('id_term, term_desc'),
+      supabase.from('tipo_impuesto').select('id_impuesto, impt_desc'),
+      supabase.from('customer').select('ruta').neq('ruta', null)
+    ]);
+    
+    if (termsRes.error) {
+      toast({ title: "Error", description: "No se pudieron cargar los términos de pago.", variant: "destructive" });
+    } else {
+      setPaymentTerms(termsRes.data as PaymentTerm[]);
+    }
+
+    if (taxesRes.error) {
+      toast({ title: "Error", description: "No se pudieron cargar los impuestos.", variant: "destructive" });
+    } else {
+      setTaxes(taxesRes.data as Tax[]);
+    }
+    
+    if (routesRes.error) {
+      toast({ title: "Error", description: "No se pudieron cargar las rutas únicas.", variant: "destructive" });
+    } else {
+      const routes = new Set(routesRes.data.map((c: { ruta: any }) => c.ruta));
+      setUniqueRoutes(Array.from(routes).sort((a, b) => (a as number) - (b as number)));
+    }
+  }, [toast]);
+  
   useEffect(() => {
-    fetchCustomers()
-    fetchPaymentTerms()
-    fetchTaxes()
-  }, [])
+    fetchStaticData();
+  }, [fetchStaticData]);
+
+  useEffect(() => {
+    fetchCustomers();
+  }, [fetchCustomers]);
   
   // Rellena el formulario cuando se selecciona un cliente para editar.
   useEffect(() => {
@@ -112,48 +179,6 @@ export default function CustomersPage() {
       });
     }
   }, [editingCustomer, form]);
-
-  // Obtiene los clientes desde la base de datos.
-  const fetchCustomers = async () => {
-    const { data, error } = await supabase.from('customer').select('code_customer,customer_name,id_impuesto,id_term,ruta')
-    if (error) {
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar los clientes.",
-        variant: "destructive",
-      })
-    } else {
-      setCustomers(data as Customer[])
-    }
-  }
-
-  // Obtiene los términos de pago desde la base de datos.
-  const fetchPaymentTerms = async () => {
-    const { data, error } = await supabase.from('terminos_pago').select('id_term, term_desc')
-    if (error) {
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar los términos de pago.",
-        variant: "destructive",
-      })
-    } else {
-      setPaymentTerms(data as PaymentTerm[])
-    }
-  }
-
-  // Obtiene los tipos de impuesto desde la base de datos.
-  const fetchTaxes = async () => {
-    const { data, error } = await supabase.from('tipo_impuesto').select('id_impuesto, impt_desc')
-    if (error) {
-        toast({
-            title: "Error",
-            description: "No se pudieron cargar los impuestos.",
-            variant: "destructive",
-        })
-    } else {
-        setTaxes(data as Tax[])
-    }
-  }
 
   // Gestiona el envío del formulario para crear o actualizar un cliente.
   const onSubmit = async (values: z.infer<typeof customerSchema>) => {
@@ -345,28 +370,6 @@ export default function CustomersPage() {
     setFilterTax('');
     setCurrentPage(1);
   };
-  
-  const filteredCustomers = useMemo(() => {
-    let filtered = customers;
-
-    if (searchQuery) {
-        filtered = filtered.filter(customer =>
-            customer.customer_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            customer.code_customer.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-    }
-    if (filterRuta) {
-      filtered = filtered.filter(customer => String(customer.ruta) === filterRuta);
-    }
-    if (filterTerm) {
-      filtered = filtered.filter(customer => String(customer.id_term) === filterTerm);
-    }
-    if (filterTax) {
-      filtered = filtered.filter(customer => String(customer.id_impuesto) === filterTax);
-    }
-
-    return filtered;
-  }, [customers, searchQuery, filterRuta, filterTerm, filterTax]);
 
   // Funciones para obtener descripciones legibles a partir de IDs.
   const getTaxDescription = (taxId: string | number | null) => {
@@ -379,11 +382,7 @@ export default function CustomersPage() {
       return paymentTerms.find(term => String(term.id_term) === String(termId))?.term_desc || termId;
   }
 
-  const totalPages = Math.ceil(filteredCustomers.length / ITEMS_PER_PAGE);
-  const paginatedCustomers = filteredCustomers.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
+  const totalPages = Math.ceil(totalCustomers / ITEMS_PER_PAGE);
   
   const getPaginationNumbers = () => {
     const pages = [];
@@ -404,11 +403,6 @@ export default function CustomersPage() {
     return pages;
   };
   
-  const uniqueRoutes = useMemo(() => {
-    const routes = new Set(customers.map(c => c.ruta).filter(r => r !== null));
-    return Array.from(routes).sort((a, b) => (a as number) - (b as number));
-  }, [customers]);
-
   return (
     <Card className="h-full flex flex-col">
       <CardHeader>
@@ -607,7 +601,7 @@ export default function CustomersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedCustomers.map((customer) => (
+              {customers.map((customer) => (
                 <TableRow key={customer.code_customer}>
                   <TableCell className="font-medium">{customer.code_customer}</TableCell>
                   <TableCell>{customer.customer_name}</TableCell>
@@ -650,7 +644,7 @@ export default function CustomersPage() {
       </CardContent>
       <CardFooter className="pt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
         <div className="text-xs text-muted-foreground">
-          Mostrando <strong>{paginatedCustomers.length}</strong> de <strong>{filteredCustomers.length}</strong> clientes.
+          Mostrando <strong>{customers.length}</strong> de <strong>{totalCustomers}</strong> clientes.
         </div>
         <div className="flex items-center space-x-2">
             <Button
@@ -713,3 +707,5 @@ export default function CustomersPage() {
     </Card>
   )
 }
+
+    
