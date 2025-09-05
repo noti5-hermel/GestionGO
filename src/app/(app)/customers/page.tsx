@@ -56,6 +56,7 @@ type Customer = {
 }
 type PaymentTerm = { id_term: string | number; term_desc: string }
 type Tax = { id_impuesto: string | number; impt_desc: string }
+type Route = { id_ruta: string | number; ruta_desc: string }
 
 const ITEMS_PER_PAGE = 10;
 
@@ -74,7 +75,7 @@ export default function CustomersPage() {
   const [filterRuta, setFilterRuta] = useState('');
   const [filterTerm, setFilterTerm] = useState('');
   const [filterTax, setFilterTax] = useState('');
-  const [uniqueRoutes, setUniqueRoutes] = useState<(number | null)[]>([]);
+  const [uniqueRoutes, setUniqueRoutes] = useState<Route[]>([]);
 
   // Configuración del formulario con react-hook-form y Zod.
   const form = useForm<z.infer<typeof customerSchema>>({
@@ -129,7 +130,7 @@ export default function CustomersPage() {
     const [termsRes, taxesRes, routesRes] = await Promise.all([
       supabase.from('terminos_pago').select('id_term, term_desc'),
       supabase.from('tipo_impuesto').select('id_impuesto, impt_desc'),
-      supabase.from('customer').select('ruta').neq('ruta', null)
+      supabase.from('rutas').select('id_ruta, ruta_desc')
     ]);
     
     if (termsRes.error) {
@@ -147,8 +148,7 @@ export default function CustomersPage() {
     if (routesRes.error) {
       toast({ title: "Error", description: "No se pudieron cargar las rutas únicas.", variant: "destructive" });
     } else {
-      const routes = new Set(routesRes.data.map((c: { ruta: any }) => c.ruta));
-      setUniqueRoutes(Array.from(routes).sort((a, b) => (a as number) - (b as number)));
+       setUniqueRoutes(routesRes.data.sort((a, b) => Number(a.id_ruta) - Number(b.id_ruta)) as Route[]);
     }
   }, [toast]);
   
@@ -269,16 +269,15 @@ export default function CustomersPage() {
               .map(row => {
                   const parseNumberOrNull = (val: any): number | null => {
                     const valueStr = String(val).trim().toUpperCase();
-                    if (val === null || val === undefined || valueStr === '' || valueStr === 'N/A') {
+                    if (val === null || val === undefined || valueStr === '' || valueStr === 'N/A' || isNaN(Number(val))) {
                         return null;
                     }
-                    const num = Number(val);
-                    return isNaN(num) ? null : num;
+                    return Number(val);
                   };
 
                   return {
-                    code_customer: String(row[0] || ''),
-                    customer_name: String(row[1] || ''),
+                    code_customer: String(row[0] || '').trim(),
+                    customer_name: String(row[1] || '').trim(),
                     ruta: parseNumberOrNull(row[2]),
                     id_impuesto: parseNumberOrNull(row[3]),
                     id_term: parseNumberOrNull(row[4]),
@@ -557,7 +556,7 @@ export default function CustomersPage() {
                 </SelectTrigger>
                 <SelectContent>
                     {uniqueRoutes.map(ruta => (
-                        <SelectItem key={String(ruta)} value={String(ruta)}>{ruta}</SelectItem>
+                        <SelectItem key={String(ruta.id_ruta)} value={String(ruta.id_ruta)}>{ruta.ruta_desc}</SelectItem>
                     ))}
                 </SelectContent>
             </Select>
