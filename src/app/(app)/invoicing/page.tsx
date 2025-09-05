@@ -303,12 +303,9 @@ export default function InvoicingPage() {
               code_customer: header.indexOf('code')
             };
               
-            //customerMap retorna los registros de tb customer de BD
-            const customerMap = new Map(customers.map(c => [String(c.code_customer).trim(), c]));
             const paymentTermMap = new Map(paymentTerms.map(pt => [pt.id_term, pt.term_desc]));
-           console.log("Customer_data:",customerMap);   
 
-            const mappedDataPromises = dataRows.map(async (row,index) => {
+            const mappedDataPromises = dataRows.map(async (row) => {
                 const getDate = (dateValue: any) => {
                   if (!dateValue) return new Date().toISOString().split('T')[0];
                   const date = new Date(dateValue);
@@ -316,7 +313,8 @@ export default function InvoicingPage() {
                 };
 
                 const getNumericValue = (value: any): number => {
-                    if (typeof value === 'string' && value.toUpperCase() === 'N/A') {
+                    const strValue = String(value).toUpperCase();
+                    if (strValue === 'N/A' || strValue.trim() === '') {
                         return 0;
                     }
                     const num = parseFloat(String(value));
@@ -324,25 +322,21 @@ export default function InvoicingPage() {
                 };
 
                 const code_customer = String(row[colIndices.code_customer]).trim();
-                if(index<5){
-                  console.log(`code: ${index + 1} →`, code_customer);
-                }
                 if (!code_customer) return null;
 
-                const customer = customerMap.get(code_customer);
-                if(index<5){
-                  console.log(`Fila ${index + 1} →`, customer);
-                }
+                const { data: customer, error: customerError } = await supabase
+                    .from('customer')
+                    .select('customer_name, ruta, id_term')
+                    .eq('code_customer', code_customer)
+                    .single();
 
-                if (!customer) {
-                  console.warn(`Cliente con código ${code_customer} no encontrado. Se omitirá esta fila.`);
-                  return null;
+                if (customerError || !customer) {
+                    console.warn(`Cliente con código ${code_customer} no encontrado. Se omitirá esta fila.`);
+                    return null;
                 }
 
                 const term_description = paymentTermMap.get(customer.id_term) || "";
-                
                 const taxIdValue = String(row[colIndices.tax_id_number]).trim();
-
 
                 return {
                     invoice_number: String(row[colIndices.invoice_number]),
@@ -363,8 +357,6 @@ export default function InvoicingPage() {
             });
 
             const mappedData = (await Promise.all(mappedDataPromises)).filter(d => d && d.id_factura);
-            
-            // Filtra los duplicados basándose en id_factura.
             const uniqueMappedData = Array.from(new Map(mappedData.map(item => [item.id_factura, item])).values());
 
             if(uniqueMappedData.length === 0) {
@@ -829,5 +821,3 @@ export default function InvoicingPage() {
     </Card>
   )
 }
-
-    
