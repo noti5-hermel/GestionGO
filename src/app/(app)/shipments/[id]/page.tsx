@@ -417,6 +417,18 @@ export default function ShipmentDetailPage() {
   if (!shipment) {
     return <p>Despacho no encontrado.</p>
   }
+  
+  const formatDate = (dateString: string) => {
+    // La fecha de Supabase es un string como '2023-09-10'. La zona horaria UTC se añade para evitar
+    // que el objeto Date la interprete en la zona horaria local, lo que podría cambiar el día.
+    const date = new Date(`${dateString}T00:00:00Z`);
+    return date.toLocaleDateString('es-ES', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      timeZone: 'UTC' // Importante para que toLocaleDateString no vuelva a aplicar la zona horaria local.
+    });
+  };
 
   const handleGeneratePdf = () => {
     if (shipment) {
@@ -542,7 +554,7 @@ export default function ShipmentDetailPage() {
             </div>
             <div className="space-y-1">
               <p className="text-sm font-medium text-muted-foreground">Fecha de Despacho</p>
-              <p>{new Date(shipment.fecha_despacho).toLocaleDateString()}</p>
+              <p>{formatDate(shipment.fecha_despacho)}</p>
             </div>
             <div className="space-y-1">
               <p className="text-sm font-medium text-muted-foreground">Total Contado</p>
@@ -774,5 +786,3 @@ export default function ShipmentDetailPage() {
     </div>
   )
 }
-
-    

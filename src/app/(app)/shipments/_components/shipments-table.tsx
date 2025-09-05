@@ -62,6 +62,18 @@ export function ShipmentsTable({
 
   const [pdfData, setPdfData] = useState<{ dataUri: string; fileName: string } | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
+  const formatDate = (dateString: string) => {
+    // La fecha de Supabase es un string como '2023-09-10'. La zona horaria UTC se añade para evitar
+    // que el objeto Date la interprete en la zona horaria local, lo que podría cambiar el día.
+    const date = new Date(`${dateString}T00:00:00Z`);
+    return date.toLocaleDateString('es-ES', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      timeZone: 'UTC' // Importante para que toLocaleDateString no vuelva a aplicar la zona horaria local.
+    });
+  };
   
   const handleGeneratePdf = async (shipment: Shipment) => {
     // 1. Obtener las facturas asociadas a este despacho
@@ -156,7 +168,7 @@ export function ShipmentsTable({
                 <TableCell>{getRouteDescription(shipment.id_ruta)}</TableCell>
                 <TableCell>{getUserName(shipment.id_motorista)}</TableCell>
                 <TableCell>{getUserName(shipment.id_auxiliar)}</TableCell>
-                <TableCell>{new Date(shipment.fecha_despacho).toLocaleDateString()}</TableCell>
+                <TableCell>{formatDate(shipment.fecha_despacho)}</TableCell>
                 <TableCell>${(shipment.total_contado ?? 0).toFixed(2)}</TableCell>
                 <TableCell>${(shipment.total_credito ?? 0).toFixed(2)}</TableCell>
                 <TableCell>${(shipment.total_general ?? 0).toFixed(2)}</TableCell>
@@ -220,5 +232,3 @@ export function ShipmentsTable({
     </>
   )
 }
-
-    

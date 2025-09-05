@@ -175,12 +175,15 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
 
   useEffect(() => {
     if (editingShipment) {
+      const utcDate = new Date(editingShipment.fecha_despacho + 'T00:00:00Z');
+      const localDateString = utcDate.toISOString().split('T')[0];
+
       form.reset({
         ...editingShipment,
         id_ruta: String(editingShipment.id_ruta),
         id_motorista: String(editingShipment.id_motorista),
         id_auxiliar: String(editingShipment.id_auxiliar),
-        fecha_despacho: editingShipment.fecha_despacho ? new Date(editingShipment.fecha_despacho).toISOString().split('T')[0] : '',
+        fecha_despacho: localDateString,
       })
     } else {
       form.reset({
@@ -446,5 +449,3 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
     setReviewFilter
   }
 }
-
-    
