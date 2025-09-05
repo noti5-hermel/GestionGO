@@ -117,7 +117,8 @@ export default function InvoicingPage() {
       .select('*', { count: 'exact' });
 
     if (searchQuery) {
-      query = query.or(`invoice_number.ilike.%${searchQuery}%,id_factura.ilike.%${searchQuery}%,code_customer.ilike.%${searchQuery}%`);
+      // La columna 'invoice_number' se convierte a texto para poder usar 'ilike'
+      query = query.or(`invoice_number::text.ilike.%${searchQuery}%,id_factura.ilike.%${searchQuery}%,code_customer.ilike.%${searchQuery}%`);
     }
 
     if (filterDate) {
@@ -136,7 +137,6 @@ export default function InvoicingPage() {
   }, [currentPage, searchQuery, filterDate, toast]);
   
   useEffect(() => {
-    fetchInvoices()
     fetchCustomers()
     fetchPaymentTerms()
   }, [])
