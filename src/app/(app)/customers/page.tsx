@@ -24,7 +24,7 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { PlusCircle, Trash2, Pencil, Upload, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, FilterX } from "lucide-react"
+import { PlusCircle, Trash2, Pencil, Upload, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, FilterX, Search } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 
@@ -69,6 +69,7 @@ export default function CustomersPage() {
   const { toast } = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState('');
   const [filterRuta, setFilterRuta] = useState('');
   const [filterTerm, setFilterTerm] = useState('');
   const [filterTax, setFilterTax] = useState('');
@@ -337,6 +338,7 @@ export default function CustomersPage() {
   };
   
   const clearFilters = () => {
+    setSearchQuery('');
     setFilterRuta('');
     setFilterTerm('');
     setFilterTax('');
@@ -346,6 +348,12 @@ export default function CustomersPage() {
   const filteredCustomers = useMemo(() => {
     let filtered = customers;
 
+    if (searchQuery) {
+        filtered = filtered.filter(customer =>
+            customer.customer_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            customer.code_customer.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+    }
     if (filterRuta) {
       filtered = filtered.filter(customer => String(customer.ruta) === filterRuta);
     }
@@ -357,7 +365,7 @@ export default function CustomersPage() {
     }
 
     return filtered;
-  }, [customers, filterRuta, filterTerm, filterTax]);
+  }, [customers, searchQuery, filterRuta, filterTerm, filterTax]);
 
   // Funciones para obtener descripciones legibles a partir de IDs.
   const getTaxDescription = (taxId: string | number | null) => {
@@ -397,7 +405,7 @@ export default function CustomersPage() {
   
   const uniqueRoutes = useMemo(() => {
     const routes = new Set(customers.map(c => c.ruta).filter(r => r !== null));
-    return Array.from(routes);
+    return Array.from(routes).sort((a, b) => (a as number) - (b as number));
   }, [customers]);
 
   return (
@@ -537,9 +545,19 @@ export default function CustomersPage() {
             </Dialog>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 mt-4">
+        <div className="flex flex-col sm:flex-row flex-wrap items-center gap-2 mt-4">
+            <div className="relative w-full sm:w-auto flex-grow sm:flex-grow-0">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                    type="search"
+                    placeholder="Buscar por código o nombre..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-8 w-full sm:w-[250px]"
+                />
+            </div>
             <Select value={filterRuta} onValueChange={setFilterRuta}>
-                <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectTrigger className="w-full sm:w-auto min-w-[160px]">
                     <SelectValue placeholder="Filtrar por Ruta" />
                 </SelectTrigger>
                 <SelectContent>
@@ -549,7 +567,7 @@ export default function CustomersPage() {
                 </SelectContent>
             </Select>
             <Select value={filterTerm} onValueChange={setFilterTerm}>
-                <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectTrigger className="w-full sm:w-auto min-w-[160px]">
                     <SelectValue placeholder="Filtrar por Término" />
                 </SelectTrigger>
                 <SelectContent>
@@ -559,7 +577,7 @@ export default function CustomersPage() {
                 </SelectContent>
             </Select>
             <Select value={filterTax} onValueChange={setFilterTax}>
-                <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectTrigger className="w-full sm:w-auto min-w-[160px]">
                     <SelectValue placeholder="Filtrar por Impuesto" />
                 </SelectTrigger>
                 <SelectContent>

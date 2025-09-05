@@ -302,11 +302,13 @@ export default function InvoicingPage() {
               id_factura: header.indexOf('your reference'),
               code_customer: header.indexOf('code')
             };
-
+              
+            //customerMap retorna los registros de tb customer de BD
             const customerMap = new Map(customers.map(c => [String(c.code_customer).trim(), c]));
             const paymentTermMap = new Map(paymentTerms.map(pt => [pt.id_term, pt.term_desc]));
+           console.log("Customer_data:",customerMap);   
 
-            const mappedDataPromises = dataRows.map(async (row) => {
+            const mappedDataPromises = dataRows.map(async (row,index) => {
                 const getDate = (dateValue: any) => {
                   if (!dateValue) return new Date().toISOString().split('T')[0];
                   const date = new Date(dateValue);
@@ -322,9 +324,15 @@ export default function InvoicingPage() {
                 };
 
                 const code_customer = String(row[colIndices.code_customer]).trim();
+                if(index<5){
+                  console.log(`code: ${index + 1} →`, code_customer);
+                }
                 if (!code_customer) return null;
 
                 const customer = customerMap.get(code_customer);
+                if(index<5){
+                  console.log(`Fila ${index + 1} →`, customer);
+                }
 
                 if (!customer) {
                   console.warn(`Cliente con código ${code_customer} no encontrado. Se omitirá esta fila.`);
