@@ -243,7 +243,8 @@ export default function CustomersPage() {
               .slice(1) // Omitir la fila de encabezados
               .map(row => {
                   const parseNumberOrNull = (val: any): number | null => {
-                    if (val === null || val === '' || val === undefined || String(val).toUpperCase() === 'N/A') {
+                    const valueStr = String(val).trim().toUpperCase();
+                    if (val === null || val === undefined || valueStr === '' || valueStr === 'N/A') {
                         return null;
                     }
                     const num = Number(val);
