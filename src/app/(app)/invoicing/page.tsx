@@ -107,6 +107,7 @@ export default function InvoicingPage() {
   const [totalInvoices, setTotalInvoices] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDate, setFilterDate] = useState('');
+  const [filterImportDate, setFilterImportDate] = useState('');
 
   // --- FORMULARIO ---
   // Configuración del formulario con react-hook-form y Zod.
@@ -147,12 +148,17 @@ export default function InvoicingPage() {
 
     // Aplica el filtro de búsqueda. Se convierte 'id_factura' a texto para poder usar 'ilike'.
     if (searchQuery) {
-      query = query.or(`id_factura::text.ilike.%${searchQuery}%,reference_number.ilike.%${searchQuery}%,code_customer.ilike.%${searchQuery}%`);
+      query = query.or(`id_factura::text.ilike.%${searchQuery}%,reference_number::text.ilike.%${searchQuery}%,code_customer.ilike.%${searchQuery}%`);
     }
 
-    // Aplica el filtro de fecha.
+    // Aplica el filtro de fecha de entrega.
     if (filterDate) {
       query = query.eq('fecha', filterDate);
+    }
+    
+    // Aplica el filtro de fecha de importación.
+    if (filterImportDate) {
+      query = query.eq('fecha_import', filterImportDate);
     }
     
     // Aplica el rango de paginación y ordena por fecha descendente.
@@ -165,7 +171,7 @@ export default function InvoicingPage() {
       setInvoices(data as Invoice[]);
       setTotalInvoices(count ?? 0); // Actualiza el conteo total para la paginación.
     }
-  }, [currentPage, searchQuery, filterDate, toast]);
+  }, [currentPage, searchQuery, filterDate, filterImportDate, toast]);
   
   /**
    * Efecto para cargar los datos estáticos (clientes, términos de pago) al montar el componente.
@@ -520,6 +526,7 @@ export default function InvoicingPage() {
   const clearFilters = () => {
     setSearchQuery('');
     setFilterDate('');
+    setFilterImportDate('');
     setCurrentPage(1);
   };
 
@@ -816,6 +823,16 @@ export default function InvoicingPage() {
                     type="date"
                     value={filterDate}
                     onChange={(e) => setFilterDate(e.target.value)}
+                    className="w-full sm:w-auto"
+                />
+             </div>
+             <div className="flex items-center gap-2">
+                <Label htmlFor="importDate">Fecha de Importación</Label>
+                <Input
+                    id="importDate"
+                    type="date"
+                    value={filterImportDate}
+                    onChange={(e) => setFilterImportDate(e.target.value)}
                     className="w-full sm:w-auto"
                 />
              </div>
