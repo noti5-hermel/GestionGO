@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge"
 import { PlusCircle, Pencil, Trash2, Upload, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Search, FilterX } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
+import { Label } from "@/components/ui/label"
 
 // Esquema de validación para la factura usando Zod
 const invoiceSchema = z.object({
@@ -710,7 +711,7 @@ export default function InvoicingPage() {
           </Dialog>
         </div>
         </div>
-        <div className="flex flex-col sm:flex-row flex-wrap items-center gap-2 mt-4">
+        <div className="flex flex-col sm:flex-row flex-wrap items-center gap-4 mt-4">
             <div className="relative w-full sm:w-auto flex-grow sm:flex-grow-0">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -721,12 +722,16 @@ export default function InvoicingPage() {
                     className="pl-8 w-full sm:w-[300px]"
                 />
             </div>
-             <Input
-                type="date"
-                value={filterDate}
-                onChange={(e) => setFilterDate(e.target.value)}
-                className="w-full sm:w-auto"
-            />
+             <div className="flex items-center gap-2">
+                <Label htmlFor="deliveryDate">Fecha de Entrega</Label>
+                <Input
+                    id="deliveryDate"
+                    type="date"
+                    value={filterDate}
+                    onChange={(e) => setFilterDate(e.target.value)}
+                    className="w-full sm:w-auto"
+                />
+             </div>
             <Button variant="ghost" onClick={clearFilters} className="text-sm">
                 <FilterX className="mr-2 h-4 w-4"/>
                 Limpiar Filtros
@@ -870,5 +875,3 @@ export default function InvoicingPage() {
     </Card>
   )
 }
-
-    
