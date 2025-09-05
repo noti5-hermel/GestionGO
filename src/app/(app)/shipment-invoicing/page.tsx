@@ -459,7 +459,7 @@ export default function ShipmentInvoicingPage() {
                             <SelectContent>
                                 {availableInvoices.map((invoice) => (
                                     <SelectItem key={invoice.id_factura} value={invoice.id_factura}>
-                                        {String(invoice.id_factura)}
+                                      {`ID: ${invoice.id_factura} - Ref: ${invoice.reference_number} - Fecha: ${new Date(invoice.fecha + 'T00:00:00Z').toLocaleDateString()}`}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
