@@ -1,7 +1,7 @@
 
 'use client'
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -25,7 +25,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { PlusCircle, Pencil, Trash2, Upload, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from "lucide-react"
+import { PlusCircle, Pencil, Trash2, Upload, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Search, FilterX } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 
@@ -82,6 +82,9 @@ export default function InvoicingPage() {
   const { toast } = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalInvoices, setTotalInvoices] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterDate, setFilterDate] = useState('');
 
   // Configuración del formulario con react-hook-form y Zod
   const form = useForm<z.infer<typeof invoiceSchema>>({
@@ -103,12 +106,43 @@ export default function InvoicingPage() {
       ruta: "",
     },
   })
+
+  const fetchInvoices = useCallback(async () => {
+    const from = (currentPage - 1) * ITEMS_PER_PAGE;
+    const to = from + ITEMS_PER_PAGE - 1;
+
+    let query = supabase
+      .from('facturacion')
+      .select('*', { count: 'exact' });
+
+    if (searchQuery) {
+      query = query.or(`invoice_number.ilike.%${searchQuery}%,id_factura.ilike.%${searchQuery}%,code_customer.ilike.%${searchQuery}%`);
+    }
+
+    if (filterDate) {
+      query = query.eq('fecha', filterDate);
+    }
+    
+    query = query.range(from, to).order('fecha', { ascending: false });
+
+    const { data, error, count } = await query;
+    if (error) {
+      toast({ title: "Error", description: "No se pudieron cargar las facturas.", variant: "destructive" });
+    } else {
+      setInvoices(data as Invoice[]);
+      setTotalInvoices(count ?? 0);
+    }
+  }, [currentPage, searchQuery, filterDate, toast]);
   
   useEffect(() => {
     fetchInvoices()
     fetchCustomers()
     fetchPaymentTerms()
   }, [])
+  
+  useEffect(() => {
+    fetchInvoices();
+  }, [fetchInvoices]);
   
   useEffect(() => {
     if (editingInvoice) {
@@ -139,15 +173,6 @@ export default function InvoicingPage() {
       });
     }
   }, [editingInvoice, form]);
-
-  const fetchInvoices = async () => {
-    const { data, error } = await supabase.from('facturacion').select('*')
-    if (error) {
-      toast({ title: "Error", description: "No se pudieron cargar las facturas.", variant: "destructive" })
-    } else {
-      setInvoices(data as Invoice[])
-    }
-  }
 
   const fetchCustomers = async () => {
     const { data, error } = await supabase.from('customer').select('code_customer, customer_name, ruta, id_term')
@@ -405,12 +430,14 @@ export default function InvoicingPage() {
   const handleImportClick = () => {
     fileInputRef.current?.click();
   };
+  
+  const clearFilters = () => {
+    setSearchQuery('');
+    setFilterDate('');
+    setCurrentPage(1);
+  };
 
-  const totalPages = Math.ceil(invoices.length / ITEMS_PER_PAGE);
-  const paginatedInvoices = invoices.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
+  const totalPages = Math.ceil(totalInvoices / ITEMS_PER_PAGE);
   
   const getPaginationNumbers = () => {
     const pages = [];
@@ -439,7 +466,7 @@ export default function InvoicingPage() {
             <CardTitle>Facturación</CardTitle>
             <CardDescription>Cree y visualice facturas.</CardDescription>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button onClick={handleImportClick} variant="outline">
                 <Upload className="mr-2 h-4 w-4" /> Importar desde Excel
             </Button>
@@ -683,6 +710,28 @@ export default function InvoicingPage() {
           </Dialog>
         </div>
         </div>
+        <div className="flex flex-col sm:flex-row flex-wrap items-center gap-2 mt-4">
+            <div className="relative w-full sm:w-auto flex-grow sm:flex-grow-0">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                    type="search"
+                    placeholder="Buscar por factura, ID o cliente..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-8 w-full sm:w-[300px]"
+                />
+            </div>
+             <Input
+                type="date"
+                value={filterDate}
+                onChange={(e) => setFilterDate(e.target.value)}
+                className="w-full sm:w-auto"
+            />
+            <Button variant="ghost" onClick={clearFilters} className="text-sm">
+                <FilterX className="mr-2 h-4 w-4"/>
+                Limpiar Filtros
+            </Button>
+        </div>
       </CardHeader>
       <CardContent className="flex-1 overflow-auto">
         <div className="relative w-full overflow-auto">
@@ -705,7 +754,7 @@ export default function InvoicingPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedInvoices.map((invoice) => {
+              {invoices.map((invoice) => {
                 const statusLabel = getStatusLabel(invoice.state);
                 return (
                   <TableRow key={invoice.id_factura}>
@@ -758,7 +807,7 @@ export default function InvoicingPage() {
       </CardContent>
       <CardFooter className="pt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
         <div className="text-xs text-muted-foreground">
-          Mostrando <strong>{paginatedInvoices.length}</strong> de <strong>{invoices.length}</strong> facturas.
+          Mostrando <strong>{invoices.length}</strong> de <strong>{totalInvoices}</strong> facturas.
         </div>
         <div className="flex items-center space-x-2">
             <Button
@@ -821,3 +870,5 @@ export default function InvoicingPage() {
     </Card>
   )
 }
+
+    
