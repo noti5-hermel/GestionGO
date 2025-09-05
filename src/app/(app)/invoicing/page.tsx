@@ -61,6 +61,7 @@ const invoiceSchema = z.object({
   net_to_pay: z.coerce.number(),
   term_description: z.string().min(1, "La descripción del término es requerida."),
   fecha: z.string().min(1, "La fecha es requerida."),
+  fecha_import: z.string().optional(),
   state: z.preprocess(
       (val) => (String(val).toLowerCase() === 'pagada' || val === true),
       z.boolean()
@@ -78,6 +79,7 @@ type Invoice = Omit<z.infer<typeof invoiceSchema>, 'state' | 'id_factura' | 'ref
   reference_number: string | number,
   tax_id_number: string | number,
   ruta: string | number,
+  fecha_import?: string,
 }
 type Customer = { code_customer: string, customer_name: string, ruta: string | number, id_term: number }
 type PaymentTerm = { id_term: number, term_desc: string }
@@ -123,6 +125,7 @@ export default function InvoicingPage() {
       net_to_pay: 0,
       term_description: "",
       fecha: new Date().toISOString().split('T')[0], // Fecha actual por defecto.
+      fecha_import: new Date().toISOString().split('T')[0],
       state: false,
       ruta: "",
     },
@@ -207,6 +210,7 @@ export default function InvoicingPage() {
         net_to_pay: 0,
         term_description: "",
         fecha: new Date().toISOString().split('T')[0],
+        fecha_import: new Date().toISOString().split('T')[0],
         state: false,
         ruta: "",
       });
@@ -239,7 +243,16 @@ export default function InvoicingPage() {
    */
   const onSubmit = async (values: z.infer<typeof invoiceSchema>) => {
     let error;
-    const dataToSubmit = { ...values };
+    
+    // Para nuevas facturas, se establece la fecha de importación.
+    // Para facturas existentes, no se modifica.
+    const dataToSubmit: Omit<typeof values, 'fecha_import'> & { fecha_import?: string } = { ...values };
+    if (!editingInvoice) {
+      dataToSubmit.fecha_import = new Date().toISOString().split('T')[0];
+    } else {
+      delete dataToSubmit.fecha_import;
+    }
+
 
     if (editingInvoice) {
       // Actualiza una factura existente.
@@ -377,6 +390,7 @@ export default function InvoicingPage() {
                     id_factura: String(row[colIndices.id_factura]),
                     reference_number: String(row[colIndices.reference_number]),
                     fecha: getDate(row[colIndices.transaction_date]),
+                    fecha_import: new Date().toISOString().split('T')[0],
                     customer_name: customer.customer_name,
                     tax_id_number: (taxIdValue.toUpperCase() === 'N/A' || taxIdValue === '') ? '0' : taxIdValue,
                     subtotal: getNumericValue(row[colIndices.subtotal]),
@@ -827,6 +841,7 @@ export default function InvoicingPage() {
                 <TableHead>Neto a Pagar</TableHead>
                 <TableHead>Término</TableHead>
                 <TableHead>Fecha</TableHead>
+                <TableHead>Fecha Importación</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
@@ -847,6 +862,7 @@ export default function InvoicingPage() {
                     <TableCell>${invoice.net_to_pay.toFixed(2)}</TableCell>
                     <TableCell>{invoice.term_description}</TableCell>
                     <TableCell>{new Date(invoice.fecha).toLocaleDateString()}</TableCell>
+                    <TableCell>{invoice.fecha_import ? new Date(invoice.fecha_import).toLocaleDateString() : 'N/A'}</TableCell>
                     <TableCell><Badge variant={getBadgeVariant(statusLabel)}>{statusLabel}</Badge></TableCell>
                     <TableCell>
                       <div className="flex justify-end items-center gap-2">
