@@ -56,7 +56,7 @@ export type ShipmentInvoice = {
   forma_pago: "Efectivo" | "Tarjeta" | "Transferencia"
   monto: number
   state: boolean
-  invoice_number?: string | number // Opcional, se añade después
+  reference_number?: string | number // Opcional, se añade después
   tax_type?: string // Opcional, se añade después
   grand_total?: number // Opcional, se añade después
 }
@@ -446,3 +446,5 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
     setReviewFilter
   }
 }
+
+    

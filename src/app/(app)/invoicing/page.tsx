@@ -32,13 +32,16 @@ import { Label } from "@/components/ui/label"
 
 // Esquema de validación para la factura usando Zod
 const invoiceSchema = z.object({
-  id_factura: z.string().min(1, "ID de factura es requerido."),
-  code_customer: z.string().min(1, "El código de cliente es requerido."),
-  customer_name: z.string().min(1, "El nombre del cliente es requerido."),
-  invoice_number: z.preprocess(
+  id_factura: z.preprocess(
     (val) => String(val),
     z.string().min(1, "El número de factura es requerido.")
   ),
+  reference_number: z.preprocess(
+    (val) => String(val),
+    z.string().min(1, "La referencia es requerida.")
+  ),
+  code_customer: z.string().min(1, "El código de cliente es requerido."),
+  customer_name: z.string().min(1, "El nombre del cliente es requerido."),
   tax_id_number: z.preprocess(
     (val) => String(val),
     z.string().min(1, "El NIF es requerido.")
@@ -61,9 +64,10 @@ const invoiceSchema = z.object({
 })
 
 // Tipo inferido del esquema de Zod. 'state' en la BD es booleano.
-type Invoice = Omit<z.infer<typeof invoiceSchema>, 'state' | 'invoice_number' | 'tax_id_number' | 'ruta'> & { 
+type Invoice = Omit<z.infer<typeof invoiceSchema>, 'state' | 'id_factura' | 'reference_number' | 'tax_id_number' | 'ruta'> & { 
   state: boolean,
-  invoice_number: string | number,
+  id_factura: string | number,
+  reference_number: string | number,
   tax_id_number: string | number,
   ruta: string | number,
 }
@@ -92,9 +96,9 @@ export default function InvoicingPage() {
     resolver: zodResolver(invoiceSchema),
     defaultValues: {
       id_factura: "",
+      reference_number: "",
       code_customer: "",
       customer_name: "",
-      invoice_number: "",
       tax_id_number: "",
       subtotal: 0,
       total_sale: 0,
@@ -118,7 +122,7 @@ export default function InvoicingPage() {
 
     if (searchQuery) {
       // La columna 'invoice_number' se convierte a texto para poder usar 'ilike'
-      query = query.or(`invoice_number::text.ilike.%${searchQuery}%,id_factura.ilike.%${searchQuery}%,code_customer.ilike.%${searchQuery}%`);
+      query = query.or(`id_factura::text.ilike.%${searchQuery}%,reference_number.ilike.%${searchQuery}%,code_customer.ilike.%${searchQuery}%`);
     }
 
     if (filterDate) {
@@ -149,7 +153,8 @@ export default function InvoicingPage() {
     if (editingInvoice) {
       form.reset({
           ...editingInvoice,
-          invoice_number: String(editingInvoice.invoice_number),
+          id_factura: String(editingInvoice.id_factura),
+          reference_number: String(editingInvoice.reference_number),
           tax_id_number: String(editingInvoice.tax_id_number),
           ruta: String(editingInvoice.ruta),
           fecha: editingInvoice.fecha ? new Date(editingInvoice.fecha).toISOString().split('T')[0] : '',
@@ -158,9 +163,9 @@ export default function InvoicingPage() {
     } else {
       form.reset({
         id_factura: "",
+        reference_number: "",
         code_customer: "",
         customer_name: "",
-        invoice_number: "",
         tax_id_number: "",
         subtotal: 0,
         total_sale: 0,
@@ -317,7 +322,8 @@ export default function InvoicingPage() {
             const dataRows = json.slice(1);
             
             const colIndices = {
-              invoice_number: header.indexOf('invoice number'),
+              id_factura: header.indexOf('invoice number'), // Mapea 'invoice number' a id_factura
+              reference_number: header.indexOf('your reference'), // Mapea 'your reference' a reference_number
               transaction_date: header.indexOf('transaction date'),
               tax_id_number: header.indexOf('tax id number'),
               subtotal: header.indexOf('subtotal'),
@@ -325,7 +331,6 @@ export default function InvoicingPage() {
               grand_total: header.indexOf('grand total'),
               payment: header.indexOf('payment total'),
               net_to_pay: header.indexOf('net to pay'),
-              id_factura: header.indexOf('your reference'),
               code_customer: header.indexOf('code')
             };
               
@@ -365,7 +370,8 @@ export default function InvoicingPage() {
                 const taxIdValue = String(row[colIndices.tax_id_number]).trim();
 
                 return {
-                    invoice_number: String(row[colIndices.invoice_number]),
+                    id_factura: String(row[colIndices.id_factura]),
+                    reference_number: String(row[colIndices.reference_number]),
                     fecha: getDate(row[colIndices.transaction_date]),
                     customer_name: customer.customer_name,
                     tax_id_number: (taxIdValue.toUpperCase() === 'N/A' || taxIdValue === '') ? '0' : taxIdValue,
@@ -376,7 +382,6 @@ export default function InvoicingPage() {
                     net_to_pay: getNumericValue(row[colIndices.net_to_pay]),
                     ruta: String(customer.ruta),
                     term_description: term_description,
-                    id_factura: String(row[colIndices.id_factura]),
                     code_customer: code_customer,
                     state: false, 
                 };
@@ -386,7 +391,7 @@ export default function InvoicingPage() {
             const uniqueMappedData = Array.from(new Map(mappedData.map(item => [item.id_factura, item])).values());
 
             if(uniqueMappedData.length === 0) {
-              toast({ title: "Advertencia", description: "No se encontraron filas válidas o únicas para importar. Verifica los códigos de cliente y los ID de factura.", variant: "destructive" });
+              toast({ title: "Advertencia", description: "No se encontraron filas válidas o únicas para importar. Verifica los códigos de cliente y los números de factura.", variant: "destructive" });
               if(event.target) event.target.value = '';
               return;
             }
@@ -499,9 +504,22 @@ export default function InvoicingPage() {
                       name="id_factura"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>ID Factura</FormLabel>
+                          <FormLabel>No. Factura</FormLabel>
                           <FormControl>
-                            <Input placeholder="Ej: FACT-003" {...field} disabled={!!editingInvoice} />
+                            <Input placeholder="Ej: INV-2024-003" {...field} disabled={!!editingInvoice} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="reference_number"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>No. Referencia</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Ej: FACT-003" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -539,19 +557,6 @@ export default function InvoicingPage() {
                           <FormLabel>Nombre Cliente</FormLabel>
                           <FormControl>
                             <Input placeholder="Ej: Juan Pérez" {...field} readOnly />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="invoice_number"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Número Factura</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Ej: INV-2024-003" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -716,7 +721,7 @@ export default function InvoicingPage() {
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                     type="search"
-                    placeholder="Buscar por factura, ID o cliente..."
+                    placeholder="Buscar por factura, ref. o cliente..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="pl-8 w-full sm:w-[300px]"
@@ -743,8 +748,8 @@ export default function InvoicingPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>ID Factura</TableHead>
                 <TableHead>No. Factura</TableHead>
+                <TableHead>Referencia</TableHead>
                 <TableHead>NIF</TableHead>
                 <TableHead>Ruta</TableHead>
                 <TableHead>Subtotal</TableHead>
@@ -762,9 +767,9 @@ export default function InvoicingPage() {
               {invoices.map((invoice) => {
                 const statusLabel = getStatusLabel(invoice.state);
                 return (
-                  <TableRow key={invoice.id_factura}>
+                  <TableRow key={String(invoice.id_factura)}>
                     <TableCell className="font-medium">{invoice.id_factura}</TableCell>
-                    <TableCell>{invoice.invoice_number}</TableCell>
+                    <TableCell>{invoice.reference_number}</TableCell>
                     <TableCell>{invoice.tax_id_number}</TableCell>
                     <TableCell>{invoice.ruta}</TableCell>
                     <TableCell>${invoice.subtotal.toFixed(2)}</TableCell>
@@ -795,7 +800,7 @@ export default function InvoicingPage() {
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDelete(invoice.id_factura)}>
+                              <AlertDialogAction onClick={() => handleDelete(String(invoice.id_factura))}>
                                 Eliminar
                               </AlertDialogAction>
                             </AlertDialogFooter>
@@ -875,3 +880,5 @@ export default function InvoicingPage() {
     </Card>
   )
 }
+
+    

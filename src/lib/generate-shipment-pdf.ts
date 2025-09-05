@@ -79,7 +79,7 @@ export const generateShipmentPDF = (
 
       const tableColumn = ["No. Factura", "Total Factura", "Forma de Pago", "Monto Pagado", "Estado"];
       const tableRows = invoiceList.map(inv => [
-        String(inv.invoice_number || inv.id_factura),
+        String(inv.id_factura || inv.id_factura),
         `$${(inv.grand_total || 0).toFixed(2)}`,
         inv.forma_pago,
         `$${inv.monto.toFixed(2)}`,
@@ -146,3 +146,5 @@ export const generateShipmentPDF = (
     fileName: `despacho_${shipment.id_despacho}.pdf`
   };
 };
+
+    

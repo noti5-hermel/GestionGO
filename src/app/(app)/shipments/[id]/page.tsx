@@ -58,14 +58,14 @@ export type ShipmentInvoice = {
   forma_pago: "Efectivo" | "Tarjeta" | "Transferencia"
   monto: number
   state: boolean
-  invoice_number?: string | number // Opcional, se añade después
+  reference_number?: string | number // Opcional, se añade después
   tax_type?: string // Opcional, se añade después
   grand_total?: number // Opcional, se añade después
 }
 
 type User = { id_user: string; name: string }
 type Route = { id_ruta: string; ruta_desc: string }
-type Invoice = { id_factura: string, invoice_number: string | number, code_customer: string, grand_total: number }
+type Invoice = { id_factura: string, reference_number: string | number, code_customer: string, grand_total: number }
 type Customer = { code_customer: string; id_impuesto: number };
 type TaxType = { id_impuesto: number; impt_desc: string };
 const paymentMethods: ShipmentInvoice['forma_pago'][] = ["Efectivo", "Tarjeta", "Transferencia"];
@@ -162,7 +162,7 @@ export default function ShipmentDetailPage() {
       const invoiceIds = shipmentInvoicesData.map(inv => inv.id_factura)
 
       if (invoiceIds.length > 0) {
-          const { data: invoicesData, error: invoicesError } = await supabase.from('facturacion').select('id_factura, invoice_number, code_customer, grand_total').in('id_factura', invoiceIds)
+          const { data: invoicesData, error: invoicesError } = await supabase.from('facturacion').select('id_factura, reference_number, code_customer, grand_total').in('id_factura', invoiceIds)
           if (invoicesError) {
               toast({ title: "Error", description: "No se pudieron cargar los datos de facturas.", variant: "destructive" });
           } else {
@@ -179,7 +179,7 @@ export default function ShipmentDetailPage() {
                       const taxMap = new Map((taxesData || []).map(t => [t.id_impuesto, t.impt_desc]))
                       const customerTaxMap = new Map((customersData || []).map(c => [c.code_customer, taxMap.get(c.id_impuesto)]))
                       const invoiceInfoMap = new Map((invoicesData || []).map(i => [i.id_factura, {
-                        invoice_number: i.invoice_number,
+                        reference_number: i.reference_number,
                         code_customer: i.code_customer,
                         grand_total: i.grand_total,
                       }]));
@@ -188,7 +188,7 @@ export default function ShipmentDetailPage() {
                         const invoiceInfo = invoiceInfoMap.get(si.id_factura);
                         return {
                           ...si,
-                          invoice_number: invoiceInfo?.invoice_number,
+                          reference_number: invoiceInfo?.reference_number,
                           grand_total: invoiceInfo?.grand_total,
                           tax_type: customerTaxMap.get(invoiceInfo?.code_customer || '')
                         }
@@ -454,7 +454,7 @@ export default function ShipmentDetailPage() {
           <TableBody>
             {invoiceList.length > 0 ? invoiceList.map((invoice) => (
               <TableRow key={invoice.id_fac_desp}>
-                <TableCell className="font-medium">{String(invoice.invoice_number || invoice.id_factura)}</TableCell>
+                <TableCell className="font-medium">{String(invoice.id_factura || invoice.id_factura)}</TableCell>
                 <TableCell>
                     {invoice.comprobante ? (
                       <button onClick={() => handleOpenImageModal(invoice.comprobante)}>
@@ -774,3 +774,5 @@ export default function ShipmentDetailPage() {
     </div>
   )
 }
+
+    

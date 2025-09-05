@@ -46,7 +46,7 @@ const shipmentInvoiceSchema = z.object({
 
 // Tipos de datos para la gestión de facturación por despacho.
 type ShipmentInvoice = z.infer<typeof shipmentInvoiceSchema> & { id_fac_desp: number, comprobante: string }
-type Invoice = { id_factura: string, invoice_number: string | number, fecha: string }
+type Invoice = { id_factura: string, reference_number: string | number, fecha: string }
 type Shipment = { id_despacho: number, fecha_despacho: string }
 
 // Opciones estáticas para menús desplegables.
@@ -147,7 +147,7 @@ export default function ShipmentInvoicingPage() {
   }
   
   const fetchInvoices = async () => {
-    const { data, error } = await supabase.from('facturacion').select('id_factura, invoice_number, fecha')
+    const { data, error } = await supabase.from('facturacion').select('id_factura, reference_number, fecha')
     if (error) {
       toast({ title: "Error", description: "No se pudieron cargar las facturas.", variant: "destructive" })
     } else {
@@ -341,7 +341,7 @@ export default function ShipmentInvoicingPage() {
   
   const getBadgeVariant = (status: boolean) => status ? "default" : "secondary"
   const getStatusLabel = (status: boolean) => status ? "Pagado" : "Pendiente"
-  const getInvoiceNumber = (invoiceId: string) => allInvoices.find(inv => inv.id_factura === invoiceId)?.invoice_number || invoiceId;
+  const getInvoiceNumber = (invoiceId: string) => allInvoices.find(inv => inv.id_factura === invoiceId)?.id_factura || invoiceId;
   const getShipmentDate = (shipmentId: string | number) => {
       const id = typeof shipmentId === 'string' ? parseInt(shipmentId, 10) : shipmentId;
       const shipment = allShipments.find(ship => ship.id_despacho === id);
@@ -410,7 +410,7 @@ export default function ShipmentInvoicingPage() {
                             <SelectContent>
                                 {availableInvoices.map((invoice) => (
                                     <SelectItem key={invoice.id_factura} value={invoice.id_factura}>
-                                        {String(invoice.invoice_number)}
+                                        {String(invoice.id_factura)}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
