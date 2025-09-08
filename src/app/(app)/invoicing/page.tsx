@@ -252,9 +252,9 @@ export default function InvoicingPage() {
     
     // Para nuevas facturas, se establece la fecha de importación.
     // Para facturas existentes, no se modifica.
-    const dataToSubmit: Omit<typeof values, 'fecha_import'> & { fecha_import?: string } = { ...values };
+    const dataToSubmit: Omit<typeof values, 'fecha_import'> & { fecha_import?: any } = { ...values };
     if (!editingInvoice) {
-      dataToSubmit.fecha_import = new Date().toISOString().split('T')[0];
+      dataToSubmit.fecha_import = 'now()';
     } else {
       delete dataToSubmit.fecha_import;
     }
@@ -396,7 +396,7 @@ export default function InvoicingPage() {
                     id_factura: String(row[colIndices.id_factura]),
                     reference_number: String(row[colIndices.reference_number]),
                     fecha: getDate(row[colIndices.transaction_date]),
-                    fecha_import: new Date().toISOString().split('T')[0],
+                    fecha_import: 'now()', // Se usará la función now() de PostgreSQL.
                     customer_name: customer.customer_name,
                     tax_id_number: (taxIdValue.toUpperCase() === 'N/A' || taxIdValue === '') ? '0' : taxIdValue,
                     subtotal: getNumericValue(row[colIndices.subtotal]),
