@@ -53,7 +53,7 @@ const shipmentInvoiceSchema = z.object({
 
 // Tipos de datos para la gestión de facturación por despacho.
 type ShipmentInvoice = z.infer<typeof shipmentInvoiceSchema> & { id_fac_desp: number, comprobante: string }
-type Invoice = { id_factura: string, reference_number: string | number, fecha: string, grand_total: number }
+type Invoice = { id_factura: string, reference_number: string | number, fecha: string, grand_total: number, customer_name: string }
 type Shipment = { id_despacho: number, fecha_despacho: string }
 
 // Opciones estáticas para menús desplegables.
@@ -164,7 +164,7 @@ export default function ShipmentInvoicingPage() {
   
   /** Obtiene todas las facturas para los selectores y la asignación. */
   const fetchInvoices = async () => {
-    const { data, error } = await supabase.from('facturacion').select('id_factura, reference_number, fecha, grand_total')
+    const { data, error } = await supabase.from('facturacion').select('id_factura, reference_number, fecha, grand_total, customer_name')
     if (error) {
       toast({ title: "Error", description: "No se pudieron cargar las facturas.", variant: "destructive" })
     } else {
@@ -486,6 +486,7 @@ export default function ShipmentInvoicingPage() {
                         </TableHead>
                         <TableHead>ID Factura</TableHead>
                         <TableHead>Referencia</TableHead>
+                        <TableHead>Cliente</TableHead>
                         <TableHead>Monto Total</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -515,17 +516,18 @@ export default function ShipmentInvoicingPage() {
                                 </TableCell>
                                 <TableCell>{invoice.id_factura}</TableCell>
                                 <TableCell>{String(invoice.reference_number)}</TableCell>
+                                <TableCell>{invoice.customer_name}</TableCell>
                                 <TableCell>${invoice.grand_total.toFixed(2)}</TableCell>
                               </TableRow>
                             ))
                           ) : (
                             <TableRow>
-                              <TableCell colSpan={4} className="text-center h-24">No hay facturas disponibles para la fecha de este despacho.</TableCell>
+                              <TableCell colSpan={5} className="text-center h-24">No hay facturas disponibles para la fecha de este despacho.</TableCell>
                             </TableRow>
                           )
                       ) : (
                         <TableRow>
-                          <TableCell colSpan={4} className="text-center h-24">Seleccione un despacho para continuar.</TableCell>
+                          <TableCell colSpan={5} className="text-center h-24">Seleccione un despacho para continuar.</TableCell>
                         </TableRow>
                       )}
                     </TableBody>
@@ -758,3 +760,5 @@ export default function ShipmentInvoicingPage() {
     </Card>
   )
 }
+
+    
