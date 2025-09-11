@@ -2,7 +2,6 @@
 'use client'
 
 import { useState, useEffect, useCallback } from "react"
-import Image from "next/image"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -10,11 +9,11 @@ import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
-import { Map, List } from "lucide-react"
+import { List, MapPin } from "lucide-react"
 
 /**
  * @file route-generation/page.tsx
- * @description Página para generar una ruta visual basada en la selección de clientes con geocercas.
+ * @description Página para generar una ruta de Google Maps basada en la selección de clientes con geocercas.
  */
 
 // Tipo de dato para un cliente con geocerca.
@@ -23,6 +22,23 @@ type CustomerWithGeofence = {
   customer_name: string;
   geocerca: string;
 }
+
+/**
+ * Parsea una cadena de geocerca en formato WKT POINT para obtener latitud y longitud.
+ * @param geofenceString - La cadena WKT, ej: "POINT(-90.51 14.63)"
+ * @returns Un objeto con lat y lon, o null si el formato es inválido.
+ */
+const parseGeofencePoint = (geofenceString: string): { lat: string; lon: string } | null => {
+    if (!geofenceString || !geofenceString.toUpperCase().startsWith('POINT')) {
+        return null;
+    }
+    const coordsMatch = geofenceString.match(/POINT\s*\(\s*(-?\d+\.?\d*)\s+(-?\d+\.?\d*)\s*\)/i);
+    if (coordsMatch && coordsMatch.length === 3) {
+        return { lon: coordsMatch[1], lat: coordsMatch[2] };
+    }
+    return null;
+};
+
 
 /**
  * Componente principal de la página de Generación de Ruta.
@@ -42,7 +58,8 @@ export default function RouteGenerationPage() {
     const { data, error } = await supabase
       .from('customer')
       .select('code_customer, customer_name, geocerca')
-      .not('geocerca', 'is', null);
+      .not('geocerca', 'is', null)
+      .like('geocerca', 'POINT%'); // Filtra solo los que son puntos
 
     if (error) {
       toast({
@@ -71,7 +88,7 @@ export default function RouteGenerationPage() {
   };
 
   /**
-   * Filtra y establece los clientes seleccionados para generar la ruta.
+   * Construye y abre una URL de Google Maps con los clientes seleccionados.
    */
   const handleGenerateRoute = () => {
     const selected = customers.filter(customer => selectedCustomers[customer.code_customer]);
@@ -83,6 +100,31 @@ export default function RouteGenerationPage() {
         });
         return;
     }
+
+    const waypoints = selected.map(customer => {
+        const coords = parseGeofencePoint(customer.geocerca);
+        return coords ? `${coords.lat},${coords.lon}` : null;
+    }).filter((c): c is string => c !== null);
+
+    if (waypoints.length === 0) {
+        toast({
+            title: "Error de Coordenadas",
+            description: "Ninguno de los clientes seleccionados tiene coordenadas válidas.",
+            variant: "destructive"
+        });
+        return;
+    }
+
+    const baseUrl = 'https://www.google.com/maps/dir/?api=1';
+    // Se usa el primer punto como origen y destino para crear un bucle,
+    // y todos los puntos (incluido el primero) como waypoints.
+    const origin = waypoints[0];
+    const destination = waypoints[waypoints.length - 1];
+    const waypointsString = waypoints.join('|');
+
+    const googleMapsUrl = `${baseUrl}&origin=${origin}&destination=${destination}&waypoints=${waypointsString}`;
+
+    window.open(googleMapsUrl, '_blank');
     setGeneratedRoute(selected);
   };
   
@@ -133,28 +175,26 @@ export default function RouteGenerationPage() {
                   </div>
                 ))
               ) : (
-                <p className="text-muted-foreground">No hay clientes con geocercas definidas.</p>
+                <p className="text-muted-foreground">No hay clientes con geocercas (de tipo POINT) definidas.</p>
               )}
             </div>
           </ScrollArea>
            <Button onClick={handleGenerateRoute} className="mt-4">
-            <Map className="mr-2 h-4 w-4" />
-            Generar Ruta
+            <MapPin className="mr-2 h-4 w-4" />
+            Generar Ruta en Google Maps
           </Button>
         </CardContent>
       </Card>
 
-      {/* Columna del Mapa y Ruta Generada */}
+      {/* Columna de la Ruta Generada */}
       <Card className="lg:col-span-2 flex flex-col">
         <CardHeader>
           <CardTitle>Ruta Generada</CardTitle>
-          <CardDescription>Visualización de la ruta basada en los clientes seleccionados.</CardDescription>
+          <CardDescription>Lista de los puntos de entrega incluidos en la ruta.</CardDescription>
         </CardHeader>
         <CardContent className="flex-1 flex flex-col items-center justify-center gap-4">
           {generatedRoute.length > 0 ? (
-            <div className="w-full h-full grid grid-cols-1 md:grid-cols-3 gap-4">
-               {/* Lista de clientes en la ruta */}
-              <div className="md:col-span-1 bg-muted p-4 rounded-lg h-full">
+            <div className="w-full h-full bg-muted p-4 rounded-lg">
                 <h3 className="font-semibold text-lg mb-4 flex items-center"><List className="mr-2 h-5 w-5"/> Puntos de Entrega</h3>
                 <ScrollArea className="h-[calc(100%-40px)]">
                     <ol className="list-decimal list-inside space-y-2">
@@ -164,24 +204,9 @@ export default function RouteGenerationPage() {
                     </ol>
                 </ScrollArea>
               </div>
-              {/* Placeholder del mapa */}
-              <div className="md:col-span-2 relative w-full h-full min-h-[300px] bg-gray-200 rounded-lg overflow-hidden">
-                <Image
-                  src="https://picsum.photos/seed/route-map/1200/800"
-                  alt="Mapa de la ruta generada"
-                  layout="fill"
-                  objectFit="cover"
-                  className="opacity-70"
-                  data-ai-hint="route map"
-                />
-                 <div className="absolute inset-0 flex items-center justify-center">
-                    <p className="text-2xl font-bold text-background bg-black/50 p-4 rounded-md">Visualización de Mapa (Placeholder)</p>
-                </div>
-              </div>
-            </div>
           ) : (
             <div className="text-center text-muted-foreground">
-              <p>Seleccione clientes y presione "Generar Ruta" para visualizar el recorrido.</p>
+              <p>Seleccione clientes y presione "Generar Ruta" para abrir Google Maps.</p>
             </div>
           )}
         </CardContent>
@@ -189,3 +214,5 @@ export default function RouteGenerationPage() {
     </div>
   )
 }
+
+    
