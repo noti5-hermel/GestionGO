@@ -17,6 +17,12 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'picsum.photos',
+        port: '',
+        pathname: '/**',
+      },
        {
         protocol: 'https',
         hostname: new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://localhost').hostname,
@@ -28,5 +34,3 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
-
-    
