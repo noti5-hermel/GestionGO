@@ -15,7 +15,8 @@ import {
   Car,
   ClipboardList,
   Image as ImageIcon,
-  Globe
+  Globe,
+  Map,
 } from 'lucide-react'
 import {
   SidebarMenu,
@@ -37,6 +38,7 @@ const allMenuItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/customers', label: 'Clientes', icon: Users },
   { href: '/shipments', label: 'Despachos', icon: Truck },
+  { href: '/route-generation', label: 'Generación de Ruta', icon: Map },
   { href: '/invoicing', label: 'Facturación', icon: FileText },
   { href: '/shipment-invoicing', label: 'Facturación por Despacho', icon: ClipboardList },
   { href: '/routes', label: 'Rutas', icon: MapIcon },
