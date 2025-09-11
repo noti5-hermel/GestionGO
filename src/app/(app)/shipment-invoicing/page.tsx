@@ -212,57 +212,41 @@ export default function ShipmentInvoicingPage() {
   };
   
   /**
-   * Recalcula y actualiza los totales (contado, crédito, general) en la tabla `despacho`
-   * después de agregar, editar o eliminar una factura del despacho.
-   * @param shipmentId El ID del despacho a actualizar.
-   */
-  const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
-    // 1. Obtener todas las facturas asociadas a este despacho.
+ * Recalcula y actualiza los totales (contado, crédito, general) en la tabla `despacho`
+ * basándose en la suma del campo `monto` de las facturas asociadas.
+ * @param shipmentId El ID del despacho a actualizar.
+ */
+const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
+    // 1. Obtener todas las facturas asociadas a este despacho, incluyendo su monto y el cliente.
     const { data: shipmentInvoicesData, error: shipmentInvoicesError } = await supabase
       .from('facturacion_x_despacho')
-      .select('id_factura')
+      .select('monto, facturacion(code_customer, customer(id_impuesto, tipo_impuesto(impt_desc)))')
       .eq('id_despacho', shipmentId);
   
     if (shipmentInvoicesError) {
-      toast({ title: "Error", description: "Paso 1: No se pudieron obtener las facturas del despacho.", variant: "destructive" });
+      toast({ title: "Error", description: "Paso 1: No se pudieron obtener las facturas del despacho para el cálculo.", variant: "destructive" });
       return;
     }
-  
-    const invoiceIds = shipmentInvoicesData.map(si => si.id_factura);
-    if (invoiceIds.length === 0) {
-      // Si no hay facturas, los totales son cero.
-      await supabase.from('despacho').update({ total_contado: 0, total_credito: 0, total_general: 0 }).eq('id_despacho', shipmentId);
-      return;
-    }
-  
-    // 2. Obtener los detalles de esas facturas y los clientes asociados para determinar el tipo de impuesto.
-    const { data: invoicesDetails, error: invoicesDetailsError } = await supabase
-      .from('facturacion')
-      .select('grand_total, customer(id_impuesto, tipo_impuesto(impt_desc))')
-      .in('id_factura', invoiceIds);
-  
-    if (invoicesDetailsError) {
-      toast({ title: "Error", description: "Paso 2: No se pudieron obtener los detalles de las facturas.", variant: "destructive" });
-      return;
-    }
-  
-    // 3. Calcular totales basados en el tipo de impuesto del cliente.
+    
+    // 2. Calcular totales basados en el tipo de impuesto del cliente.
     let totalContado = 0;
     let totalCredito = 0;
   
-    invoicesDetails.forEach(inv => {
+    shipmentInvoicesData.forEach(inv => {
       // La consulta devuelve un objeto anidado, por eso el casting a 'any'.
-      const taxDesc = (inv.customer as any)?.tipo_impuesto?.impt_desc;
+      // @ts-ignore
+      const taxDesc = inv.facturacion?.customer?.tipo_impuesto?.impt_desc;
+      
       if (taxDesc === 'Consumidor Final') {
-        totalContado += inv.grand_total || 0;
+        totalContado += inv.monto || 0;
       } else if (taxDesc === 'Crédito Fiscal') {
-        totalCredito += inv.grand_total || 0;
+        totalCredito += inv.monto || 0;
       }
     });
   
     const totalGeneral = totalContado + totalCredito;
   
-    // 4. Actualizar el registro del despacho con los nuevos totales.
+    // 3. Actualizar el registro del despacho con los nuevos totales.
     const { error: updateError } = await supabase
       .from('despacho')
       .update({
@@ -273,11 +257,12 @@ export default function ShipmentInvoicingPage() {
       .eq('id_despacho', shipmentId);
   
     if (updateError) {
-      toast({ title: "Error", description: "Paso 4: No se pudo actualizar el despacho con los nuevos totales.", variant: "destructive" });
+      toast({ title: "Error", description: "Paso 3: No se pudo actualizar el despacho con los nuevos totales.", variant: "destructive" });
     } else {
       toast({ title: "Sincronizado", description: "Los totales del despacho han sido actualizados." });
     }
   };
+
 
   /**
    * Gestiona el envío del formulario para actualizar una asociación factura-despacho.
@@ -357,7 +342,7 @@ export default function ShipmentInvoicingPage() {
         return {
             id_despacho: parseInt(selectedShipmentForMassAssign, 10),
             id_factura: invoiceId,
-            monto: invoiceDetails?.grand_total || 0, // Asigna el monto total por defecto
+            monto: 0, // Se establece en 0 por defecto al asignar masivamente.
             state: false, // Estado pendiente por defecto
             forma_pago: 'Efectivo' as const, // Forma de pago por defecto
         };

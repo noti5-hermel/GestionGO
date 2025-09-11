@@ -77,9 +77,10 @@ export const generateShipmentPDF = (
       doc.text(title, 14, yPos);
       yPos += 8;
 
-      const tableColumn = ["No. Factura", "Total Factura", "Forma de Pago", "Monto Pagado", "Estado"];
+      const tableColumn = ["No. Factura", "Dirección", "Total Factura", "Forma de Pago", "Monto Pagado", "Estado"];
       const tableRows = invoiceList.map(inv => [
         String(inv.id_factura || inv.id_factura),
+        (inv as any).direccion || 'N/A', // Se castea a any para acceder a la propiedad añadida dinámicamente
         `$${(inv.grand_total || 0).toFixed(2)}`,
         inv.forma_pago,
         `$${inv.monto.toFixed(2)}`,
@@ -108,12 +109,17 @@ export const generateShipmentPDF = (
     yPos = 20;
   }
 
-  // 5. Resumen de Totales (Cálculos dinámicos)
-  const totalContadoCalculado = finalConsumerInvoices
+  // 5. Resumen de Totales (Cálculos dinámicos basados en el `monto` pagado)
+  const totalContadoCalculado = invoices
+    .filter(inv => inv.tax_type === 'Consumidor Final')
     .reduce((acc, inv) => acc + inv.monto, 0);
   
-  const totalCreditoCalculado = fiscalCreditInvoices
-    .reduce((acc, inv) => acc + (inv.grand_total || 0), 0);
+  const totalCreditoCalculado = invoices
+    .filter(inv => inv.tax_type === 'Crédito Fiscal')
+    .reduce((acc, inv) => acc + inv.monto, 0);
+    
+  const totalGeneralCalculado = totalContadoCalculado + totalCreditoCalculado;
+
 
   doc.setFontSize(14);
   doc.text("Resumen de Totales", 14, yPos);
@@ -123,7 +129,7 @@ export const generateShipmentPDF = (
   const totals = [
     { label: "Total Contado:", value: `$${totalContadoCalculado.toFixed(2)}` },
     { label: "Total Crédito:", value: `$${totalCreditoCalculado.toFixed(2)}` },
-    { label: "Total General:", value: `$${shipment.total_general.toFixed(2)}` }
+    { label: "Total General:", value: `$${totalGeneralCalculado.toFixed(2)}` }
   ];
 
   totals.forEach(total => {
