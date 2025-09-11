@@ -86,7 +86,7 @@ export default function RouteGenerationPage() {
       .from('customer')
       .select('code_customer, customer_name, geocerca')
       .not('geocerca', 'is', null)
-      .like('geocerca', 'POLYGON%'); // Filtra solo los que son polígonos
+      .ilike('geocerca', 'POLYGON%'); // Filtra solo los que son polígonos (insensible a mayúsculas)
 
     if (error) {
       toast({
