@@ -24,19 +24,46 @@ type CustomerWithGeofence = {
 }
 
 /**
- * Parsea una cadena de geocerca en formato WKT POINT para obtener latitud y longitud.
- * @param geofenceString - La cadena WKT, ej: "POINT(-90.51 14.63)"
- * @returns Un objeto con lat y lon, o null si el formato es inválido.
+ * Parsea una cadena de geocerca en formato WKT POLYGON para obtener su centroide.
+ * @param geofenceString - La cadena WKT, ej: "POLYGON((lon1 lat1, lon2 lat2, ...))"
+ * @returns Un objeto con lat y lon del centroide, o null si el formato es inválido.
  */
-const parseGeofencePoint = (geofenceString: string): { lat: string; lon: string } | null => {
-    if (!geofenceString || !geofenceString.toUpperCase().startsWith('POINT')) {
+const parseGeofenceCentroid = (geofenceString: string): { lat: string; lon: string } | null => {
+    if (!geofenceString || !geofenceString.toUpperCase().startsWith('POLYGON')) {
         return null;
     }
-    const coordsMatch = geofenceString.match(/POINT\s*\(\s*(-?\d+\.?\d*)\s+(-?\d+\.?\d*)\s*\)/i);
-    if (coordsMatch && coordsMatch.length === 3) {
-        return { lon: coordsMatch[1], lat: coordsMatch[2] };
+    
+    // Extrae las coordenadas del string. Ej: "-90.51 14.63, -90.50 14.63, ..."
+    const coordsMatch = geofenceString.match(/\(\((.*)\)\)/);
+    if (!coordsMatch || !coordsMatch[1]) {
+        return null;
     }
-    return null;
+
+    // Convierte el string de coordenadas en un array de puntos [lon, lat]
+    const points = coordsMatch[1].split(',').map(pair => {
+        const [lon, lat] = pair.trim().split(' ').map(Number);
+        return { lon, lat };
+    }).filter(p => !isNaN(p.lon) && !isNaN(p.lat));
+
+    if (points.length === 0) {
+        return null;
+    }
+
+    // Calcula el centroide (el promedio de todos los puntos del polígono)
+    const centroid = points.reduce(
+        (acc, point) => {
+            acc.lon += point.lon;
+            acc.lat += point.lat;
+            return acc;
+        },
+        { lon: 0, lat: 0 }
+    );
+
+    const numPoints = points.length;
+    return {
+        lon: String(centroid.lon / numPoints),
+        lat: String(centroid.lat / numPoints)
+    };
 };
 
 
@@ -59,7 +86,7 @@ export default function RouteGenerationPage() {
       .from('customer')
       .select('code_customer, customer_name, geocerca')
       .not('geocerca', 'is', null)
-      .like('geocerca', 'POINT%'); // Filtra solo los que son puntos
+      .like('geocerca', 'POLYGON%'); // Filtra solo los que son polígonos
 
     if (error) {
       toast({
@@ -102,7 +129,7 @@ export default function RouteGenerationPage() {
     }
 
     const waypoints = selected.map(customer => {
-        const coords = parseGeofencePoint(customer.geocerca);
+        const coords = parseGeofenceCentroid(customer.geocerca);
         return coords ? `${coords.lat},${coords.lon}` : null;
     }).filter((c): c is string => c !== null);
 
@@ -175,7 +202,7 @@ export default function RouteGenerationPage() {
                   </div>
                 ))
               ) : (
-                <p className="text-muted-foreground">No hay clientes con geocercas (de tipo POINT) definidas.</p>
+                <p className="text-muted-foreground">No hay clientes con geocercas (de tipo POLYGON) definidas.</p>
               )}
             </div>
           </ScrollArea>
@@ -214,5 +241,3 @@ export default function RouteGenerationPage() {
     </div>
   )
 }
-
-    
