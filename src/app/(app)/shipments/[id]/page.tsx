@@ -215,7 +215,7 @@ export default function ShipmentDetailPage() {
                         return {
                           ...si,
                           reference_number: invoiceInfo?.reference_number,
-                          grand_total: invoiceInfo?.grand_total,
+                          grand_total: invoiceInfo?.grand_total || 0,
                           tax_type: customerTaxMap.get(invoiceInfo?.code_customer || '')
                         }
                       });
