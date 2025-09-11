@@ -132,9 +132,9 @@ export default function ShipmentDetailPage() {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   // --- FORMULARIO ---
+  // El resolver se define aquí pero se actualizará en el useEffect cuando se edite una factura.
   const form = useForm<z.infer<ReturnType<typeof shipmentInvoiceEditSchema>>>({
-    // El resolver se actualiza dinámicamente para obtener el `grand_total` de la factura que se está editando.
-    resolver: zodResolver(shipmentInvoiceEditSchema(editingShipmentInvoice?.grand_total || 0)),
+    resolver: zodResolver(shipmentInvoiceEditSchema(0)), // Inicializa con un valor por defecto
     defaultValues: {
       comprobante: "",
       forma_pago: "Efectivo",
@@ -215,7 +215,7 @@ export default function ShipmentDetailPage() {
                         return {
                           ...si,
                           reference_number: invoiceInfo?.reference_number,
-                          grand_total: invoiceInfo?.grand_total || 0,
+                          grand_total: invoiceInfo?.grand_total ?? 0, // Asegura que grand_total sea un número
                           tax_type: customerTaxMap.get(invoiceInfo?.code_customer || '')
                         }
                       });
@@ -239,7 +239,7 @@ export default function ShipmentDetailPage() {
   // Efecto para rellenar el formulario de edición cuando se selecciona una factura.
   useEffect(() => {
     if (editingShipmentInvoice) {
-      // Re-crear el resolver con el grand_total correcto para la factura actual.
+      // Re-crea el resolver con el grand_total correcto para la factura actual.
       form.reset(
         {
           comprobante: editingShipmentInvoice.comprobante,
@@ -252,7 +252,7 @@ export default function ShipmentDetailPage() {
           keepErrors: false,
         }
       );
-      // Actualizar el resolver del formulario para la validación
+      // Reemplaza el resolver del formulario para que use la nueva validación.
       (form as any)._resolver = zodResolver(shipmentInvoiceEditSchema(editingShipmentInvoice.grand_total || 0));
     }
     setSelectedFile(null);
@@ -829,5 +829,3 @@ export default function ShipmentDetailPage() {
     </div>
   )
 }
-
-    
