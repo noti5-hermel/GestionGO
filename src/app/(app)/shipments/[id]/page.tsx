@@ -42,6 +42,8 @@ const shipmentInvoiceEditSchema = (maxAmount: number) => z.object({
   state: z.boolean(),
 });
 
+type ShipmentInvoiceEditValues = z.infer<ReturnType<typeof shipmentInvoiceEditSchema>>;
+
 // Tipos de datos para la página de detalle del despacho.
 type Shipment = {
   id_despacho: string
@@ -132,9 +134,8 @@ export default function ShipmentDetailPage() {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   // --- FORMULARIO ---
-  // El resolver se define aquí pero se actualizará en el useEffect cuando se edite una factura.
-  const form = useForm<z.infer<ReturnType<typeof shipmentInvoiceEditSchema>>>({
-    // La validación se hará dinámicamente antes de enviar.
+  const form = useForm<ShipmentInvoiceEditValues>({
+    // El resolver se define aquí, pero la validación se hará dinámicamente antes de enviar.
     defaultValues: {
       comprobante: "",
       forma_pago: "Efectivo",
@@ -312,13 +313,10 @@ export default function ShipmentDetailPage() {
    * Actualiza los detalles de una factura asociada al despacho.
    * @param values Los datos del formulario de edición.
    */
-  const handleUpdateInvoice = async () => {
+  const handleUpdateInvoice = async (values: ShipmentInvoiceEditValues) => {
     if (!editingShipmentInvoice) return;
 
-    // 1. Obtener los valores actuales del formulario
-    const values = form.getValues();
-    
-    // 2. Validar los datos contra el esquema dinámico
+    // 1. Validar manualmente los datos del formulario contra el esquema dinámico
     const validationSchema = shipmentInvoiceEditSchema(editingShipmentInvoice.grand_total);
     const validationResult = validationSchema.safeParse(values);
     
@@ -328,10 +326,10 @@ export default function ShipmentDetailPage() {
       if (errors[0] && errors[0].path[0] === 'monto') {
         form.setError('monto', { type: 'manual', message: errors[0].message });
       }
-      return;
+      return; // Detiene la ejecución
     }
 
-    // 3. Si la validación es exitosa, proceder a guardar
+    // 2. Si la validación es exitosa, proceder a guardar
     const imageUrl = await uploadComprobante();
     if (!imageUrl && selectedFile) { 
         return; // Detiene si la carga falla.
@@ -741,7 +739,7 @@ export default function ShipmentDetailPage() {
                 <DialogClose asChild>
                   <Button type="button" variant="secondary" onClick={closeInvoiceDialog}>Cancelar</Button>
                 </DialogClose>
-                <Button type="button" onClick={handleUpdateInvoice} disabled={loading}>{loading ? 'Guardando...' : 'Guardar Cambios'}</Button>
+                <Button type="submit" disabled={loading}>{loading ? 'Guardando...' : 'Guardar Cambios'}</Button>
               </DialogFooter>
             </form>
           </Form>
