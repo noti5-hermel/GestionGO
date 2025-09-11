@@ -69,7 +69,7 @@ export type ShipmentInvoice = {
   state: boolean
   reference_number?: string | number // Opcional, se añade después desde la tabla `facturacion`
   tax_type?: string // Opcional, se añade después a través de joins
-  grand_total?: number // Opcional, se añade después desde la tabla `facturacion`
+  grand_total: number // No es opcional para la validación
 }
 
 type User = { id_user: string; name: string }
@@ -134,7 +134,7 @@ export default function ShipmentDetailPage() {
   // --- FORMULARIO ---
   const form = useForm<z.infer<ReturnType<typeof shipmentInvoiceEditSchema>>>({
     // El resolver se actualiza dinámicamente para obtener el `grand_total` de la factura que se está editando.
-    resolver: zodResolver(shipmentInvoiceEditSchema(editingShipmentInvoice?.grand_total || Number.MAX_SAFE_INTEGER)),
+    resolver: zodResolver(shipmentInvoiceEditSchema(editingShipmentInvoice?.grand_total || 0)),
     defaultValues: {
       comprobante: "",
       forma_pago: "Efectivo",
@@ -239,12 +239,21 @@ export default function ShipmentDetailPage() {
   // Efecto para rellenar el formulario de edición cuando se selecciona una factura.
   useEffect(() => {
     if (editingShipmentInvoice) {
-      form.reset({
-        comprobante: editingShipmentInvoice.comprobante,
-        forma_pago: editingShipmentInvoice.forma_pago,
-        monto: editingShipmentInvoice.monto,
-        state: editingShipmentInvoice.state,
-      });
+      // Re-crear el resolver con el grand_total correcto para la factura actual.
+      form.reset(
+        {
+          comprobante: editingShipmentInvoice.comprobante,
+          forma_pago: editingShipmentInvoice.forma_pago,
+          monto: editingShipmentInvoice.monto,
+          state: editingShipmentInvoice.state,
+        },
+        {
+          keepDirty: false,
+          keepErrors: false,
+        }
+      );
+      // Actualizar el resolver del formulario para la validación
+      (form as any)._resolver = zodResolver(shipmentInvoiceEditSchema(editingShipmentInvoice.grand_total || 0));
     }
     setSelectedFile(null);
   }, [editingShipmentInvoice, form]);
@@ -820,3 +829,5 @@ export default function ShipmentDetailPage() {
     </div>
   )
 }
+
+    
