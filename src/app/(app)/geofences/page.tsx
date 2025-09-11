@@ -37,9 +37,10 @@ const geofenceSchema = z.object({
   geocerca: z.string().min(10, { message: "El campo de geocerca no puede estar vacío." })
     .refine(value => {
         try {
+            const trimmedValue = value.trim();
             // Intenta validar si el string tiene un formato parecido a un polígono
             // Esta es una validación muy básica. PostGIS hará la validación real.
-            return value.toUpperCase().startsWith('POLYGON((') && value.endsWith('))')
+            return trimmedValue.toUpperCase().startsWith('POLYGON((') && trimmedValue.endsWith('))')
         } catch {
             return false
         }
@@ -101,7 +102,7 @@ export default function GeofencesPage() {
   const onSubmit = async (values: z.infer<typeof geofenceSchema>) => {
     const { error } = await supabase
         .from('customer')
-        .update({ geocerca: values.geocerca })
+        .update({ geocerca: values.geocerca.trim() }) // Se guarda el valor sin espacios
         .eq('code_customer', values.code_customer);
 
     if (error) {
