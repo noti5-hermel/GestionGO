@@ -21,9 +21,10 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { PlusCircle, Pencil } from "lucide-react"
+import { PlusCircle, Pencil, Search, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
+import { Input } from "@/components/ui/input"
 
 /**
  * @file geofences/page.tsx
@@ -54,14 +55,21 @@ type Customer = {
   geocerca: string | null;
 }
 
+const ITEMS_PER_PAGE = 10;
+
 /**
  * Componente principal de la página de Geocercas.
  */
 export default function GeofencesPage() {
-  const [customers, setCustomers] = useState<Customer[]>([])
+  const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
+  const [paginatedCustomers, setPaginatedCustomers] = useState<Customer[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const { toast } = useToast()
+  
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCustomers, setTotalCustomers] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const form = useForm<z.infer<typeof geofenceSchema>>({
     resolver: zodResolver(geofenceSchema),
@@ -72,7 +80,20 @@ export default function GeofencesPage() {
   })
 
   const fetchCustomers = useCallback(async () => {
-    const { data, error } = await supabase.from('customer').select('code_customer, customer_name, geocerca')
+    const from = (currentPage - 1) * ITEMS_PER_PAGE;
+    const to = from + ITEMS_PER_PAGE - 1;
+
+    let query = supabase
+      .from('customer')
+      .select('code_customer, customer_name, geocerca', { count: 'exact' });
+
+    if (searchQuery) {
+      query = query.or(`customer_name.ilike.%${searchQuery}%,code_customer.ilike.%${searchQuery}%`);
+    }
+    
+    query = query.order('customer_name').range(from, to);
+
+    const { data, error, count } = await query;
     if (error) {
       toast({
         title: "Error",
@@ -80,13 +101,25 @@ export default function GeofencesPage() {
         variant: "destructive",
       })
     } else {
-      setCustomers(data as Customer[])
+      setPaginatedCustomers(data as Customer[]);
+      setTotalCustomers(count ?? 0);
     }
-  }, [toast])
+  }, [toast, currentPage, searchQuery]);
+  
+  const fetchAllCustomersForSelect = useCallback(async () => {
+    const { data, error } = await supabase.from('customer').select('code_customer, customer_name, geocerca').order('customer_name');
+    if (!error && data) {
+      setAllCustomers(data as Customer[]);
+    }
+  }, []);
 
   useEffect(() => {
-    fetchCustomers()
-  }, [fetchCustomers])
+    fetchCustomers();
+  }, [fetchCustomers]);
+  
+  useEffect(() => {
+    fetchAllCustomersForSelect();
+  }, [fetchAllCustomersForSelect]);
   
   useEffect(() => {
     if (editingCustomer) {
@@ -116,7 +149,8 @@ export default function GeofencesPage() {
         title: "Éxito",
         description: "Geocerca guardada correctamente.",
       })
-      fetchCustomers()
+      fetchCustomers();
+      fetchAllCustomersForSelect();
       handleCloseDialog();
     }
   }
@@ -138,6 +172,27 @@ export default function GeofencesPage() {
     form.reset({ code_customer: "", geocerca: "" });
     setIsDialogOpen(false);
   }
+  
+  const totalPages = Math.ceil(totalCustomers / ITEMS_PER_PAGE);
+
+  const getPaginationNumbers = () => {
+    const pages = [];
+    const totalVisiblePages = 5;
+    if (totalPages <= totalVisiblePages) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      if (currentPage <= 3) {
+        pages.push(1, 2, 3, 4, '...', totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+      } else {
+        pages.push(1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages);
+      }
+    }
+    return pages;
+  };
 
   return (
     <Card className="h-full flex flex-col">
@@ -175,7 +230,7 @@ export default function GeofencesPage() {
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {customers.map((customer) => (
+                              {allCustomers.map((customer) => (
                                 <SelectItem key={customer.code_customer} value={customer.code_customer}>
                                   {customer.customer_name} ({customer.code_customer})
                                 </SelectItem>
@@ -215,6 +270,18 @@ export default function GeofencesPage() {
             </DialogContent>
           </Dialog>
         </div>
+        <div className="flex flex-col sm:flex-row flex-wrap items-center gap-2 mt-4">
+            <div className="relative w-full sm:w-auto flex-grow sm:flex-grow-0">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                    type="search"
+                    placeholder="Buscar por código o nombre..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-8 w-full sm:w-[250px]"
+                />
+            </div>
+        </div>
       </CardHeader>
       <CardContent className="flex-1 overflow-auto">
         <div className="relative w-full overflow-auto">
@@ -228,7 +295,7 @@ export default function GeofencesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {customers.map((customer) => (
+              {paginatedCustomers.map((customer) => (
                 <TableRow key={customer.code_customer}>
                   <TableCell className="font-medium">{customer.code_customer}</TableCell>
                   <TableCell>{customer.customer_name}</TableCell>
@@ -251,9 +318,66 @@ export default function GeofencesPage() {
           </Table>
         </div>
       </CardContent>
-      <CardFooter className="pt-6">
+      <CardFooter className="pt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
         <div className="text-xs text-muted-foreground">
-          Mostrando <strong>{customers.length}</strong> de <strong>{customers.length}</strong> clientes.
+          Mostrando <strong>{paginatedCustomers.length}</strong> de <strong>{totalCustomers}</strong> clientes.
+        </div>
+        <div className="flex items-center space-x-2">
+            <Button
+                variant="outline"
+                className="h-8 w-8 p-0"
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+            >
+                <span className="sr-only">Primera página</span>
+                <ChevronsLeft className="h-4 w-4" />
+            </Button>
+            <Button
+                variant="outline"
+                className="h-8 w-8 p-0"
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+            >
+                <span className="sr-only">Página anterior</span>
+                <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <div className="flex items-center gap-2">
+                {getPaginationNumbers().map((page, index) =>
+                    typeof page === 'number' ? (
+                        <Button
+                            key={index}
+                            variant={currentPage === page ? 'default' : 'outline'}
+                            className="h-8 w-8 p-0"
+                            onClick={() => setCurrentPage(page)}
+                        >
+                            {page}
+                        </Button>
+                    ) : (
+                        <span key={index} className="px-1.5">...</span>
+                    )
+                )}
+            </div>
+            <Button
+                variant="outline"
+                className="h-8 w-8 p-0"
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages || totalPages === 0}
+            >
+                <span className="sr-only">Siguiente página</span>
+                <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button
+                variant="outline"
+                className="h-8 w-8 p-0"
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages || totalPages === 0}
+            >
+                <span className="sr-only">Última página</span>
+                <ChevronsRight className="h-4 w-4" />
+            </Button>
+        </div>
+        <div className="text-xs text-muted-foreground">
+          Página <strong>{currentPage}</strong> de <strong>{totalPages || 1}</strong>
         </div>
       </CardFooter>
     </Card>
