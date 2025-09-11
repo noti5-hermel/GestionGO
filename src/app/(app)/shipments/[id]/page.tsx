@@ -1,7 +1,7 @@
 
 'use client'
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -459,6 +459,14 @@ export default function ShipmentDetailPage() {
   const finalConsumerInvoices = invoices.filter(inv => inv.tax_type === 'Consumidor Final');
   const otherInvoices = invoices.filter(inv => inv.tax_type !== 'Crédito Fiscal' && inv.tax_type !== 'Consumidor Final');
 
+  // Calcula los totales dinámicamente basados en el `monto` de las facturas cargadas.
+  const { totalContadoCalculado, totalCreditoCalculado, totalGeneralCalculado } = useMemo(() => {
+      const totalContadoCalculado = finalConsumerInvoices.reduce((acc, inv) => acc + inv.monto, 0);
+      const totalCreditoCalculado = fiscalCreditInvoices.reduce((acc, inv) => acc + inv.monto, 0);
+      const totalGeneralCalculado = totalContadoCalculado + totalCreditoCalculado;
+      return { totalContadoCalculado, totalCreditoCalculado, totalGeneralCalculado };
+  }, [invoices]);
+
   if (loading && !shipment) {
     return <p>Cargando detalles del despacho...</p>
   }
@@ -582,15 +590,15 @@ export default function ShipmentDetailPage() {
             </div>
             <div className="space-y-1">
               <p className="text-sm font-medium text-muted-foreground">Total Contado</p>
-              <p>${shipment.total_contado.toFixed(2)}</p>
+              <p>${totalContadoCalculado.toFixed(2)}</p>
             </div>
             <div className="space-y-1">
               <p className="text-sm font-medium text-muted-foreground">Total Crédito</p>
-              <p>${shipment.total_credito.toFixed(2)}</p>
+              <p>${totalCreditoCalculado.toFixed(2)}</p>
             </div>
             <div className="space-y-1">
               <p className="text-sm font-medium text-muted-foreground">Total General</p>
-              <p className="font-bold">${shipment.total_general.toFixed(2)}</p>
+              <p className="font-bold">${totalGeneralCalculado.toFixed(2)}</p>
             </div>
           </div>
         </CardContent>
