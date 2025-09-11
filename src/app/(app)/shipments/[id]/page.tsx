@@ -135,7 +135,6 @@ export default function ShipmentDetailPage() {
 
   // --- FORMULARIO ---
   const form = useForm<ShipmentInvoiceEditValues>({
-    // El resolver se define aquí, pero la validación se hará dinámicamente antes de enviar.
     defaultValues: {
       comprobante: "",
       forma_pago: "Efectivo",
@@ -836,5 +835,3 @@ export default function ShipmentDetailPage() {
     </div>
   )
 }
-
-    
