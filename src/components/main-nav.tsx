@@ -14,7 +14,8 @@ import {
   LayoutDashboard,
   Car,
   ClipboardList,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Globe
 } from 'lucide-react'
 import {
   SidebarMenu,
@@ -40,6 +41,7 @@ const allMenuItems = [
   { href: '/shipment-invoicing', label: 'Facturación por Despacho', icon: ClipboardList },
   { href: '/routes', label: 'Rutas', icon: MapIcon },
   { href: '/vehicles', label: 'Vehículos', icon: Car },
+  { href: '/geofences', label: 'Geocercas', icon: Globe },
   { href: '/settings', label: 'Configuración', icon: Settings },
 ]
 
@@ -114,5 +116,3 @@ export function MainNav({ session }: MainNavProps) {
     </SidebarMenu>
   )
 }
-
-    

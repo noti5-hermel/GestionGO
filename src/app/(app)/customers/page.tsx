@@ -1,4 +1,5 @@
 
+
 'use client'
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react"
@@ -27,6 +28,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PlusCircle, Trash2, Pencil, Upload, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, FilterX, Search } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
+import { Textarea } from "@/components/ui/textarea"
 
 /**
  * @file customers/page.tsx
@@ -51,6 +53,7 @@ const customerSchema = z.object({
     (val) => (val === '' ? undefined : Number(val)),
     z.number({ required_error: "La ruta es requerida.", invalid_type_error: "La ruta debe ser un número." }).optional().nullable()
   ),
+  geocerca: z.string().optional().nullable(),
 })
 
 // Tipos de datos para la gestión de clientes.
@@ -60,6 +63,7 @@ type Customer = {
   id_impuesto: number | null;
   id_term: number | null;
   ruta: number | null;
+  geocerca?: string | null;
 }
 type PaymentTerm = { id_term: string | number; term_desc: string }
 type Tax = { id_impuesto: string | number; impt_desc: string }
@@ -108,6 +112,7 @@ export default function CustomersPage() {
       id_impuesto: undefined,
       id_term: undefined,
       ruta: undefined,
+      geocerca: "",
     },
   })
 
@@ -124,7 +129,7 @@ export default function CustomersPage() {
     // Construye la consulta a Supabase de forma dinámica.
     let query = supabase
       .from('customer')
-      .select('code_customer,customer_name,id_impuesto,id_term,ruta', { count: 'exact' });
+      .select('code_customer,customer_name,id_impuesto,id_term,ruta,geocerca', { count: 'exact' });
 
     // Aplica el filtro de búsqueda si existe.
     if (searchQuery) {
@@ -210,6 +215,7 @@ export default function CustomersPage() {
         id_impuesto: editingCustomer.id_impuesto !== null ? Number(editingCustomer.id_impuesto) : undefined,
         id_term: editingCustomer.id_term !== null ? Number(editingCustomer.id_term) : undefined,
         ruta: editingCustomer.ruta !== null ? Number(editingCustomer.ruta) : undefined,
+        geocerca: editingCustomer.geocerca ?? "",
       });
     } else {
       form.reset({
@@ -218,6 +224,7 @@ export default function CustomersPage() {
         id_impuesto: undefined,
         id_term: undefined,
         ruta: undefined,
+        geocerca: "",
       });
     }
   }, [editingCustomer, form]);
@@ -229,11 +236,14 @@ export default function CustomersPage() {
   const onSubmit = async (values: z.infer<typeof customerSchema>) => {
     let error;
 
+    // Solo se envían los campos que no son de la geocerca
+    const { geocerca, ...customerData } = values;
+
     if (editingCustomer) {
       // Actualiza un cliente existente.
       const { error: updateError } = await supabase
         .from('customer')
-        .update(values)
+        .update(customerData)
         .eq('code_customer', editingCustomer.code_customer)
         .select()
       error = updateError;
@@ -241,7 +251,7 @@ export default function CustomersPage() {
       // Inserta un nuevo cliente.
       const { error: insertError } = await supabase
         .from('customer')
-        .insert([values])
+        .insert([customerData])
         .select()
       error = insertError;
     }
@@ -488,7 +498,7 @@ export default function CustomersPage() {
                   <PlusCircle className="mr-2 h-4 w-4" /> Añadir Cliente
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>{editingCustomer ? 'Editar Cliente' : 'Añadir Nuevo Cliente'}</DialogTitle>
                   <DialogDescription>
@@ -588,6 +598,28 @@ export default function CustomersPage() {
                         </FormItem>
                       )}
                     />
+                     {editingCustomer && (
+                       <FormField
+                        control={form.control}
+                        name="geocerca"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Geocerca</FormLabel>
+                            <FormControl>
+                              <Textarea
+                                placeholder="Datos de la geocerca (solo lectura)"
+                                {...field}
+                                value={field.value || ""}
+                                readOnly
+                                className="resize-none"
+                                rows={3}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                     )}
                     <DialogFooter className="gap-2 pt-4">
                       <DialogClose asChild>
                         <Button type="button" variant="secondary" className="w-full sm:w-auto">Cancelar</Button>
