@@ -40,12 +40,14 @@ const geofenceSchema = z.object({
         try {
             // Normaliza el string: quita espacios al inicio/final y convierte a mayúsculas
             const normalizedValue = value.trim().toUpperCase();
-            // Validación más flexible: debe empezar con POLYGON y contener los paréntesis.
-            return normalizedValue.startsWith('POLYGON') && normalizedValue.includes('((') && normalizedValue.includes('))');
+            // Validación flexible: debe empezar con POLYGON o GEOMETRYCOLLECTION y contener los paréntesis.
+            const isPolygon = normalizedValue.startsWith('POLYGON') && normalizedValue.includes('((') && normalizedValue.includes('))');
+            const isGeometryCollection = normalizedValue.startsWith('GEOMETRYCOLLECTION') && normalizedValue.includes('POLYGON');
+            return isPolygon || isGeometryCollection;
         } catch {
             return false
         }
-    }, { message: "Formato de geocerca inválido. Debe ser un polígono, ej: POLYGON((...))" })
+    }, { message: "Formato de geocerca inválido. Debe ser un POLYGON o GEOMETRYCOLLECTION." })
 })
 
 // Tipos de datos
@@ -249,7 +251,7 @@ export default function GeofencesPage() {
                         <FormLabel>Datos de Geocerca (Formato POLYGON)</FormLabel>
                         <FormControl>
                            <Textarea
-                            placeholder="Ej: POLYGON((long1 lat1, long2 lat2, ...))"
+                            placeholder="Ej: POLYGON((long1 lat1, long2 lat2, ...)) o GEOMETRYCOLLECTION(POLYGON(...), ...)"
                             className="resize-y"
                             rows={5}
                             {...field}
@@ -383,3 +385,5 @@ export default function GeofencesPage() {
     </Card>
   )
 }
+
+    

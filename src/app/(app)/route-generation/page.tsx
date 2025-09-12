@@ -24,45 +24,68 @@ type CustomerWithGeofence = {
 }
 
 /**
- * Parsea una geocerca (ya sea WKT string o GeoJSON object) para obtener su centroide.
- * @param geofenceData - La geocerca, ej: "POLYGON((...))" o { type: "Polygon", coordinates: [...] }.
+ * Parsea una geocerca para obtener su centroide.
+ * Admite formatos WKT (string) para POLYGON y GEOMETRYCOLLECTION, y objetos GeoJSON.
+ * @param geofenceData - La geocerca en formato WKT o como objeto GeoJSON.
  * @returns Un objeto con lat y lon del centroide, o null si el formato es inválido.
  */
 const parseGeofenceCentroid = (geofenceData: any): { lat: string; lon: string } | null => {
     if (!geofenceData) return null;
 
-    let points: { lon: number; lat: number }[] = [];
+    let allPoints: { lon: number; lat: number }[] = [];
 
-    // Caso 1: Es un objeto GeoJSON (la forma más probable en que Supabase lo devuelve)
-    if (typeof geofenceData === 'object' && geofenceData.type === 'Polygon' && Array.isArray(geofenceData.coordinates)) {
-        // Tomamos el primer anillo del polígono
-        const coordinateRing = geofenceData.coordinates[0];
-        if (!Array.isArray(coordinateRing)) return null;
-
-        points = coordinateRing.map((p: number[]) => ({ lon: p[0], lat: p[1] }))
-            .filter(p => !isNaN(p.lon) && !isNaN(p.lat));
-    
-    // Caso 2: Es un string en formato WKT
-    } else if (typeof geofenceData === 'string' && geofenceData.toUpperCase().includes('POLYGON')) {
-        const coordsMatch = geofenceData.match(/\(\((.*)\)\)/);
-        if (!coordsMatch || !coordsMatch[1]) {
-            return null;
-        }
-
-        points = coordsMatch[1].split(',').map(pair => {
+    const getPointsFromPolygonString = (polygonString: string): { lon: number; lat: number }[] => {
+        const coordsMatch = polygonString.match(/\(\((.*)\)\)/);
+        if (!coordsMatch || !coordsMatch[1]) return [];
+        
+        return coordsMatch[1].split(',').map(pair => {
             const [lon, lat] = pair.trim().split(' ').map(Number);
             return { lon, lat };
         }).filter(p => !isNaN(p.lon) && !isNaN(p.lat));
-    } else {
-        return null; // Formato no reconocido
+    };
+
+    // Caso 1: Es un objeto GeoJSON
+    if (typeof geofenceData === 'object' && geofenceData.type) {
+        if (geofenceData.type === 'Polygon' && Array.isArray(geofenceData.coordinates)) {
+            const coordinateRing = geofenceData.coordinates[0];
+            if (Array.isArray(coordinateRing)) {
+                allPoints = coordinateRing.map((p: number[]) => ({ lon: p[0], lat: p[1] }))
+                    .filter(p => !isNaN(p.lon) && !isNaN(p.lat));
+            }
+        }
+        // Soporte para GEOMETRYCOLLECTION en GeoJSON (aunque menos común para este caso)
+        else if (geofenceData.type === 'GeometryCollection' && Array.isArray(geofenceData.geometries)) {
+             geofenceData.geometries.forEach((geom: any) => {
+                if (geom.type === 'Polygon' && Array.isArray(geom.coordinates)) {
+                    const coordinateRing = geom.coordinates[0];
+                    if(Array.isArray(coordinateRing)) {
+                        const points = coordinateRing.map((p: number[]) => ({ lon: p[0], lat: p[1] }))
+                            .filter(p => !isNaN(p.lon) && !isNaN(p.lat));
+                        allPoints.push(...points);
+                    }
+                }
+            });
+        }
+    
+    // Caso 2: Es un string en formato WKT (Well-Known Text)
+    } else if (typeof geofenceData === 'string') {
+        const wktString = geofenceData.toUpperCase();
+        if (wktString.startsWith('GEOMETRYCOLLECTION')) {
+            const polygonStrings = geofenceData.match(/POLYGON\s*\(\(.*?\)\)/gi) || [];
+            polygonStrings.forEach(polyStr => {
+                allPoints.push(...getPointsFromPolygonString(polyStr));
+            });
+        } else if (wktString.startsWith('POLYGON')) {
+            allPoints = getPointsFromPolygonString(geofenceData);
+        }
     }
 
-    if (points.length === 0) {
+    if (allPoints.length === 0) {
         return null;
     }
 
-    // Calcula el centroide (el promedio de todos los puntos del polígono)
-    const centroid = points.reduce(
+    // Calcula el centroide (el promedio de todos los puntos de todos los polígonos)
+    const centroid = allPoints.reduce(
         (acc, point) => {
             acc.lon += point.lon;
             acc.lat += point.lat;
@@ -71,7 +94,7 @@ const parseGeofenceCentroid = (geofenceData: any): { lat: string; lon: string } 
         { lon: 0, lat: 0 }
     );
 
-    const numPoints = points.length;
+    const numPoints = allPoints.length;
     return {
         lon: String(centroid.lon / numPoints),
         lat: String(centroid.lat / numPoints)
@@ -139,12 +162,13 @@ export default function RouteGenerationPage() {
         return;
     }
 
-    const waypoints = selected.map(customer => {
+    const waypointsData = selected.map(customer => {
         const coords = parseGeofenceCentroid(customer.geocerca);
-        return coords ? `${coords.lat},${coords.lon}` : null;
-    }).filter((c): c is string => c !== null);
+        return coords ? { coords, customer } : null;
+    }).filter((c): c is { coords: { lat: string; lon: string }; customer: CustomerWithGeofence } => c !== null);
 
-    if (waypoints.length === 0) {
+
+    if (waypointsData.length === 0) {
         toast({
             title: "Error de Coordenadas",
             description: "Ninguno de los clientes seleccionados tiene coordenadas válidas.",
@@ -152,18 +176,23 @@ export default function RouteGenerationPage() {
         });
         return;
     }
+    
+    // El primer cliente seleccionado es el origen, el último el destino.
+    const origin = `${waypointsData[0].coords.lat},${waypointsData[0].coords.lon}`;
+    const destination = `${waypointsData[waypointsData.length - 1].coords.lat},${waypointsData[waypointsData.length - 1].coords.lon}`;
+    
+    // El resto de los puntos (si los hay) son las paradas intermedias.
+    const intermediateWaypoints = waypointsData.slice(1, -1).map(wp => `${wp.coords.lat},${wp.coords.lon}`).join('|');
 
     const baseUrl = 'https://www.google.com/maps/dir/?api=1';
-    // Se usa el primer punto como origen y destino para crear un bucle,
-    // y todos los puntos (incluido el primero) como waypoints.
-    const origin = waypoints[0];
-    const destination = waypoints[waypoints.length - 1];
-    const waypointsString = waypoints.join('|');
+    let googleMapsUrl = `${baseUrl}&origin=${origin}&destination=${destination}`;
 
-    const googleMapsUrl = `${baseUrl}&origin=${origin}&destination=${destination}&waypoints=${waypointsString}`;
+    if (intermediateWaypoints) {
+      googleMapsUrl += `&waypoints=${intermediateWaypoints}`;
+    }
 
     window.open(googleMapsUrl, '_blank');
-    setGeneratedRoute(selected);
+    setGeneratedRoute(waypointsData.map(wp => wp.customer));
   };
   
   const handleSelectAll = (checked: boolean) => {
@@ -252,3 +281,5 @@ export default function RouteGenerationPage() {
     </div>
   )
 }
+
+    
