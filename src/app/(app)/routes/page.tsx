@@ -60,22 +60,25 @@ const normalizeGeometryCollectionWKT = (wktString: string | null | undefined): s
     if (!wktString || wktString.trim() === '') {
         return null;
     }
-    const trimmedWkt = wktString.trim();
+    
+    let wkt = wktString.trim();
 
-    // Expresión regular para encontrar todos los polígonos, insensible a mayúsculas y espacios.
-    const polygons = trimmedWkt.match(/POLYGON\s*\(\(.*?\)\)/gi);
-
+    // Regex para encontrar polígonos. Es compleja para manejar paréntesis anidados.
+    const polygonRegex = /POLYGON\s*\(\s*\((?:[^()]*|\((?:[^()]*|\([^()]*\))*\))*\)\s*\)/gi;
+    const polygons = wkt.match(polygonRegex);
+    
     if (!polygons || polygons.length === 0) {
-        // Si no se encuentran polígonos, podría ser una entrada inválida, devolver original para que la BD lo valide.
-        return trimmedWkt;
+        // No se encontraron polígonos válidos, devolver el texto original para que falle en la BD si es inválido
+        return wkt;
     }
 
     if (polygons.length === 1) {
-        // Si solo hay un polígono, lo devolvemos tal cual.
+        // Si solo hay un polígono, se devuelve tal cual.
+        // Esto también maneja el caso de un GEOMETRYCOLLECTION con un solo polígono.
         return polygons[0];
     }
 
-    // Si hay múltiples polígonos, los unimos en una GEOMETRYCOLLECTION.
+    // Si hay múltiples polígonos, se asegura de que estén envueltos en GEOMETRYCOLLECTION
     return `GEOMETRYCOLLECTION(${polygons.join(',')})`;
 };
 
@@ -440,5 +443,3 @@ export default function RoutesPage() {
     </Card>
   )
 }
-
-    

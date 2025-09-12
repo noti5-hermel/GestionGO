@@ -69,23 +69,25 @@ const normalizeGeometryCollectionWKT = (wktString: string | null | undefined): s
     if (!wktString || wktString.trim() === '') {
         return null;
     }
-    const trimmedWkt = wktString.trim();
+    
+    let wkt = wktString.trim();
 
-    // Expresión regular para encontrar todos los polígonos, insensible a mayúsculas y espacios.
-    const polygons = trimmedWkt.match(/POLYGON\s*\(\(.*?\)\)/gi);
-
+    // Regex para encontrar polígonos. Es compleja para manejar paréntesis anidados.
+    const polygonRegex = /POLYGON\s*\(\s*\((?:[^()]*|\((?:[^()]*|\([^()]*\))*\))*\)\s*\)/gi;
+    const polygons = wkt.match(polygonRegex);
+    
     if (!polygons || polygons.length === 0) {
-        // Si no se encuentran polígonos, podría ser una entrada inválida.
-        // Devolver el texto original permite que la validación de la BD falle si es necesario.
-        return trimmedWkt;
+        // No se encontraron polígonos válidos, devolver el texto original para que falle en la BD si es inválido
+        return wkt;
     }
 
     if (polygons.length === 1) {
-        // Si solo hay un polígono, lo devolvemos tal cual para no envolverlo innecesariamente.
+        // Si solo hay un polígono, se devuelve tal cual.
+        // Esto también maneja el caso de un GEOMETRYCOLLECTION con un solo polígono.
         return polygons[0];
     }
 
-    // Si hay múltiples polígonos, los unimos en una GEOMETRYCOLLECTION con la sintaxis correcta.
+    // Si hay múltiples polígonos, se asegura de que estén envueltos en GEOMETRYCOLLECTION
     return `GEOMETRYCOLLECTION(${polygons.join(',')})`;
 };
 
@@ -418,5 +420,3 @@ export default function GeofencesPage() {
     </Card>
   )
 }
-
-    
