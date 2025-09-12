@@ -50,6 +50,38 @@ type Route = {
 
 const ITEMS_PER_PAGE = 10;
 
+/**
+ * Normaliza una cadena de texto WKT de GEOMETRYCOLLECTION para asegurar una sintaxis válida.
+ * @param wktString - La cadena de texto de la geocerca.
+ * @returns Una cadena WKT formateada correctamente o null si la entrada es inválida.
+ */
+const normalizeGeometryCollectionWKT = (wktString: string | null | undefined): string | null => {
+    if (!wktString || wktString.trim() === '') {
+        return null;
+    }
+    const trimmedWkt = wktString.trim();
+    
+    // Si es solo un polígono, lo devolvemos tal cual.
+    if (trimmedWkt.toUpperCase().startsWith('POLYGON')) {
+        return trimmedWkt;
+    }
+
+    // Si es una GEOMETRYCOLLECTION, la normalizamos.
+    if (trimmedWkt.toUpperCase().startsWith('GEOMETRYCOLLECTION')) {
+        // Extrae todos los polígonos usando una expresión regular.
+        const polygons = trimmedWkt.match(/POLYGON\s*\(\(.*?\)\)/gi);
+        if (!polygons) {
+            return trimmedWkt; // Devuelve el original si no encuentra polígonos válidos.
+        }
+        // Reconstruye la cadena con los polígonos separados por comas dentro de un solo paréntesis.
+        return `GEOMETRYCOLLECTION(${polygons.join(',')})`;
+    }
+    
+    // Si no es ninguno de los formatos esperados, devuelve el original.
+    return trimmedWkt;
+};
+
+
 export default function RoutesPage() {
   const [routes, setRoutes] = useState<Route[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -98,10 +130,12 @@ export default function RoutesPage() {
   const onSubmit = async (values: z.infer<typeof routeSchema>) => {
     let error;
     
-    // Si el campo de geocerca está vacío, lo guardamos como NULL en la base de datos
+    // Normaliza la geocerca antes de guardarla.
+    const normalizedGeocerca = normalizeGeometryCollectionWKT(values.geocerca);
+
     const dataToSubmit = {
       ...values,
-      geocerca: values.geocerca?.trim() === '' ? null : values.geocerca,
+      geocerca: normalizedGeocerca,
     };
 
     if (editingRoute) {
