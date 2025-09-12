@@ -85,8 +85,7 @@ export default function RouteGenerationPage() {
     const { data, error } = await supabase
       .from('customer')
       .select('code_customer, customer_name, geocerca')
-      .not('geocerca', 'is', null)
-      .ilike('geocerca', '%POLYGON%'); // Filtra registros que contengan "POLYGON"
+      .not('geocerca', 'is', null);
 
     if (error) {
       toast({
@@ -202,7 +201,7 @@ export default function RouteGenerationPage() {
                   </div>
                 ))
               ) : (
-                <p className="text-muted-foreground">No hay clientes con geocercas (de tipo POLYGON) definidas.</p>
+                <p className="text-muted-foreground">No hay clientes con geocercas definidas.</p>
               )}
             </div>
           </ScrollArea>
