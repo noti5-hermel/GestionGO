@@ -60,6 +60,36 @@ type Customer = {
 const ITEMS_PER_PAGE = 10;
 
 /**
+ * Normaliza una cadena de texto WKT de geocerca para asegurar una sintaxis válida.
+ * Puede manejar un solo POLYGON o una GEOMETRYCOLLECTION con múltiples polígonos.
+ * @param wktString - La cadena de texto de la geocerca.
+ * @returns Una cadena WKT formateada correctamente o null si la entrada es inválida o vacía.
+ */
+const normalizeGeometryCollectionWKT = (wktString: string | null | undefined): string | null => {
+    if (!wktString || wktString.trim() === '') {
+        return null;
+    }
+    const trimmedWkt = wktString.trim();
+
+    // Expresión regular para encontrar todos los polígonos, insensible a mayúsculas y espacios.
+    const polygons = trimmedWkt.match(/POLYGON\s*\(\(.*?\)\)/gi);
+
+    if (!polygons || polygons.length === 0) {
+        // Si no se encuentran polígonos, podría ser una entrada inválida.
+        // Devolver el texto original permite que la validación de la BD falle si es necesario.
+        return trimmedWkt;
+    }
+
+    if (polygons.length === 1) {
+        // Si solo hay un polígono, lo devolvemos tal cual para no envolverlo innecesariamente.
+        return polygons[0];
+    }
+
+    // Si hay múltiples polígonos, los unimos en una GEOMETRYCOLLECTION con la sintaxis correcta.
+    return `GEOMETRYCOLLECTION(${polygons.join(',')})`;
+};
+
+/**
  * Componente principal de la página de Geocercas.
  */
 export default function GeofencesPage() {
@@ -135,9 +165,12 @@ export default function GeofencesPage() {
   }, [editingCustomer, form]);
 
   const onSubmit = async (values: z.infer<typeof geofenceSchema>) => {
+    // Normaliza la geocerca antes de guardarla.
+    const normalizedGeocerca = normalizeGeometryCollectionWKT(values.geocerca);
+
     const { error } = await supabase
         .from('customer')
-        .update({ geocerca: values.geocerca.trim() }) // Se guarda el valor sin espacios
+        .update({ geocerca: normalizedGeocerca })
         .eq('code_customer', values.code_customer);
 
     if (error) {
