@@ -38,10 +38,10 @@ const geofenceSchema = z.object({
   geocerca: z.string().min(10, { message: "El campo de geocerca no puede estar vacío." })
     .refine(value => {
         try {
-            const trimmedValue = value.trim();
-            // Intenta validar si el string tiene un formato parecido a un polígono
-            // Esta es una validación muy básica. PostGIS hará la validación real.
-            return trimmedValue.toUpperCase().startsWith('POLYGON((') && trimmedValue.endsWith('))')
+            // Normaliza el string: quita espacios al inicio/final y convierte a mayúsculas
+            const normalizedValue = value.trim().toUpperCase();
+            // Validación más flexible: debe empezar con POLYGON y contener los paréntesis.
+            return normalizedValue.startsWith('POLYGON') && normalizedValue.includes('((') && normalizedValue.includes('))');
         } catch {
             return false
         }
