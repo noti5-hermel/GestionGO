@@ -51,34 +51,32 @@ type Route = {
 const ITEMS_PER_PAGE = 10;
 
 /**
- * Normaliza una cadena de texto WKT de GEOMETRYCOLLECTION para asegurar una sintaxis válida.
+ * Normaliza una cadena de texto WKT de geocerca para asegurar una sintaxis válida.
+ * Puede manejar un solo POLYGON o una GEOMETRYCOLLECTION con múltiples polígonos.
  * @param wktString - La cadena de texto de la geocerca.
- * @returns Una cadena WKT formateada correctamente o null si la entrada es inválida.
+ * @returns Una cadena WKT formateada correctamente o null si la entrada es inválida o vacía.
  */
 const normalizeGeometryCollectionWKT = (wktString: string | null | undefined): string | null => {
     if (!wktString || wktString.trim() === '') {
         return null;
     }
     const trimmedWkt = wktString.trim();
-    
-    // Si es solo un polígono, lo devolvemos tal cual.
-    if (trimmedWkt.toUpperCase().startsWith('POLYGON')) {
+
+    // Expresión regular para encontrar todos los polígonos, insensible a mayúsculas y espacios.
+    const polygons = trimmedWkt.match(/POLYGON\s*\(\(.*?\)\)/gi);
+
+    if (!polygons || polygons.length === 0) {
+        // Si no se encuentran polígonos, podría ser una entrada inválida, devolver original para que la BD lo valide.
         return trimmedWkt;
     }
 
-    // Si es una GEOMETRYCOLLECTION, la normalizamos.
-    if (trimmedWkt.toUpperCase().startsWith('GEOMETRYCOLLECTION')) {
-        // Extrae todos los polígonos usando una expresión regular.
-        const polygons = trimmedWkt.match(/POLYGON\s*\(\(.*?\)\)/gi);
-        if (!polygons) {
-            return trimmedWkt; // Devuelve el original si no encuentra polígonos válidos.
-        }
-        // Reconstruye la cadena con los polígonos separados por comas dentro de un solo paréntesis.
-        return `GEOMETRYCOLLECTION(${polygons.join(',')})`;
+    if (polygons.length === 1) {
+        // Si solo hay un polígono, lo devolvemos tal cual.
+        return polygons[0];
     }
-    
-    // Si no es ninguno de los formatos esperados, devuelve el original.
-    return trimmedWkt;
+
+    // Si hay múltiples polígonos, los unimos en una GEOMETRYCOLLECTION.
+    return `GEOMETRYCOLLECTION(${polygons.join(',')})`;
 };
 
 
