@@ -42,7 +42,12 @@ const routeSchema = z.object({
   geocerca: z.string().optional().nullable(),
 })
 
-type Route = z.infer<typeof routeSchema>
+type Route = {
+  id_ruta: string | number; // Permite ambos tipos para los datos de la BD
+  ruta_desc: string;
+  geocerca: string | null;
+}
+
 const ITEMS_PER_PAGE = 10;
 
 export default function RoutesPage() {
@@ -52,7 +57,7 @@ export default function RoutesPage() {
   const { toast } = useToast()
   const [currentPage, setCurrentPage] = useState(1);
 
-  const form = useForm<Route>({
+  const form = useForm<z.infer<typeof routeSchema>>({
     resolver: zodResolver(routeSchema),
     defaultValues: {
       id_ruta: "",
@@ -69,6 +74,7 @@ export default function RoutesPage() {
     if (editingRoute) {
       form.reset({
         ...editingRoute,
+        id_ruta: String(editingRoute.id_ruta), // Convierte a string para el formulario
         geocerca: editingRoute.geocerca ?? "",
       });
     } else {
@@ -89,7 +95,7 @@ export default function RoutesPage() {
     }
   }
 
-  const onSubmit = async (values: Route) => {
+  const onSubmit = async (values: z.infer<typeof routeSchema>) => {
     let error;
     
     // Si el campo de geocerca está vacío, lo guardamos como NULL en la base de datos
@@ -129,7 +135,7 @@ export default function RoutesPage() {
     }
   }
 
-  const handleDelete = async (routeId: string) => {
+  const handleDelete = async (routeId: string | number) => {
     const { error } = await supabase
       .from('rutas')
       .delete()
@@ -294,8 +300,8 @@ export default function RoutesPage() {
             </TableHeader>
             <TableBody>
               {paginatedRoutes.map((route) => (
-                <TableRow key={route.id_ruta}>
-                  <TableCell className="font-medium">{route.id_ruta}</TableCell>
+                <TableRow key={String(route.id_ruta)}>
+                  <TableCell className="font-medium">{String(route.id_ruta)}</TableCell>
                   <TableCell>{route.ruta_desc}</TableCell>
                   <TableCell>
                     {route.geocerca 
@@ -402,5 +408,3 @@ export default function RoutesPage() {
     </Card>
   )
 }
-
-    
