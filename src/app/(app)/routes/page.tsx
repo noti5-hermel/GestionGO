@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { PlusCircle, Trash2, Pencil, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
@@ -38,6 +39,7 @@ import { useToast } from "@/hooks/use-toast"
 const routeSchema = z.object({
   id_ruta: z.string().min(1, { message: "El ID de la ruta es requerido." }),
   ruta_desc: z.string().min(1, { message: "La descripción es requerida." }),
+  geocerca: z.string().optional().nullable(),
 })
 
 type Route = z.infer<typeof routeSchema>
@@ -55,6 +57,7 @@ export default function RoutesPage() {
     defaultValues: {
       id_ruta: "",
       ruta_desc: "",
+      geocerca: ""
     },
   })
   
@@ -64,14 +67,17 @@ export default function RoutesPage() {
 
   useEffect(() => {
     if (editingRoute) {
-      form.reset(editingRoute);
+      form.reset({
+        ...editingRoute,
+        geocerca: editingRoute.geocerca ?? "",
+      });
     } else {
-      form.reset({ id_ruta: "", ruta_desc: "" });
+      form.reset({ id_ruta: "", ruta_desc: "", geocerca: "" });
     }
   }, [editingRoute, form]);
 
   const fetchRoutes = async () => {
-    const { data, error } = await supabase.from('rutas').select('id_ruta, ruta_desc')
+    const { data, error } = await supabase.from('rutas').select('id_ruta, ruta_desc, geocerca')
     if (error) {
       toast({
         title: "Error",
@@ -85,17 +91,24 @@ export default function RoutesPage() {
 
   const onSubmit = async (values: Route) => {
     let error;
+    
+    // Si el campo de geocerca está vacío, lo guardamos como NULL en la base de datos
+    const dataToSubmit = {
+      ...values,
+      geocerca: values.geocerca?.trim() === '' ? null : values.geocerca,
+    };
+
     if (editingRoute) {
       const { error: updateError } = await supabase
         .from('rutas')
-        .update(values)
+        .update(dataToSubmit)
         .eq('id_ruta', editingRoute.id_ruta)
         .select()
       error = updateError;
     } else {
       const { error: insertError } = await supabase
         .from('rutas')
-        .insert([values])
+        .insert([dataToSubmit])
         .select()
       error = insertError;
     }
@@ -159,7 +172,7 @@ export default function RoutesPage() {
 
   const handleCloseDialog = () => {
     setEditingRoute(null);
-    form.reset({ id_ruta: "", ruta_desc: "" });
+    form.reset({ id_ruta: "", ruta_desc: "", geocerca: "" });
     setIsDialogOpen(false);
   }
 
@@ -202,7 +215,7 @@ export default function RoutesPage() {
                 <PlusCircle className="mr-2 h-4 w-4" /> Añadir Ruta
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{editingRoute ? 'Editar Ruta' : 'Añadir Nueva Ruta'}</DialogTitle>
                 <DialogDescription>
@@ -218,7 +231,7 @@ export default function RoutesPage() {
                       <FormItem>
                         <FormLabel>ID Ruta</FormLabel>
                         <FormControl>
-                          <Input placeholder="Ej: Ruta-Este" {...field} disabled={!!editingRoute} />
+                          <Input placeholder="Ej: R-01" {...field} disabled={!!editingRoute} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -237,7 +250,26 @@ export default function RoutesPage() {
                       </FormItem>
                     )}
                   />
-                  <DialogFooter>
+                  <FormField
+                    control={form.control}
+                    name="geocerca"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Geocerca (Opcional)</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Ej: POLYGON((long1 lat1, ...)) o GEOMETRYCOLLECTION(POLYGON(...))"
+                            className="resize-y"
+                            rows={4}
+                            {...field}
+                            value={field.value ?? ""}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <DialogFooter className="gap-2 pt-4">
                     <DialogClose asChild>
                       <Button type="button" variant="secondary" onClick={handleCloseDialog}>Cancelar</Button>
                     </DialogClose>
@@ -256,6 +288,7 @@ export default function RoutesPage() {
               <TableRow>
                 <TableHead>ID Ruta</TableHead>
                 <TableHead>Descripción</TableHead>
+                <TableHead>Geocerca Asignada</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -264,6 +297,12 @@ export default function RoutesPage() {
                 <TableRow key={route.id_ruta}>
                   <TableCell className="font-medium">{route.id_ruta}</TableCell>
                   <TableCell>{route.ruta_desc}</TableCell>
+                  <TableCell>
+                    {route.geocerca 
+                        ? <span className="font-mono text-xs p-1 bg-muted rounded">Sí</span> 
+                        : <span className="text-muted-foreground">No</span>
+                    }
+                  </TableCell>
                   <TableCell>
                     <div className="flex justify-end items-center gap-2">
                       <Button variant="ghost" size="icon" onClick={() => handleEdit(route)}>
@@ -341,7 +380,7 @@ export default function RoutesPage() {
                 variant="outline"
                 className="h-8 w-8 p-0"
                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
+                disabled={currentPage === totalPages || totalPages === 0}
             >
                 <span className="sr-only">Siguiente página</span>
                 <ChevronRight className="h-4 w-4" />
@@ -350,14 +389,14 @@ export default function RoutesPage() {
                 variant="outline"
                 className="h-8 w-8 p-0"
                 onClick={() => setCurrentPage(totalPages)}
-                disabled={currentPage === totalPages}
+                disabled={currentPage === totalPages || totalPages === 0}
             >
                 <span className="sr-only">Última página</span>
                 <ChevronsRight className="h-4 w-4" />
             </Button>
         </div>
         <div className="text-xs text-muted-foreground">
-          Página <strong>{currentPage}</strong> de <strong>{totalPages}</strong>
+          Página <strong>{currentPage}</strong> de <strong>{totalPages || 1}</strong>
         </div>
       </CardFooter>
     </Card>
