@@ -29,7 +29,7 @@ type CustomerWithGeofence = {
  * @returns Un objeto con lat y lon del centroide, o null si el formato es inválido.
  */
 const parseGeofenceCentroid = (geofenceString: string): { lat: string; lon: string } | null => {
-    if (!geofenceString || !geofenceString.toUpperCase().startsWith('POLYGON')) {
+    if (!geofenceString || !geofenceString.toUpperCase().includes('POLYGON')) {
         return null;
     }
     
@@ -86,7 +86,7 @@ export default function RouteGenerationPage() {
       .from('customer')
       .select('code_customer, customer_name, geocerca')
       .not('geocerca', 'is', null)
-      .ilike('geocerca', 'POLYGON%'); // Filtra solo los que son polígonos (insensible a mayúsculas)
+      .ilike('geocerca', '%POLYGON%'); // Filtra registros que contengan "POLYGON"
 
     if (error) {
       toast({
