@@ -20,30 +20,42 @@ import { List, MapPin } from "lucide-react"
 type CustomerWithGeofence = {
   code_customer: string;
   customer_name: string;
-  geocerca: string;
+  geocerca: any; // Se usa 'any' para manejar tanto strings como objetos GeoJSON.
 }
 
 /**
- * Parsea una cadena de geocerca en formato WKT POLYGON para obtener su centroide.
- * @param geofenceString - La cadena WKT, ej: "POLYGON((lon1 lat1, lon2 lat2, ...))"
+ * Parsea una geocerca (ya sea WKT string o GeoJSON object) para obtener su centroide.
+ * @param geofenceData - La geocerca, ej: "POLYGON((...))" o { type: "Polygon", coordinates: [...] }.
  * @returns Un objeto con lat y lon del centroide, o null si el formato es inválido.
  */
-const parseGeofenceCentroid = (geofenceString: string): { lat: string; lon: string } | null => {
-    if (!geofenceString || !geofenceString.toUpperCase().includes('POLYGON')) {
-        return null;
-    }
-    
-    // Extrae las coordenadas del string. Ej: "-90.51 14.63, -90.50 14.63, ..."
-    const coordsMatch = geofenceString.match(/\(\((.*)\)\)/);
-    if (!coordsMatch || !coordsMatch[1]) {
-        return null;
-    }
+const parseGeofenceCentroid = (geofenceData: any): { lat: string; lon: string } | null => {
+    if (!geofenceData) return null;
 
-    // Convierte el string de coordenadas en un array de puntos [lon, lat]
-    const points = coordsMatch[1].split(',').map(pair => {
-        const [lon, lat] = pair.trim().split(' ').map(Number);
-        return { lon, lat };
-    }).filter(p => !isNaN(p.lon) && !isNaN(p.lat));
+    let points: { lon: number; lat: number }[] = [];
+
+    // Caso 1: Es un objeto GeoJSON (la forma más probable en que Supabase lo devuelve)
+    if (typeof geofenceData === 'object' && geofenceData.type === 'Polygon' && Array.isArray(geofenceData.coordinates)) {
+        // Tomamos el primer anillo del polígono
+        const coordinateRing = geofenceData.coordinates[0];
+        if (!Array.isArray(coordinateRing)) return null;
+
+        points = coordinateRing.map((p: number[]) => ({ lon: p[0], lat: p[1] }))
+            .filter(p => !isNaN(p.lon) && !isNaN(p.lat));
+    
+    // Caso 2: Es un string en formato WKT
+    } else if (typeof geofenceData === 'string' && geofenceData.toUpperCase().includes('POLYGON')) {
+        const coordsMatch = geofenceData.match(/\(\((.*)\)\)/);
+        if (!coordsMatch || !coordsMatch[1]) {
+            return null;
+        }
+
+        points = coordsMatch[1].split(',').map(pair => {
+            const [lon, lat] = pair.trim().split(' ').map(Number);
+            return { lon, lat };
+        }).filter(p => !isNaN(p.lon) && !isNaN(p.lat));
+    } else {
+        return null; // Formato no reconocido
+    }
 
     if (points.length === 0) {
         return null;
