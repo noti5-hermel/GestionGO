@@ -29,6 +29,7 @@ import { PlusCircle, Pencil, Trash2, Upload, ChevronsLeft, ChevronLeft, ChevronR
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 import { Label } from "@/components/ui/label"
+import { Combobox } from "@/components/ui/combobox"
 
 /**
  * @file invoicing/page.tsx
@@ -491,6 +492,7 @@ export default function InvoicingPage() {
   const handleCustomerChange = (code: string) => {
     const customer = customers.find(c => c.code_customer === code);
     if (customer) {
+      form.setValue('code_customer', customer.code_customer);
       form.setValue('customer_name', customer.customer_name);
       form.setValue('ruta', String(customer.ruta || ''));
       const term = paymentTerms.find(t => t.id_term === customer.id_term);
@@ -551,6 +553,11 @@ export default function InvoicingPage() {
     }
     return pages;
   };
+  
+  const customerOptions = customers.map(customer => ({
+    value: customer.code_customer,
+    label: `${customer.code_customer} - ${customer.customer_name}`
+  }));
 
   // --- RENDERIZADO DEL COMPONENTE ---
   return (
@@ -618,22 +625,16 @@ export default function InvoicingPage() {
                       control={form.control}
                       name="code_customer"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className="flex flex-col">
                           <FormLabel>Código Cliente</FormLabel>
-                          <Select onValueChange={(value) => { field.onChange(value); handleCustomerChange(value); }} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Seleccione un cliente" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {customers.map((customer) => (
-                                <SelectItem key={customer.code_customer} value={customer.code_customer}>
-                                  {customer.code_customer} - {customer.customer_name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <Combobox
+                            options={customerOptions}
+                            value={field.value}
+                            onChange={(value) => handleCustomerChange(value)}
+                            placeholder="Seleccione un cliente"
+                            searchPlaceholder="Buscar cliente..."
+                            emptyText="No se encontró el cliente."
+                          />
                           <FormMessage />
                         </FormItem>
                       )}
