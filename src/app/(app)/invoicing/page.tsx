@@ -226,7 +226,7 @@ export default function InvoicingPage() {
 
   /** Obtiene la lista completa de clientes para el selector del formulario. */
   const fetchCustomers = async () => {
-    const { data, error } = await supabase.from('customer').select('code_customer, customer_name, ruta, id_term')
+    const { data, error } = await supabase.from('customer').select('code_customer, customer_name, ruta, id_term').limit(10000);
     if (error) {
       toast({ title: "Error", description: "No se pudieron cargar los clientes.", variant: "destructive" })
     } else {
@@ -982,3 +982,5 @@ export default function InvoicingPage() {
     </Card>
   )
 }
+
+    
