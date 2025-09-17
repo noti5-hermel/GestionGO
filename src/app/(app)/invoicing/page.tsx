@@ -29,7 +29,7 @@ import { PlusCircle, Pencil, Trash2, Upload, ChevronsLeft, ChevronLeft, ChevronR
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 import { Label } from "@/components/ui/label"
-import { Combobox } from "@/components/ui/combobox"
+import { AsyncCombobox } from "@/components/ui/async-combobox"
 
 /**
  * @file invoicing/page.tsx
@@ -96,7 +96,6 @@ const ITEMS_PER_PAGE = 10;
 export default function InvoicingPage() {
   // --- ESTADOS ---
   const [invoices, setInvoices] = useState<Invoice[]>([])
-  const [customers, setCustomers] = useState<Customer[]>([])
   const [paymentTerms, setPaymentTerms] = useState<PaymentTerm[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null)
@@ -178,7 +177,6 @@ export default function InvoicingPage() {
    * Efecto para cargar los datos estáticos (clientes, términos de pago) al montar el componente.
    */
   useEffect(() => {
-    fetchCustomers()
     fetchPaymentTerms()
   }, [])
   
@@ -223,18 +221,6 @@ export default function InvoicingPage() {
       });
     }
   }, [editingInvoice, form]);
-
-  /** Obtiene la lista completa de clientes para el selector del formulario. */
-  const fetchCustomers = async () => {
-    const { data, error } = await supabase.from('customer').select('code_customer, customer_name, ruta, id_term').limit(10000);
-    if (error) {
-      toast({ title: "Error", description: "No se pudieron cargar los clientes.", variant: "destructive" })
-    } else {
-      // Filtra clientes que no tengan código o nombre para evitar problemas en el combobox
-      const validCustomers = data.filter(c => c.code_customer && c.customer_name);
-      setCustomers(validCustomers as Customer[]);
-    }
-  }
   
   /** Obtiene la lista de términos de pago para el formulario. */
   const fetchPaymentTerms = async () => {
@@ -487,14 +473,46 @@ export default function InvoicingPage() {
     setIsDialogOpen(false);
   }
 
+  const searchCustomers = useCallback(async (query: string) => {
+    if (!query) {
+      return [];
+    }
+    const { data, error } = await supabase
+      .from('customer')
+      .select('code_customer, customer_name, ruta, id_term')
+      .or(`code_customer.ilike.%${query}%,customer_name.ilike.%${query}%`)
+      .limit(10);
+    
+    if (error) {
+      toast({ title: "Error", description: "No se pudieron buscar los clientes.", variant: "destructive" });
+      return [];
+    }
+
+    return (data || []).map(c => ({
+      value: c.code_customer,
+      label: `${c.code_customer} - ${c.customer_name}`
+    }));
+  }, [toast]);
+
   /**
    * Actualiza los campos del formulario cuando se selecciona un cliente.
    * @param code El código del cliente seleccionado.
    */
-  const handleCustomerChange = (code: string) => {
-    const customer = customers.find(c => c.code_customer === code);
+  const handleCustomerChange = async (code: string) => {
+    if (!code) {
+      form.setValue('customer_name', '');
+      form.setValue('ruta', '');
+      form.setValue('term_description', '');
+      return;
+    }
+    const { data: customer, error } = await supabase
+        .from('customer')
+        .select('customer_name, ruta, id_term')
+        .eq('code_customer', code)
+        .single();
+    
     if (customer) {
-      form.setValue('code_customer', customer.code_customer);
+      form.setValue('code_customer', code);
       form.setValue('customer_name', customer.customer_name);
       form.setValue('ruta', String(customer.ruta || ''));
       const term = paymentTerms.find(t => t.id_term === customer.id_term);
@@ -556,10 +574,6 @@ export default function InvoicingPage() {
     return pages;
   };
   
-  const customerOptions = customers.map(customer => ({
-    value: customer.code_customer,
-    label: `${customer.code_customer} - ${customer.customer_name}`
-  }));
 
   // --- RENDERIZADO DEL COMPONENTE ---
   return (
@@ -629,13 +643,11 @@ export default function InvoicingPage() {
                       render={({ field }) => (
                         <FormItem className="flex flex-col">
                           <FormLabel>Código Cliente</FormLabel>
-                          <Combobox
-                            options={customerOptions}
-                            value={field.value}
-                            onChange={(value) => handleCustomerChange(value)}
-                            placeholder="Seleccione un cliente"
-                            searchPlaceholder="Buscar cliente..."
-                            emptyText="No se encontró el cliente."
+                          <AsyncCombobox
+                              value={field.value}
+                              onValueChange={handleCustomerChange}
+                              loadOptions={searchCustomers}
+                              placeholder="Buscar cliente por código o nombre..."
                           />
                           <FormMessage />
                         </FormItem>
