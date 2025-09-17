@@ -230,7 +230,9 @@ export default function InvoicingPage() {
     if (error) {
       toast({ title: "Error", description: "No se pudieron cargar los clientes.", variant: "destructive" })
     } else {
-      setCustomers(data as Customer[])
+      // Filtra clientes que no tengan código o nombre para evitar problemas en el combobox
+      const validCustomers = data.filter(c => c.code_customer && c.customer_name);
+      setCustomers(validCustomers as Customer[]);
     }
   }
   

@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -33,13 +34,15 @@ export function Combobox({
   const searchInputRef = React.useRef<HTMLInputElement>(null);
   const comboboxRef = React.useRef<HTMLDivElement>(null);
 
-  // Filtrado de ítems basado en la búsqueda
+  // Filtrado de ítems basado en la búsqueda. Ahora busca en la etiqueta y en el valor.
   const filteredItems = React.useMemo(() => {
     if (!search) {
       return items;
     }
+    const lowercasedSearch = search.toLowerCase();
     return items.filter((item) =>
-      item.label.toLowerCase().includes(search.toLowerCase())
+      item.label.toLowerCase().includes(lowercasedSearch) ||
+      item.value.toLowerCase().includes(lowercasedSearch)
     );
   }, [items, search]);
 
@@ -181,3 +184,5 @@ export function Combobox({
     </div>
   );
 }
+
+    
