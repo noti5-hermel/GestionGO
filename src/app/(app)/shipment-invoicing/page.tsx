@@ -162,9 +162,17 @@ export default function ShipmentInvoicingPage() {
       return;
     }
 
+    // Convertir el ID de la ruta a número para la función RPC
+    const routeIdAsInt = parseInt(selectedShipment.id_ruta, 10);
+    if (isNaN(routeIdAsInt)) {
+        toast({ title: "Error de Datos", description: "El ID de la ruta no es un número válido.", variant: "destructive" });
+        setLoading(false);
+        return;
+    }
+
     // Llamada a la función RPC para encontrar clientes dentro de la geocerca de la ruta
     const { data: customersInRoute, error: rpcError } = await supabase.rpc('get_customers_in_route_geofence', {
-      route_id_param: selectedShipment.id_ruta
+      route_id_param: routeIdAsInt
     });
 
     if (rpcError) {
