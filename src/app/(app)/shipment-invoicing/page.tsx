@@ -53,7 +53,7 @@ const shipmentInvoiceSchema = z.object({
 
 // Tipos de datos para la gestión de facturación por despacho.
 type ShipmentInvoice = z.infer<typeof shipmentInvoiceSchema> & { id_fac_desp: number, comprobante: string }
-type Invoice = { id_factura: string, reference_number: string | number, fecha: string, grand_total: number, customer_name: string }
+type Invoice = { id_factura: string, reference_number: string | number, fecha: string, grand_total: number, customer_name: string, code_customer: string }
 type Shipment = { id_despacho: number, fecha_despacho: string, id_ruta: string }
 
 // Opciones estáticas para menús desplegables.
@@ -89,6 +89,17 @@ export default function ShipmentInvoicingPage() {
   
   const [availableInvoices, setAvailableInvoices] = useState<Invoice[]>([]);
 
+  const form = useForm<z.infer<typeof shipmentInvoiceSchema>>({
+    resolver: zodResolver(shipmentInvoiceSchema),
+    defaultValues: {
+      id_factura: "",
+      id_despacho: "",
+      comprobante: "",
+      forma_pago: "Efectivo",
+      monto: 0,
+      state: false,
+    },
+  })
 
   // Carga los datos iniciales al montar el componente.
   useEffect(() => {
