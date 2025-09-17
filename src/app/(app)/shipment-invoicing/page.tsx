@@ -55,6 +55,8 @@ const shipmentInvoiceSchema = z.object({
 type ShipmentInvoice = z.infer<typeof shipmentInvoiceSchema> & { id_fac_desp: number, comprobante: string }
 type Invoice = { id_factura: string, reference_number: string | number, fecha: string, grand_total: number, customer_name: string, code_customer: string }
 type Shipment = { id_despacho: number, fecha_despacho: string, id_ruta: string }
+type Route = { id_ruta: string; ruta_desc: string };
+
 
 // Opciones estáticas para menús desplegables.
 const paymentMethods: ShipmentInvoice['forma_pago'][] = ["Efectivo", "Tarjeta", "Transferencia"];
@@ -71,6 +73,7 @@ export default function ShipmentInvoicingPage() {
   const [shipmentInvoices, setShipmentInvoices] = useState<ShipmentInvoice[]>([])
   const [allInvoices, setAllInvoices] = useState<Invoice[]>([])
   const [allShipments, setAllShipments] = useState<Shipment[]>([])
+  const [allRoutes, setAllRoutes] = useState<Route[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingShipmentInvoice, setEditingShipmentInvoice] = useState<ShipmentInvoice | null>(null)
   const { toast } = useToast()
@@ -106,6 +109,7 @@ export default function ShipmentInvoicingPage() {
     fetchShipmentInvoices()
     fetchInvoices()
     fetchShipments()
+    fetchRoutes();
   }, [])
 
   // Rellena el formulario cuando se selecciona un registro para editar.
@@ -235,6 +239,15 @@ export default function ShipmentInvoicingPage() {
       setAllShipments(data as Shipment[])
     }
   }
+  
+  const fetchRoutes = async () => {
+    const { data, error } = await supabase.from('rutas').select('id_ruta, ruta_desc');
+    if (error) {
+      toast({ title: "Error", description: "No se pudieron cargar las rutas.", variant: "destructive" });
+    } else {
+      setAllRoutes(data as Route[]);
+    }
+  };
 
   /**
    * Sube un archivo de imagen (comprobante) a Supabase Storage.
@@ -466,6 +479,10 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
       const shipment = allShipments.find(ship => ship.id_despacho === id);
       return shipment ? new Date(shipment.fecha_despacho + 'T00:00:00Z').toLocaleDateString() : shipmentId;
   }
+  
+  const getRouteDescription = (routeId: string) => {
+    return allRoutes.find(r => r.id_ruta === routeId)?.ruta_desc || 'Ruta Desconocida';
+  }
 
   // --- RENDERIZADO DEL COMPONENTE ---
   return (
@@ -497,7 +514,7 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
                   <SelectContent>
                     {allShipments.map((shipment) => (
                       <SelectItem key={shipment.id_despacho} value={String(shipment.id_despacho)}>
-                        ID: {shipment.id_despacho} - Fecha: {new Date(shipment.fecha_despacho + 'T00:00:00Z').toLocaleDateString()}
+                        ID: {shipment.id_despacho} - Ruta: {getRouteDescription(shipment.id_ruta)} - Fecha: {new Date(shipment.fecha_despacho + 'T00:00:00Z').toLocaleDateString()}
                       </SelectItem>
                     ))}
                   </SelectContent>
