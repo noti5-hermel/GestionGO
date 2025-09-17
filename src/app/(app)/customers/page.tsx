@@ -67,7 +67,7 @@ type Customer = {
 }
 type PaymentTerm = { id_term: string | number; term_desc: string }
 type Tax = { id_impuesto: string | number; impt_desc: string }
-type Route = { id_ruta: string | number; ruta_desc: string }
+type RouteNumber = { ruta: number };
 
 const ITEMS_PER_PAGE = 10;
 
@@ -84,7 +84,7 @@ export default function CustomersPage() {
   // Almacena los tipos de impuesto para los filtros.
   const [taxes, setTaxes] = useState<Tax[]>([])
   // Almacena las rutas disponibles para los filtros.
-  const [uniqueRoutes, setUniqueRoutes] = useState<Route[]>([]);
+  const [uniqueRoutes, setUniqueRoutes] = useState<RouteNumber[]>([]);
   // Controla la visibilidad del diálogo de creación/edición.
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   // Almacena el cliente que se está editando, o null si se está creando uno nuevo.
@@ -169,10 +169,11 @@ export default function CustomersPage() {
    * Se ejecuta solo una vez al cargar el componente.
    */
   const fetchStaticData = useCallback(async () => {
+    // Obtiene los valores únicos de ruta directamente de la tabla de clientes.
     const [termsRes, taxesRes, routesRes] = await Promise.all([
       supabase.from('terminos_pago').select('id_term, term_desc'),
       supabase.from('tipo_impuesto').select('id_impuesto, impt_desc'),
-      supabase.from('rutas').select('id_ruta, ruta_desc') // Obtiene las rutas desde la tabla de rutas.
+      supabase.from('customer').select('ruta').not('ruta', 'is', null) // Obtiene solo rutas existentes
     ]);
     
     if (termsRes.error) {
@@ -190,7 +191,11 @@ export default function CustomersPage() {
     if (routesRes.error) {
       toast({ title: "Error", description: "No se pudieron cargar las rutas.", variant: "destructive" });
     } else {
-       setUniqueRoutes(routesRes.data.sort((a, b) => Number(a.id_ruta) - Number(b.id_ruta)) as Route[]);
+      // Procesa para obtener valores únicos y ordenados
+      const uniqueRouteNumbers = Array.from(new Set(routesRes.data.map(item => item.ruta)))
+                                      .sort((a, b) => a - b)
+                                      .map(ruta => ({ ruta }));
+      setUniqueRoutes(uniqueRouteNumbers);
     }
   }, [toast]);
   
@@ -649,7 +654,7 @@ export default function CustomersPage() {
                 </SelectTrigger>
                 <SelectContent>
                     {uniqueRoutes.map(ruta => (
-                        <SelectItem key={String(ruta.id_ruta)} value={String(ruta.id_ruta)}>{ruta.ruta_desc}</SelectItem>
+                        <SelectItem key={ruta.ruta} value={String(ruta.ruta)}>Ruta {ruta.ruta}</SelectItem>
                     ))}
                 </SelectContent>
             </Select>
@@ -799,3 +804,6 @@ export default function CustomersPage() {
     </Card>
   )
 }
+
+
+    
