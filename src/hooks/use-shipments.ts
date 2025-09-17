@@ -47,7 +47,7 @@ export type Shipment = z.infer<typeof shipmentSchema> & {
   total_credito: number;
   total_general: number;
 }
-export type Route = { id_ruta: string; ruta_desc: string }
+export type Route = { id_ruta: string; ruta_desc: string; geocerca: string | null; }
 export type User = { id_user: string; name: string }
 interface UserSession {
   id: string;
@@ -261,7 +261,7 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
 
   /** Obtiene la lista de rutas para el formulario. */
   const fetchRoutes = async () => {
-    const { data, error } = await supabase.from('rutas').select('id_ruta, ruta_desc');
+    const { data, error } = await supabase.from('rutas').select('id_ruta, ruta_desc, geocerca');
     if (error) {
         toast({
             title: "Error",
@@ -269,7 +269,7 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
             variant: "destructive",
         });
     } else if (data) {
-        setRoutes(data);
+        setRoutes(data as Route[]);
     }
   };
 

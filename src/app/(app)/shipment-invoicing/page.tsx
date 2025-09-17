@@ -54,7 +54,7 @@ const shipmentInvoiceSchema = z.object({
 // Tipos de datos para la gestión de facturación por despacho.
 type ShipmentInvoice = z.infer<typeof shipmentInvoiceSchema> & { id_fac_desp: number, comprobante: string }
 type Invoice = { id_factura: string, reference_number: string | number, fecha: string, grand_total: number, customer_name: string }
-type Shipment = { id_despacho: number, fecha_despacho: string }
+type Shipment = { id_despacho: number, fecha_despacho: string, id_ruta: string }
 
 // Opciones estáticas para menús desplegables.
 const paymentMethods: ShipmentInvoice['forma_pago'][] = ["Efectivo", "Tarjeta", "Transferencia"];
@@ -86,44 +86,9 @@ export default function ShipmentInvoicingPage() {
   const [isMassAssignDialogOpen, setIsMassAssignDialogOpen] = useState(false);
   const [selectedShipmentForMassAssign, setSelectedShipmentForMassAssign] = useState<string>('');
   const [selectedInvoicesForMassAssign, setSelectedInvoicesForMassAssign] = useState<Record<string, boolean>>({});
-
-
-  // --- FORMULARIO (para edición individual) ---
-  const form = useForm<z.infer<typeof shipmentInvoiceSchema>>({
-    resolver: zodResolver(shipmentInvoiceSchema),
-    defaultValues: {
-      id_factura: "",
-      id_despacho: "",
-      comprobante: "",
-      forma_pago: "Efectivo",
-      monto: 0,
-      state: false,
-    },
-  })
   
-  // --- LÓGICA DE DATOS Y EFECTOS ---
-  
-  /**
-   * `useMemo` se usa para calcular las facturas disponibles para la asignación masiva.
-   * Filtra las facturas que coinciden con la fecha del despacho seleccionado y que no han sido
-   * asociadas a otro despacho.
-   */
-  const availableInvoicesForMassAssign = useMemo(() => {
-    if (!selectedShipmentForMassAssign) return [];
-    const selectedShipment = allShipments.find(s => String(s.id_despacho) === selectedShipmentForMassAssign);
-    if (!selectedShipment) return [];
-    
-    // Compara las fechas ignorando la zona horaria.
-    const selectedDate = new Date(selectedShipment.fecha_despacho + 'T00:00:00Z').toISOString().split('T')[0];
-    const usedInvoiceIds = new Set(shipmentInvoices.map(si => si.id_factura));
+  const [availableInvoices, setAvailableInvoices] = useState<Invoice[]>([]);
 
-    return allInvoices.filter(inv => {
-        const invoiceDate = new Date(inv.fecha + 'T00:00:00Z').toISOString().split('T')[0];
-        const isDateMatch = invoiceDate === selectedDate;
-        const isNotUsed = !usedInvoiceIds.has(inv.id_factura);
-        return isDateMatch && isNotUsed;
-    });
-  }, [selectedShipmentForMassAssign, allInvoices, allShipments, shipmentInvoices]);
 
   // Carga los datos iniciales al montar el componente.
   useEffect(() => {
@@ -151,6 +116,76 @@ export default function ShipmentInvoicingPage() {
     }
     setSelectedFile(null); // Resetea el archivo al abrir el diálogo.
   }, [editingShipmentInvoice, form])
+  
+  /**
+   * Obtiene las facturas disponibles para un despacho específico.
+   * Filtra por fecha y geocerca (cliente dentro de la geocerca de la ruta).
+   */
+  const getAvailableInvoices = useCallback(async (shipmentId: string) => {
+    if (!shipmentId) {
+      setAvailableInvoices([]);
+      return;
+    }
+    setLoading(true);
+    
+    const selectedShipment = allShipments.find(s => String(s.id_despacho) === shipmentId);
+    if (!selectedShipment) {
+      setLoading(false);
+      return;
+    }
+    
+    // Lista de IDs de facturas que ya están asignadas a CUALQUIER despacho
+    const usedInvoiceIds = new Set(shipmentInvoices.map(si => si.id_factura));
+
+    // Obtener la geocerca de la ruta del despacho
+    const { data: routeData, error: routeError } = await supabase
+      .from('rutas')
+      .select('geocerca')
+      .eq('id_ruta', selectedShipment.id_ruta)
+      .single();
+
+    if (routeError || !routeData.geocerca) {
+      toast({ title: "Advertencia", description: "La ruta de este despacho no tiene una geocerca definida. No se pueden filtrar facturas por ubicación.", variant: "destructive" });
+      setLoading(false);
+      setAvailableInvoices([]);
+      return;
+    }
+
+    // Llamada a la función RPC para encontrar clientes dentro de la geocerca de la ruta
+    const { data: customersInRoute, error: rpcError } = await supabase.rpc('get_customers_in_route_geofence', {
+      route_id_param: selectedShipment.id_ruta
+    });
+
+    if (rpcError) {
+      toast({ title: "Error de Geocerca", description: "No se pudo consultar qué clientes están en la ruta.", variant: "destructive" });
+      setLoading(false);
+      return;
+    }
+
+    const customerCodesInRoute = new Set(customersInRoute.map((c: any) => c.code_customer));
+    const selectedDate = new Date(selectedShipment.fecha_despacho + 'T00:00:00Z').toISOString().split('T')[0];
+
+    const filteredInvoices = allInvoices.filter(inv => {
+      const invoiceDate = new Date(inv.fecha + 'T00:00:00Z').toISOString().split('T')[0];
+      const isDateMatch = invoiceDate === selectedDate;
+      const isNotUsed = !usedInvoiceIds.has(inv.id_factura);
+      // @ts-ignore - 'code_customer' is not on the base type but it is in the data
+      const isInRoute = customerCodesInRoute.has(inv.code_customer);
+
+      return isDateMatch && isNotUsed && isInRoute;
+    });
+
+    setAvailableInvoices(filteredInvoices);
+    setLoading(false);
+
+  }, [allShipments, allInvoices, shipmentInvoices, toast]);
+
+
+  // Efecto que se dispara cuando el usuario selecciona un despacho en el diálogo de asignación masiva.
+  useEffect(() => {
+    getAvailableInvoices(selectedShipmentForMassAssign);
+    setSelectedInvoicesForMassAssign({}); // Resetea la selección de facturas
+  }, [selectedShipmentForMassAssign, getAvailableInvoices]);
 
   /** Obtiene los registros de facturación por despacho desde Supabase. */
   const fetchShipmentInvoices = async () => {
@@ -164,7 +199,7 @@ export default function ShipmentInvoicingPage() {
   
   /** Obtiene todas las facturas para los selectores y la asignación. */
   const fetchInvoices = async () => {
-    const { data, error } = await supabase.from('facturacion').select('id_factura, reference_number, fecha, grand_total, customer_name')
+    const { data, error } = await supabase.from('facturacion').select('id_factura, reference_number, fecha, grand_total, customer_name, code_customer')
     if (error) {
       toast({ title: "Error", description: "No se pudieron cargar las facturas.", variant: "destructive" })
     } else {
@@ -174,7 +209,7 @@ export default function ShipmentInvoicingPage() {
   
   /** Obtiene todos los despachos para el selector. */
   const fetchShipments = async () => {
-    const { data, error } = await supabase.from('despacho').select('id_despacho, fecha_despacho')
+    const { data, error } = await supabase.from('despacho').select('id_despacho, fecha_despacho, id_ruta')
     if (error) {
       toast({ title: "Error", description: "No se pudieron cargar los despachos.", variant: "destructive" })
     } else {
@@ -338,7 +373,6 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
     setLoading(true);
 
     const recordsToInsert = invoiceIdsToAssign.map(invoiceId => {
-        const invoiceDetails = allInvoices.find(inv => inv.id_factura === invoiceId);
         return {
             id_despacho: parseInt(selectedShipmentForMassAssign, 10),
             id_factura: invoiceId,
@@ -402,6 +436,7 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
     setIsMassAssignDialogOpen(false);
     setSelectedShipmentForMassAssign('');
     setSelectedInvoicesForMassAssign({});
+    setAvailableInvoices([]); // Limpia las facturas disponibles
   };
   
   const getBadgeVariant = (status: boolean) => status ? "default" : "secondary"
@@ -432,7 +467,7 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
               <DialogHeader>
                 <DialogTitle>Asignación Masiva de Facturas</DialogTitle>
                 <DialogDescription>
-                  Seleccione un despacho para ver las facturas disponibles y asígnelas.
+                  Seleccione un despacho para ver las facturas disponibles (filtradas por fecha y geocerca) y asígnelas.
                 </DialogDescription>
               </DialogHeader>
               <div className="flex flex-col gap-4 py-4 flex-1 overflow-y-hidden">
@@ -456,13 +491,13 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
                         <TableHead className="w-[50px]">
                            <Checkbox
                                 checked={
-                                    availableInvoicesForMassAssign.length > 0 &&
-                                    availableInvoicesForMassAssign.every(inv => selectedInvoicesForMassAssign[inv.id_factura])
+                                    availableInvoices.length > 0 &&
+                                    availableInvoices.every(inv => selectedInvoicesForMassAssign[inv.id_factura])
                                 }
                                 onCheckedChange={(checked) => {
                                     const newSelection: Record<string, boolean> = {};
                                     if (checked) {
-                                        availableInvoicesForMassAssign.forEach(inv => newSelection[inv.id_factura] = true);
+                                        availableInvoices.forEach(inv => newSelection[inv.id_factura] = true);
                                     }
                                     setSelectedInvoicesForMassAssign(newSelection);
                                 }}
@@ -476,9 +511,11 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {selectedShipmentForMassAssign ? (
-                         availableInvoicesForMassAssign.length > 0 ? (
-                           availableInvoicesForMassAssign.map(invoice => (
+                      {loading ? (
+                        <TableRow><TableCell colSpan={5} className="text-center h-24">Buscando facturas disponibles...</TableCell></TableRow>
+                      ) : selectedShipmentForMassAssign ? (
+                         availableInvoices.length > 0 ? (
+                           availableInvoices.map(invoice => (
                               <TableRow key={invoice.id_factura}
                                 onClick={() => {
                                     setSelectedInvoicesForMassAssign(prev => ({
@@ -507,7 +544,7 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
                             ))
                           ) : (
                             <TableRow>
-                              <TableCell colSpan={5} className="text-center h-24">No hay facturas disponibles para la fecha de este despacho.</TableCell>
+                              <TableCell colSpan={5} className="text-center h-24">No hay facturas disponibles para la fecha y ruta de este despacho.</TableCell>
                             </TableRow>
                           )
                       ) : (
@@ -745,5 +782,3 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
     </Card>
   )
 }
-
-    
