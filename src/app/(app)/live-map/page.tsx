@@ -21,7 +21,7 @@ type User = {
   name: string;
 };
 
-// Carga dinámica del mapa para evitar problemas con SSR.
+// Carga dinámica del mapa para evitar problemas con SSR y el doble montaje en desarrollo.
 // Al definirlo fuera del componente, nos aseguramos de que solo se cree una vez.
 const LiveMap = dynamic(() => import('@/components/live-map'), {
   ssr: false,
