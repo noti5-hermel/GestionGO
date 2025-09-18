@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
-import { ArrowLeft, Pencil, Upload, Camera, X, FileText } from "lucide-react"
+import { ArrowLeft, Pencil, Upload, Camera, X, FileText, Loader2 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
@@ -27,6 +27,7 @@ import { PdfPreviewModal } from "@/components/pdf-preview-modal"
  * @description Página de detalle para un despacho específico. Muestra la información del despacho,
  * el estado del proceso, y una lista de todas las facturas asociadas. Permite editar
  * los detalles de pago de cada factura y subir/capturar comprobantes.
+ * Para motoristas, la edición está restringida por geocerca.
  */
 
 const BUCKET_NAME = 'comprobante';
@@ -66,6 +67,7 @@ type Shipment = {
 export type ShipmentInvoice = {
   id_fac_desp: number
   id_factura: string
+  code_customer: string
   comprobante: string
   forma_pago: "Efectivo" | "Tarjeta" | "Transferencia"
   monto: number
@@ -76,8 +78,8 @@ export type ShipmentInvoice = {
   grand_total: number // No es opcional para la validación
 }
 
-type User = { id_user: string; name: string }
-type Route = { id_ruta: string; ruta_desc: string }
+type User = { id_user: string; name: string; id_rol: number; }
+type Role = { id_ruta: string; ruta_desc: string }
 type Invoice = { id_factura: string, reference_number: string | number, code_customer: string, grand_total: number }
 type Customer = { code_customer: string; id_impuesto: number };
 type TaxType = { id_impuesto: number; impt_desc: string };
@@ -110,7 +112,7 @@ export default function ShipmentDetailPage() {
   const [shipment, setShipment] = useState<Shipment | null>(null)
   const [invoices, setInvoices] = useState<ShipmentInvoice[]>([])
   const [users, setUsers] = useState<User[]>([])
-  const [routes, setRoutes] = useState<Route[]>([])
+  const [routes, setRoutes] = useState<Role[]>([])
   const [loading, setLoading] = useState(true)
 
   // Estados para el diálogo de edición de factura.
@@ -134,6 +136,10 @@ export default function ShipmentDetailPage() {
   // Estados para la previsualización del PDF.
   const [pdfData, setPdfData] = useState<{ dataUri: string; fileName: string } | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  
+  const [currentUser, setCurrentUser] = useState<any | null>(null);
+  const [verifyingLocationInvoiceId, setVerifyingLocationInvoiceId] = useState<number | null>(null);
+
 
   // --- FORMULARIO ---
   const form = useForm<ShipmentInvoiceEditValues>({
@@ -164,9 +170,9 @@ export default function ShipmentDetailPage() {
       shipmentInvoicesRes,
     ] = await Promise.all([
       supabase.from('despacho').select('*').eq('id_despacho', id).single(),
-      supabase.from('usuario').select('id_user, name'),
+      supabase.from('usuario').select('id_user, name, id_rol'),
       supabase.from('rutas').select('id_ruta, ruta_desc'),
-      supabase.from('facturacion_x_despacho').select('*').eq('id_despacho', id),
+      supabase.from('facturacion_x_despacho').select('*, facturacion(code_customer)').eq('id_despacho', id),
     ]);
 
     if (shipmentRes.error) toast({ title: "Error", description: "No se pudo cargar el despacho.", variant: "destructive" })
@@ -176,13 +182,14 @@ export default function ShipmentDetailPage() {
     else setUsers(usersRes.data as User[])
 
     if (routesRes.error) toast({ title: "Error", description: "No se pudieron cargar las rutas.", variant: "destructive" })
-    else setRoutes(routesRes.data as Route[])
+    else setRoutes(routesRes.data as Role[])
     
     // 2. Si hay facturas asociadas, las enriquece con datos de otras tablas.
     if (shipmentInvoicesRes.error) {
       toast({ title: "Error", description: "No se pudieron cargar las facturas asociadas.", variant: "destructive" })
     } else {
-      const shipmentInvoicesData = (shipmentInvoicesRes.data || []) as ShipmentInvoice[]
+       // @ts-ignore
+      const shipmentInvoicesData = (shipmentInvoicesRes.data || []).map(si => ({...si, code_customer: si.facturacion.code_customer})) as ShipmentInvoice[];
       const invoiceIds = shipmentInvoicesData.map(inv => inv.id_factura)
 
       if (invoiceIds.length > 0) {
@@ -233,6 +240,17 @@ export default function ShipmentDetailPage() {
 
     setLoading(false)
   }
+  
+    useEffect(() => {
+    try {
+      const userSession = localStorage.getItem('user-session');
+      if (userSession) {
+        setCurrentUser(JSON.parse(userSession));
+      }
+    } catch (error) {
+      console.error("Failed to parse user session from localStorage", error);
+    }
+  }, []);
 
   // Efecto para cargar todos los datos cuando el ID del despacho cambia.
   useEffect(() => {
@@ -438,6 +456,46 @@ export default function ShipmentDetailPage() {
     const file = event.target.files?.[0];
     if (file) setSelectedFile(file);
   };
+
+  const handleAttemptEditInvoice = (invoice: ShipmentInvoice) => {
+    // Si el usuario no es motorista, permite la edición directamente.
+    if (currentUser?.role?.toLowerCase() !== 'motorista') {
+      handleEditInvoice(invoice);
+      return;
+    }
+    
+    setVerifyingLocationInvoiceId(invoice.id_fac_desp);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        const { data, error } = await supabase.rpc('is_user_in_client_geofence', {
+          user_latitude: latitude,
+          user_longitude: longitude,
+          p_code_customer: invoice.code_customer,
+        });
+
+        setVerifyingLocationInvoiceId(null);
+        
+        if (error) {
+          toast({ title: "Error de verificación", description: "No se pudo comprobar la ubicación.", variant: "destructive" });
+          return;
+        }
+
+        if (data === true) {
+          handleEditInvoice(invoice);
+        } else {
+          toast({ title: "Acción no permitida", description: "Debe estar dentro de la geocerca del cliente para editar.", variant: "destructive" });
+        }
+      },
+      (error) => {
+        setVerifyingLocationInvoiceId(null);
+        toast({ title: "Error de ubicación", description: "No se pudo obtener su ubicación. Asegúrese de tener los permisos activados.", variant: "destructive" });
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+  
   const handleEditInvoice = (invoice: ShipmentInvoice) => {
     setEditingShipmentInvoice(invoice);
     setIsInvoiceDialogOpen(true);
@@ -496,8 +554,8 @@ export default function ShipmentDetailPage() {
         shipment,
         invoices,
         routes.find(r => r.id_ruta === shipment.id_ruta) || { ruta_desc: 'N/A' },
-        users.find(u => u.id_user === shipment.id_motorista) || { name: 'N/A' },
-        users.find(u => u.id_user === shipment.id_auxiliar) || { name: 'N/A' }
+        users.find(u => u.id_user === shipment.id_motorista) || { name: 'N/A', id_rol: 0 },
+        users.find(u => u.id_user === shipment.id_auxiliar) || { name: 'N/A', id_rol: 0 }
       );
       setPdfData(pdfOutput);
       setIsPreviewOpen(true);
@@ -548,7 +606,7 @@ export default function ShipmentDetailPage() {
           <TableBody>
             {invoiceList.length > 0 ? invoiceList.map((invoice) => (
               <TableRow key={invoice.id_fac_desp}>
-                <TableCell className="font-medium">{String(invoice.id_factura || invoice.id_factura)}</TableCell>
+                <TableCell className="font-medium">{String(invoice.reference_number || invoice.id_factura)}</TableCell>
                 <TableCell>
                     {invoice.comprobante ? (
                       <button onClick={() => handleOpenImageModal(invoice.comprobante)}>
@@ -575,8 +633,8 @@ export default function ShipmentDetailPage() {
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end items-center gap-2">
-                    <Button variant="ghost" size="icon" onClick={() => handleEditInvoice(invoice)}>
-                      <Pencil className="h-4 w-4" />
+                    <Button variant="ghost" size="icon" onClick={() => handleAttemptEditInvoice(invoice)} disabled={verifyingLocationInvoiceId === invoice.id_fac_desp}>
+                      {verifyingLocationInvoiceId === invoice.id_fac_desp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
                     </Button>
                     <Button variant="ghost" size="icon" onClick={() => openCameraDialog(invoice)}>
                       <Camera className="h-4 w-4" />
