@@ -677,7 +677,7 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
                 <SelectContent>
                     {allShipments.map(shipment => (
                         <SelectItem key={shipment.id_despacho} value={String(shipment.id_despacho)}>
-                            ID: {shipment.id_despacho} - {getShipmentDate(shipment.id_despacho)}
+                            ID: {shipment.id_despacho} - {getRouteDescription(shipment.id_ruta)} - {getShipmentDate(shipment.id_despacho)}
                         </SelectItem>
                     ))}
                 </SelectContent>
