@@ -74,13 +74,14 @@ export type ShipmentInvoice = {
   state: boolean
   fecha_entrega: string | null;
   reference_number?: string | number // Opcional, se añade después desde la tabla `facturacion`
+  customer_name?: string
   tax_type?: string // Opcional, se añade después a través de joins
   grand_total: number // No es opcional para la validación
 }
 
 type User = { id_user: string; name: string; id_rol: number; }
 type Role = { id_ruta: string; ruta_desc: string }
-type Invoice = { id_factura: string, reference_number: string | number, code_customer: string, grand_total: number }
+type Invoice = { id_factura: string, reference_number: string | number, code_customer: string, customer_name: string, grand_total: number }
 type Customer = { code_customer: string; id_impuesto: number };
 type TaxType = { id_impuesto: number; impt_desc: string };
 const paymentMethods: ShipmentInvoice['forma_pago'][] = ["Efectivo", "Tarjeta", "Transferencia"];
@@ -194,7 +195,7 @@ export default function ShipmentDetailPage() {
 
       if (invoiceIds.length > 0) {
           // Obtiene detalles de las facturas.
-          const { data: invoicesData, error: invoicesError } = await supabase.from('facturacion').select('id_factura, reference_number, code_customer, grand_total').in('id_factura', invoiceIds)
+          const { data: invoicesData, error: invoicesError } = await supabase.from('facturacion').select('id_factura, reference_number, code_customer, customer_name, grand_total').in('id_factura', invoiceIds)
           if (invoicesError) {
               toast({ title: "Error", description: "No se pudieron cargar los datos de facturas.", variant: "destructive" });
           } else {
@@ -216,6 +217,7 @@ export default function ShipmentDetailPage() {
                       const invoiceInfoMap = new Map((invoicesData || []).map(i => [i.id_factura, {
                         reference_number: i.reference_number,
                         code_customer: i.code_customer,
+                        customer_name: i.customer_name,
                         grand_total: i.grand_total,
                       }]));
 
@@ -225,6 +227,7 @@ export default function ShipmentDetailPage() {
                         return {
                           ...si,
                           reference_number: invoiceInfo?.reference_number,
+                          customer_name: invoiceInfo?.customer_name,
                           grand_total: invoiceInfo?.grand_total ?? 0,
                           tax_type: customerTaxMap.get(invoiceInfo?.code_customer || '')
                         }
@@ -451,49 +454,43 @@ export default function ShipmentDetailPage() {
     }
   };
   
-    /**
-   * Intenta realizar una acción (editar o abrir cámara) tras verificar la geocerca.
-   * @param invoice La factura sobre la que se actúa.
-   * @param onSuccess La función a ejecutar si la verificación es exitosa.
-   */
   const handleGeofenceProtectedAction = (invoice: ShipmentInvoice, onSuccess: (invoice: ShipmentInvoice) => void) => {
-    // Si el usuario no es motorista, permite la acción directamente.
     if (currentUser?.role?.toLowerCase() !== 'motorista') {
-      onSuccess(invoice);
-      return;
+        onSuccess(invoice);
+        return;
     }
     
     setVerifyingLocationInvoiceId(invoice.id_fac_desp);
 
     navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        const { data, error } = await supabase.rpc('is_user_in_client_geofence', {
-          user_latitude: latitude,
-          user_longitude: longitude,
-          p_code_customer: invoice.code_customer,
-        });
+        async (position) => {
+            const { latitude, longitude } = position.coords;
+            const { data, error } = await supabase.rpc('is_user_in_client_geofence', {
+                user_latitude: latitude,
+                user_longitude: longitude,
+                p_code_customer: invoice.code_customer,
+            });
 
-        setVerifyingLocationInvoiceId(null);
-        
-        if (error) {
-          toast({ title: "Error de verificación", description: "No se pudo comprobar la ubicación.", variant: "destructive" });
-          return;
-        }
+            setVerifyingLocationInvoiceId(null);
+            
+            if (error) {
+                toast({ title: "Error de verificación", description: "No se pudo comprobar la ubicación.", variant: "destructive" });
+                return;
+            }
 
-        if (data === true) {
-          onSuccess(invoice);
-        } else {
-          toast({ title: "Acción no permitida", description: "Debe estar dentro de la geocerca del cliente para realizar esta acción.", variant: "destructive" });
-        }
-      },
-      (error) => {
-        setVerifyingLocationInvoiceId(null);
-        toast({ title: "Error de ubicación", description: "No se pudo obtener su ubicación. Asegúrese de tener los permisos activados.", variant: "destructive" });
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            if (data === true) {
+                onSuccess(invoice);
+            } else {
+                toast({ title: "Acción no permitida", description: "Debe estar dentro de la geocerca del cliente para realizar esta acción.", variant: "destructive" });
+            }
+        },
+        (error) => {
+            setVerifyingLocationInvoiceId(null);
+            toast({ title: "Error de ubicación", description: "No se pudo obtener su ubicación. Asegúrese de tener los permisos activados.", variant: "destructive" });
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
-  };
+};
 
 
   // --- FUNCIONES AUXILIARES DE LA UI ---
@@ -503,8 +500,10 @@ export default function ShipmentDetailPage() {
   };
 
   const handleEditInvoice = (invoice: ShipmentInvoice) => {
-    setEditingShipmentInvoice(invoice);
-    setIsInvoiceDialogOpen(true);
+    handleGeofenceProtectedAction(invoice, (inv) => {
+      setEditingShipmentInvoice(inv);
+      setIsInvoiceDialogOpen(true);
+    });
   };
   const closeInvoiceDialog = () => {
     setIsInvoiceDialogOpen(false);
@@ -517,8 +516,10 @@ export default function ShipmentDetailPage() {
     setImageModalOpen(true);
   }
   const openCameraDialog = (invoice: ShipmentInvoice) => {
-    setInvoiceForCamera(invoice);
-    setIsCameraDialogOpen(true);
+      handleGeofenceProtectedAction(invoice, (inv) => {
+      setInvoiceForCamera(inv);
+      setIsCameraDialogOpen(true);
+    });
   };
   const closeCameraDialog = () => {
     setIsCameraDialogOpen(false);
@@ -600,6 +601,7 @@ export default function ShipmentDetailPage() {
           <TableHeader>
             <TableRow>
               <TableHead>No. Factura</TableHead>
+              <TableHead>Nombre del Cliente</TableHead>
               <TableHead>Comprobante</TableHead>
               <TableHead>Fecha Entrega</TableHead>
               <TableHead>Total Factura</TableHead>
@@ -613,6 +615,7 @@ export default function ShipmentDetailPage() {
             {invoiceList.length > 0 ? invoiceList.map((invoice) => (
               <TableRow key={invoice.id_fac_desp}>
                 <TableCell className="font-medium">{String(invoice.reference_number || invoice.id_factura)}</TableCell>
+                <TableCell>{invoice.customer_name || 'N/A'}</TableCell>
                 <TableCell>
                     {invoice.comprobante ? (
                       <button onClick={() => handleOpenImageModal(invoice.comprobante)}>
@@ -639,10 +642,10 @@ export default function ShipmentDetailPage() {
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end items-center gap-2">
-                    <Button variant="ghost" size="icon" onClick={() => handleGeofenceProtectedAction(invoice, handleEditInvoice)} disabled={verifyingLocationInvoiceId === invoice.id_fac_desp}>
+                    <Button variant="ghost" size="icon" onClick={() => handleEditInvoice(invoice)} disabled={verifyingLocationInvoiceId === invoice.id_fac_desp}>
                       {verifyingLocationInvoiceId === invoice.id_fac_desp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleGeofenceProtectedAction(invoice, openCameraDialog)} disabled={verifyingLocationInvoiceId === invoice.id_fac_desp}>
+                    <Button variant="ghost" size="icon" onClick={() => openCameraDialog(invoice)} disabled={verifyingLocationInvoiceId === invoice.id_fac_desp}>
                        {verifyingLocationInvoiceId === invoice.id_fac_desp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
                     </Button>
                   </div>
@@ -650,7 +653,7 @@ export default function ShipmentDetailPage() {
               </TableRow>
             )) : (
               <TableRow>
-                  <TableCell colSpan={8} className="text-center">No hay facturas en esta categoría.</TableCell>
+                  <TableCell colSpan={9} className="text-center">No hay facturas en esta categoría.</TableCell>
               </TableRow>
             )}
           </TableBody>
@@ -950,3 +953,5 @@ export default function ShipmentDetailPage() {
     </div>
   )
 }
+
+    
