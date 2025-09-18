@@ -52,7 +52,7 @@ const shipmentInvoiceSchema = z.object({
 })
 
 // Tipos de datos para la gestión de facturación por despacho.
-type ShipmentInvoice = z.infer<typeof shipmentInvoiceSchema> & { id_fac_desp: number, comprobante: string }
+type ShipmentInvoice = z.infer<typeof shipmentInvoiceSchema> & { id_fac_desp: number, comprobante: string, fecha_entrega: string | null }
 type Invoice = { id_factura: string, reference_number: string | number, fecha: string, grand_total: number, customer_name: string, code_customer: string }
 type Shipment = { id_despacho: number, fecha_despacho: string, id_ruta: string }
 type Route = { id_ruta: string; ruta_desc: string };
@@ -341,11 +341,16 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
         return; // Detiene la ejecución si la carga de una nueva imagen falla.
     }
 
-    const dataToSubmit = {
+    const dataToSubmit: any = {
       ...values,
       id_despacho: parseInt(String(values.id_despacho), 10),
       comprobante: imageUrl,
     };
+
+    // Si se subió un nuevo archivo, se establece la fecha de entrega.
+    if (selectedFile) {
+        dataToSubmit.fecha_entrega = new Date().toISOString();
+    }
     
     if (!editingShipmentInvoice) return;
 
@@ -483,6 +488,13 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
   const getRouteDescription = (routeId: string) => {
     return allRoutes.find(r => r.id_ruta === routeId)?.ruta_desc || 'Ruta Desconocida';
   }
+  
+  const formatDateTime = (dateString: string | null) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
+  };
+
 
   // --- RENDERIZADO DEL COMPONENTE ---
   return (
@@ -610,6 +622,7 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
                 <TableHead>No. Factura</TableHead>
                 <TableHead>ID Despacho</TableHead>
                 <TableHead>Comprobante</TableHead>
+                <TableHead>Fecha Entrega</TableHead>
                 <TableHead>Forma de Pago</TableHead>
                 <TableHead>Monto</TableHead>
                 <TableHead>Estado</TableHead>
@@ -635,6 +648,7 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
                       <span className="text-muted-foreground">N/A</span>
                     )}
                   </TableCell>
+                  <TableCell>{formatDateTime(shipmentInvoice.fecha_entrega)}</TableCell>
                   <TableCell>{shipmentInvoice.forma_pago}</TableCell>
                   <TableCell>${shipmentInvoice.monto.toFixed(2)}</TableCell>
                   <TableCell><Badge variant={getBadgeVariant(shipmentInvoice.state)}>{getStatusLabel(shipmentInvoice.state)}</Badge></TableCell>
