@@ -21,16 +21,19 @@ type User = {
   name: string;
 };
 
-// Carga dinámica del mapa para evitar problemas con SSR
-const LiveMap = dynamic(() => import('@/components/live-map'), {
-  ssr: false,
-  loading: () => <p className="text-center">Cargando mapa...</p>,
-});
-
 export default function LiveMapPage() {
   const [locations, setLocations] = useState<MotoristaLocation[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const { toast } = useToast();
+
+  // Carga dinámica del mapa para evitar problemas con SSR.
+  // Se usa useMemo para prevenir que el componente se re-inicialice en el modo estricto de React,
+  // lo que causa el error "Map container is already initialized".
+  const LiveMap = useMemo(() => dynamic(() => import('@/components/live-map'), {
+    ssr: false,
+    loading: () => <p className="text-center">Cargando mapa...</p>,
+  }), []);
+
 
   useEffect(() => {
     // Función para obtener los usuarios (motoristas)
