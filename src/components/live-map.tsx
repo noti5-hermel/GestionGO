@@ -10,7 +10,7 @@ import ReactDOMServer from 'react-dom/server';
 type MotoristaLocation = {
   id_motorista: number;
   last_update: string;
-  location: string; // Formato "POINT(long lat)"
+  location: any; // Se cambia a 'any' para manejar string u objeto
   name?: string;
 };
 
@@ -18,18 +18,33 @@ interface LiveMapProps {
   locations: MotoristaLocation[];
 }
 
-// Función para parsear el punto de la base de datos
-const parseLocation = (locationString: any): [number, number] | null => {
-  // Asegura que el valor sea un string antes de intentar usar .match()
-  if (typeof locationString !== 'string' || !locationString) {
-    return null;
+/**
+ * Parsea el valor de ubicación de la base de datos.
+ * Puede manejar formato de string WKT "POINT(lon lat)" o formato de objeto GeoJSON.
+ * @param locationData - El dato de ubicación, puede ser string u objeto.
+ * @returns Un array [lat, lon] o null si el formato es inválido.
+ */
+const parseLocation = (locationData: any): [number, number] | null => {
+  // Caso 1: El dato es un objeto (formato GeoJSON)
+  if (typeof locationData === 'object' && locationData !== null && locationData.type === 'Point' && Array.isArray(locationData.coordinates)) {
+    const [lon, lat] = locationData.coordinates;
+    if (typeof lon === 'number' && typeof lat === 'number') {
+      return [lat, lon]; // Leaflet espera [lat, lon]
+    }
   }
-  const match = locationString.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
-  if (match) {
-    return [parseFloat(match[2]), parseFloat(match[1])]; // Devuelve [lat, lon]
+
+  // Caso 2: El dato es un string (formato WKT)
+  if (typeof locationData === 'string') {
+    const match = locationData.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
+    if (match) {
+      return [parseFloat(match[2]), parseFloat(match[1])]; // Devuelve [lat, lon]
+    }
   }
+
+  // Si no se puede parsear, devuelve null
   return null;
 };
+
 
 // Crear un icono personalizado usando un icono de Lucide
 const customIcon = new Icon({
