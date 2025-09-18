@@ -450,17 +450,16 @@ export default function ShipmentDetailPage() {
       closeCameraDialog();
     }
   };
-
-  // --- FUNCIONES AUXILIARES DE LA UI ---
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) setSelectedFile(file);
-  };
-
-  const handleAttemptEditInvoice = (invoice: ShipmentInvoice) => {
-    // Si el usuario no es motorista, permite la edición directamente.
+  
+    /**
+   * Intenta realizar una acción (editar o abrir cámara) tras verificar la geocerca.
+   * @param invoice La factura sobre la que se actúa.
+   * @param onSuccess La función a ejecutar si la verificación es exitosa.
+   */
+  const handleGeofenceProtectedAction = (invoice: ShipmentInvoice, onSuccess: (invoice: ShipmentInvoice) => void) => {
+    // Si el usuario no es motorista, permite la acción directamente.
     if (currentUser?.role?.toLowerCase() !== 'motorista') {
-      handleEditInvoice(invoice);
+      onSuccess(invoice);
       return;
     }
     
@@ -483,9 +482,9 @@ export default function ShipmentDetailPage() {
         }
 
         if (data === true) {
-          handleEditInvoice(invoice);
+          onSuccess(invoice);
         } else {
-          toast({ title: "Acción no permitida", description: "Debe estar dentro de la geocerca del cliente para editar.", variant: "destructive" });
+          toast({ title: "Acción no permitida", description: "Debe estar dentro de la geocerca del cliente para realizar esta acción.", variant: "destructive" });
         }
       },
       (error) => {
@@ -495,7 +494,14 @@ export default function ShipmentDetailPage() {
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   };
-  
+
+
+  // --- FUNCIONES AUXILIARES DE LA UI ---
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) setSelectedFile(file);
+  };
+
   const handleEditInvoice = (invoice: ShipmentInvoice) => {
     setEditingShipmentInvoice(invoice);
     setIsInvoiceDialogOpen(true);
@@ -633,11 +639,11 @@ export default function ShipmentDetailPage() {
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end items-center gap-2">
-                    <Button variant="ghost" size="icon" onClick={() => handleAttemptEditInvoice(invoice)} disabled={verifyingLocationInvoiceId === invoice.id_fac_desp}>
+                    <Button variant="ghost" size="icon" onClick={() => handleGeofenceProtectedAction(invoice, handleEditInvoice)} disabled={verifyingLocationInvoiceId === invoice.id_fac_desp}>
                       {verifyingLocationInvoiceId === invoice.id_fac_desp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => openCameraDialog(invoice)}>
-                      <Camera className="h-4 w-4" />
+                    <Button variant="ghost" size="icon" onClick={() => handleGeofenceProtectedAction(invoice, openCameraDialog)} disabled={verifyingLocationInvoiceId === invoice.id_fac_desp}>
+                       {verifyingLocationInvoiceId === invoice.id_fac_desp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
                     </Button>
                   </div>
                 </TableCell>
@@ -944,5 +950,3 @@ export default function ShipmentDetailPage() {
     </div>
   )
 }
-
-    
