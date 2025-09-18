@@ -16,6 +16,8 @@ import { MainNav } from '@/components/main-nav';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { LogOut } from 'lucide-react'
+import { supabase } from '@/lib/supabase';
+import { useToast } from '@/hooks/use-toast';
 
 // Definir un tipo para la sesión del usuario
 interface UserSession {
@@ -23,6 +25,72 @@ interface UserSession {
   name: string;
   role: string;
 }
+
+const LocationTracker = () => {
+  const { toast } = useToast();
+  const [session, setSession] = useState<UserSession | null>(null);
+
+  useEffect(() => {
+    try {
+      const userSession = localStorage.getItem('user-session');
+      if (userSession) {
+        setSession(JSON.parse(userSession));
+      }
+    } catch (error) {
+      console.error("Failed to parse user session for location tracker", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!session || session.role.toLowerCase() !== 'motorista') {
+      return;
+    }
+
+    let watchId: number | null = null;
+
+    const handleSuccess = async (position: GeolocationPosition) => {
+      const { latitude, longitude } = position.coords;
+      const { error } = await supabase
+        .from('locations_motoristas')
+        .upsert({
+          id_motorista: session.id,
+          location: `POINT(${longitude} ${latitude})`,
+          last_update: new Date().toISOString(),
+        }, { onConflict: 'id_motorista' });
+
+      if (error) {
+        console.error("Error updating location:", error);
+      }
+    };
+
+    const handleError = (error: GeolocationPositionError) => {
+      toast({
+        variant: 'destructive',
+        title: 'Error de ubicación',
+        description: `No se pudo obtener la ubicación: ${error.message}`,
+      });
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+    };
+
+    if ('geolocation' in navigator) {
+      watchId = navigator.geolocation.watchPosition(handleSuccess, handleError, {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      });
+    }
+
+    return () => {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+    };
+  }, [session, toast]);
+
+  return null;
+};
 
 export default function AppLayout({
   children,
@@ -70,6 +138,7 @@ export default function AppLayout({
 
   return (
     <SidebarProvider>
+      <LocationTracker />
       <Sidebar variant="sidebar" collapsible="icon">
         <SidebarHeader className="p-4">
           <div className="flex items-center justify-between">

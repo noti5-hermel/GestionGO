@@ -17,6 +17,7 @@ import {
   Image as ImageIcon,
   Globe,
   Map,
+  ScanEye,
 } from 'lucide-react'
 import {
   SidebarMenu,
@@ -48,6 +49,7 @@ const allMenuItems = [
 ]
 
 const adminMenuItems = [
+    { href: '/live-map', label: 'Mapa en Vivo', icon: ScanEye },
     { href: '/users', label: 'Usuarios', icon: User },
     { href: '/user-roles', label: 'Roles de Usuario', icon: Shield },
     { href: '/image-test', label: 'Test de Imágenes', icon: ImageIcon },
