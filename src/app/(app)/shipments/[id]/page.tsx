@@ -290,6 +290,14 @@ export default function ShipmentDetailPage() {
    * @returns La URL pública de la imagen subida.
    */
   const uploadComprobante = async (): Promise<string | undefined> => {
+    // Si se está editando y hay un archivo nuevo, elimina el antiguo primero.
+    if (selectedFile && editingShipmentInvoice?.comprobante) {
+        const oldFileName = editingShipmentInvoice.comprobante.split('/').pop();
+        if (oldFileName) {
+            await supabase.storage.from(BUCKET_NAME).remove([oldFileName]);
+        }
+    }
+
     if (!selectedFile) {
       return editingShipmentInvoice?.comprobante; // Mantiene la imagen existente si no se selecciona una nueva.
     }
@@ -378,6 +386,14 @@ export default function ShipmentDetailPage() {
     if (!capturedImage || !invoiceForCamera) return;
 
     setLoading(true);
+    // Si ya existe un comprobante, bórralo primero.
+    if (invoiceForCamera.comprobante) {
+        const oldFileName = invoiceForCamera.comprobante.split('/').pop();
+        if (oldFileName) {
+            await supabase.storage.from(BUCKET_NAME).remove([oldFileName]);
+        }
+    }
+    
     // Convierte la imagen en formato DataURL a un Blob para subirla.
     const response = await fetch(capturedImage);
     const blob = await response.blob();

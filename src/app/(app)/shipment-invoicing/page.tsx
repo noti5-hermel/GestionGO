@@ -176,20 +176,6 @@ export default function ShipmentInvoicingPage() {
     }
     const usedInvoiceIds = new Set(usedInvoices.map(si => si.id_factura));
     
-    // Obtener la geocerca de la ruta del despacho
-    const { data: routeData, error: routeError } = await supabase
-      .from('rutas')
-      .select('geocerca')
-      .eq('id_ruta', selectedShipment.id_ruta)
-      .single();
-
-    if (routeError || !routeData.geocerca) {
-      toast({ title: "Advertencia", description: "La ruta de este despacho no tiene una geocerca definida. No se pueden filtrar facturas por ubicación.", variant: "destructive" });
-      setLoading(false);
-      setAvailableInvoices([]);
-      return;
-    }
-
     // Convertir el ID de la ruta a número para la función RPC
     const routeIdAsInt = parseInt(selectedShipment.id_ruta, 10);
     if (isNaN(routeIdAsInt)) {
@@ -306,10 +292,19 @@ export default function ShipmentInvoicingPage() {
    * @returns La URL pública de la imagen subida, o la URL existente si no se sube un nuevo archivo.
    */
   const uploadComprobante = async (): Promise<string | undefined> => {
+    // Si se está editando y hay un archivo nuevo, elimina el antiguo primero.
+    if (selectedFile && editingShipmentInvoice?.comprobante) {
+        const oldFileName = editingShipmentInvoice.comprobante.split('/').pop();
+        if (oldFileName) {
+            await supabase.storage.from(BUCKET_NAME).remove([oldFileName]);
+        }
+    }
+
     if (!selectedFile) {
-        // Si se está editando y no se selecciona un nuevo archivo, se mantiene la URL existente.
+        // Si no se selecciona un nuevo archivo, se mantiene la URL existente.
         return editingShipmentInvoice?.comprobante;
     }
+
     setLoading(true);
     const fileName = `${Date.now()}-${selectedFile.name}`;
     const { data, error } = await supabase.storage
