@@ -21,7 +21,7 @@ type User = {
   name: string;
 };
 
-// Carga dinámica del mapa para evitar problemas con SSR y el error "Map container is already initialized".
+// Carga dinámica del mapa para evitar problemas con SSR.
 // Al definirlo fuera del componente, nos aseguramos de que solo se cree una vez.
 const LiveMap = dynamic(() => import('@/components/live-map'), {
   ssr: false,
