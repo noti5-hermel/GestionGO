@@ -102,6 +102,7 @@ export default function ShipmentInvoicingPage() {
   const [filterAmount, setFilterAmount] = useState('');
   const [filterDeliveryDate, setFilterDeliveryDate] = useState('');
   const [filterPaymentMethod, setFilterPaymentMethod] = useState('');
+  const [filterState, setFilterState] = useState('');
 
 
   const form = useForm<z.infer<typeof shipmentInvoiceSchema>>({
@@ -126,7 +127,7 @@ export default function ShipmentInvoicingPage() {
   // Carga los datos de facturación por despacho con filtros
   useEffect(() => {
     fetchShipmentInvoices()
-  }, [currentPage, filterShipmentId, filterAmount, filterDeliveryDate, filterPaymentMethod])
+  }, [currentPage, filterShipmentId, filterAmount, filterDeliveryDate, filterPaymentMethod, filterState])
 
 
   // Rellena el formulario cuando se selecciona un registro para editar.
@@ -256,6 +257,9 @@ export default function ShipmentInvoicingPage() {
     if (filterPaymentMethod) {
         query = query.eq('forma_pago', filterPaymentMethod);
     }
+    if (filterState !== '') {
+        query = query.eq('state', filterState === 'true');
+    }
     
     query = query.range(from, to).order('id_fac_desp', { ascending: false });
 
@@ -266,7 +270,7 @@ export default function ShipmentInvoicingPage() {
         setShipmentInvoices(data as ShipmentInvoice[]);
         setTotalRecords(count ?? 0);
     }
-  }, [currentPage, filterShipmentId, filterAmount, filterDeliveryDate, filterPaymentMethod, toast]);
+  }, [currentPage, filterShipmentId, filterAmount, filterDeliveryDate, filterPaymentMethod, filterState, toast]);
   
   /** Obtiene todas las facturas para los selectores y la asignación. */
   const fetchInvoices = async () => {
@@ -529,6 +533,7 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
     setFilterAmount('');
     setFilterDeliveryDate('');
     setFilterPaymentMethod('');
+    setFilterState('');
     setCurrentPage(1);
   };
   
@@ -706,6 +711,16 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
                 <SelectContent>
                     {paymentMethods.map(method => (
                         <SelectItem key={method} value={method}>{method}</SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+            <Select value={filterState} onValueChange={setFilterState}>
+                <SelectTrigger className="w-full sm:w-auto min-w-[160px]">
+                    <SelectValue placeholder="Filtrar por Estado" />
+                </SelectTrigger>
+                <SelectContent>
+                    {statusOptions.map(option => (
+                        <SelectItem key={option.label} value={String(option.value)}>{option.label}</SelectItem>
                     ))}
                 </SelectContent>
             </Select>
