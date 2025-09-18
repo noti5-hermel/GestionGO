@@ -30,6 +30,7 @@ import { Input } from "@/components/ui/input"
  * @file geofences/page.tsx
  * @description Página para la gestión de geocercas asociadas a clientes.
  * Permite crear y actualizar los datos de geometría de las geocercas.
+ * Las geocercas son fundamentales para la lógica de negocio de rutas y entregas.
  */
 
 // Esquema de validación para el formulario de geocerca.
@@ -50,7 +51,7 @@ const geofenceSchema = z.object({
     }, { message: "Formato de geocerca inválido. Debe ser un POLYGON o GEOMETRYCOLLECTION." })
 })
 
-// Tipos de datos
+// Tipos de datos para esta página.
 type Customer = {
   code_customer: string;
   customer_name: string;
@@ -60,7 +61,7 @@ type Customer = {
 const ITEMS_PER_PAGE = 10;
 
 /**
- * Normaliza una cadena de texto WKT de geocerca para asegurar una sintaxis válida.
+ * Normaliza una cadena de texto WKT (Well-Known Text) de geocerca para asegurar una sintaxis válida.
  * Puede manejar un solo POLYGON o una GEOMETRYCOLLECTION con múltiples polígonos.
  * @param wktString - La cadena de texto de la geocerca.
  * @returns Una cadena WKT formateada correctamente o null si la entrada es inválida o vacía.
@@ -95,16 +96,23 @@ const normalizeGeometryCollectionWKT = (wktString: string | null | undefined): s
  * Componente principal de la página de Geocercas.
  */
 export default function GeofencesPage() {
+  // --- ESTADOS ---
+  // Almacena todos los clientes para el selector del formulario (no paginado).
   const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
+  // Almacena los clientes para mostrar en la tabla (paginado).
   const [paginatedCustomers, setPaginatedCustomers] = useState<Customer[]>([]);
+  // Controla la visibilidad del diálogo de edición/creación.
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  // Almacena el cliente cuya geocerca se está editando.
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const { toast } = useToast()
   
+  // --- ESTADOS DE PAGINACIÓN Y BÚSQUEDA ---
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCustomers, setTotalCustomers] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // --- FORMULARIO ---
   const form = useForm<z.infer<typeof geofenceSchema>>({
     resolver: zodResolver(geofenceSchema),
     defaultValues: {
@@ -113,6 +121,12 @@ export default function GeofencesPage() {
     },
   })
 
+  // --- LÓGICA DE DATOS Y EFECTOS ---
+
+  /**
+   * Obtiene la lista de clientes paginada y filtrada para mostrar en la tabla.
+   * La consulta se hace del lado del servidor para optimizar el rendimiento.
+   */
   const fetchCustomers = useCallback(async () => {
     const from = (currentPage - 1) * ITEMS_PER_PAGE;
     const to = from + ITEMS_PER_PAGE - 1;
@@ -140,6 +154,10 @@ export default function GeofencesPage() {
     }
   }, [toast, currentPage, searchQuery]);
   
+  /**
+   * Obtiene la lista completa de todos los clientes para poblar el menú desplegable del formulario.
+   * No se pagina para que el usuario pueda seleccionar cualquier cliente.
+   */
   const fetchAllCustomersForSelect = useCallback(async () => {
     const { data, error } = await supabase.from('customer').select('code_customer, customer_name, geocerca').order('customer_name');
     if (!error && data) {
@@ -147,14 +165,17 @@ export default function GeofencesPage() {
     }
   }, []);
 
+  // Carga los clientes paginados cada vez que cambia la página o la búsqueda.
   useEffect(() => {
     fetchCustomers();
   }, [fetchCustomers]);
   
+  // Carga todos los clientes para el selector solo una vez al montar el componente.
   useEffect(() => {
     fetchAllCustomersForSelect();
   }, [fetchAllCustomersForSelect]);
   
+  // Rellena el formulario con los datos del cliente a editar.
   useEffect(() => {
     if (editingCustomer) {
       form.reset({
@@ -166,8 +187,12 @@ export default function GeofencesPage() {
     }
   }, [editingCustomer, form]);
 
+  /**
+   * Gestiona el envío del formulario para guardar o actualizar la geocerca de un cliente.
+   * @param values Los datos del formulario validados por Zod.
+   */
   const onSubmit = async (values: z.infer<typeof geofenceSchema>) => {
-    // Normaliza la geocerca antes de guardarla.
+    // Normaliza la geocerca antes de guardarla para asegurar un formato WKT válido.
     const normalizedGeocerca = normalizeGeometryCollectionWKT(values.geocerca);
 
     const { error } = await supabase
@@ -186,17 +211,21 @@ export default function GeofencesPage() {
         title: "Éxito",
         description: "Geocerca guardada correctamente.",
       })
-      fetchCustomers();
-      fetchAllCustomersForSelect();
+      fetchCustomers(); // Recarga la tabla de clientes paginados.
+      fetchAllCustomersForSelect(); // Recarga la lista completa por si el estado cambió.
       handleCloseDialog();
     }
   }
 
+  // --- FUNCIONES AUXILIARES DE LA UI ---
+
+  /** Prepara el formulario para editar la geocerca de un cliente. */
   const handleEdit = (customer: Customer) => {
     setEditingCustomer(customer);
     setIsDialogOpen(true);
   }
   
+  /** Controla la apertura y cierre del diálogo, reseteando el estado de edición. */
   const handleOpenDialog = (open: boolean) => {
     setIsDialogOpen(open);
     if (!open) {
@@ -204,6 +233,7 @@ export default function GeofencesPage() {
     }
   };
 
+  /** Cierra el diálogo y resetea el estado y el formulario. */
   const handleCloseDialog = () => {
     setEditingCustomer(null);
     form.reset({ code_customer: "", geocerca: "" });
@@ -212,6 +242,7 @@ export default function GeofencesPage() {
   
   const totalPages = Math.ceil(totalCustomers / ITEMS_PER_PAGE);
 
+  /** Genera los números de página para mostrar en la paginación. */
   const getPaginationNumbers = () => {
     const pages = [];
     const totalVisiblePages = 5;
@@ -231,6 +262,7 @@ export default function GeofencesPage() {
     return pages;
   };
 
+  // --- RENDERIZADO DEL COMPONENTE ---
   return (
     <Card className="h-full flex flex-col">
       <CardHeader>
