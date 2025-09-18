@@ -1,4 +1,5 @@
 
+
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from "react"
@@ -27,7 +28,7 @@ import { PdfPreviewModal } from "@/components/pdf-preview-modal"
  * @description Página de detalle para un despacho específico. Muestra la información del despacho,
  * el estado del proceso, y una lista de todas las facturas asociadas. Permite editar
  * los detalles de pago de cada factura y subir/capturar comprobantes.
- * Para motoristas, la edición está restringida por geocerca.
+ * Para motoristas, la edición está restringida por geocerca o captura la ubicación si no existe.
  */
 
 const BUCKET_NAME = 'comprobante';
@@ -77,12 +78,13 @@ export type ShipmentInvoice = {
   customer_name?: string
   tax_type?: string // Opcional, se añade después a través de joins
   grand_total: number // No es opcional para la validación
+  geocerca?: any;
 }
 
 type User = { id_user: string; name: string; id_rol: number; }
 type Role = { id_ruta: string; ruta_desc: string }
 type Invoice = { id_factura: string, reference_number: string | number, code_customer: string, customer_name: string, grand_total: number }
-type Customer = { code_customer: string; id_impuesto: number };
+type Customer = { code_customer: string; id_impuesto: number; geocerca: any };
 type TaxType = { id_impuesto: number; impt_desc: string };
 const paymentMethods: ShipmentInvoice['forma_pago'][] = ["Efectivo", "Tarjeta", "Transferencia"];
 const statusOptions: { label: string; value: boolean }[] = [
@@ -201,7 +203,7 @@ export default function ShipmentDetailPage() {
           } else {
               // Obtiene detalles de los clientes para saber el tipo de impuesto.
               const customerCodes = (invoicesData || []).map(inv => inv.code_customer)
-              const { data: customersData, error: customersError } = await supabase.from('customer').select('code_customer, id_impuesto').in('code_customer', customerCodes)
+              const { data: customersData, error: customersError } = await supabase.from('customer').select('code_customer, id_impuesto, geocerca').in('code_customer', customerCodes)
               if (customersError) {
                   toast({ title: "Error", description: "No se pudieron cargar los datos de clientes.", variant: "destructive" });
               } else {
@@ -213,7 +215,8 @@ export default function ShipmentDetailPage() {
                   } else {
                       // Crea mapas para un acceso rápido y eficiente a los datos.
                       const taxMap = new Map((taxesData || []).map(t => [t.id_impuesto, t.impt_desc]))
-                      const customerTaxMap = new Map((customersData || []).map(c => [c.code_customer, taxMap.get(c.id_impuesto)]))
+                      const customerMap = new Map((customersData || []).map(c => [c.code_customer, { tax: taxMap.get(c.id_impuesto), geofence: c.geocerca }]));
+
                       const invoiceInfoMap = new Map((invoicesData || []).map(i => [i.id_factura, {
                         reference_number: i.reference_number,
                         code_customer: i.code_customer,
@@ -224,12 +227,14 @@ export default function ShipmentDetailPage() {
                       // Combina todos los datos en un solo array de facturas enriquecidas.
                       const enrichedInvoices = shipmentInvoicesData.map(si => {
                         const invoiceInfo = invoiceInfoMap.get(si.id_factura);
+                        const customerInfo = customerMap.get(invoiceInfo?.code_customer || '');
                         return {
                           ...si,
                           reference_number: invoiceInfo?.reference_number,
                           customer_name: invoiceInfo?.customer_name,
                           grand_total: invoiceInfo?.grand_total ?? 0,
-                          tax_type: customerTaxMap.get(invoiceInfo?.code_customer || '')
+                          tax_type: customerInfo?.tax,
+                          geocerca: customerInfo?.geofence,
                         }
                       });
                       setInvoices(enrichedInvoices);
@@ -456,41 +461,62 @@ export default function ShipmentDetailPage() {
   
   const handleGeofenceProtectedAction = (invoice: ShipmentInvoice, onSuccess: (invoice: ShipmentInvoice) => void) => {
     if (currentUser?.role?.toLowerCase() !== 'motorista') {
-        onSuccess(invoice);
-        return;
+      onSuccess(invoice);
+      return;
     }
-    
+  
     setVerifyingLocationInvoiceId(invoice.id_fac_desp);
-
+  
     navigator.geolocation.getCurrentPosition(
-        async (position) => {
-            const { latitude, longitude } = position.coords;
-            const { data, error } = await supabase.rpc('is_user_in_client_geofence', {
-                user_latitude: latitude,
-                user_longitude: longitude,
-                p_code_customer: invoice.code_customer,
-            });
-
-            setVerifyingLocationInvoiceId(null);
-            
-            if (error) {
-                toast({ title: "Error de verificación", description: "No se pudo comprobar la ubicación.", variant: "destructive" });
-                return;
-            }
-
-            if (data === true) {
-                onSuccess(invoice);
-            } else {
-                toast({ title: "Acción no permitida", description: "Debe estar dentro de la geocerca del cliente para realizar esta acción.", variant: "destructive" });
-            }
-        },
-        (error) => {
-            setVerifyingLocationInvoiceId(null);
-            toast({ title: "Error de ubicación", description: "No se pudo obtener su ubicación. Asegúrese de tener los permisos activados.", variant: "destructive" });
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+  
+        // Si el cliente tiene geocerca, la validamos.
+        if (invoice.geocerca) {
+          const { data, error } = await supabase.rpc('is_user_in_client_geofence', {
+            user_latitude: latitude,
+            user_longitude: longitude,
+            p_code_customer: invoice.code_customer,
+          });
+  
+          setVerifyingLocationInvoiceId(null);
+  
+          if (error) {
+            toast({ title: "Error de verificación", description: "No se pudo comprobar la ubicación.", variant: "destructive" });
+            return;
+          }
+  
+          if (data === true) {
+            onSuccess(invoice); // Usuario está en la geocerca, procede.
+          } else {
+            toast({ title: "Acción no permitida", description: "Debe estar dentro de la geocerca del cliente para realizar esta acción.", variant: "destructive" });
+          }
+        } else {
+          // Si el cliente NO tiene geocerca, guardamos su ubicación y procedemos.
+          setVerifyingLocationInvoiceId(null);
+          toast({ title: "Ubicación registrada", description: "El cliente no tiene geocerca. Se guardará su ubicación actual." });
+          
+          onSuccess(invoice); // Procede con la acción (editar/abrir cámara).
+  
+          // Después, actualizamos la ubicación del cliente en segundo plano.
+          const { error: updateError } = await supabase
+            .from('customer')
+            .update({ last_known_location: `POINT(${longitude} ${latitude})` })
+            .eq('code_customer', invoice.code_customer);
+  
+          if (updateError) {
+            console.error("Error updating last_known_location:", updateError);
+            toast({ title: "Advertencia", description: "No se pudo guardar la ubicación del cliente.", variant: "destructive" });
+          }
+        }
+      },
+      (error) => {
+        setVerifyingLocationInvoiceId(null);
+        toast({ title: "Error de ubicación", description: "No se pudo obtener su ubicación. Asegúrese de tener los permisos activados.", variant: "destructive" });
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
-};
+  };
 
 
   // --- FUNCIONES AUXILIARES DE LA UI ---
@@ -953,5 +979,3 @@ export default function ShipmentDetailPage() {
     </div>
   )
 }
-
-    

@@ -54,6 +54,7 @@ const customerSchema = z.object({
     z.number({ required_error: "La ruta es requerida.", invalid_type_error: "La ruta debe ser un número." }).optional().nullable()
   ),
   geocerca: z.string().optional().nullable(),
+  last_known_location: z.string().optional().nullable(),
 })
 
 // Tipos de datos para la gestión de clientes.
@@ -64,6 +65,7 @@ type Customer = {
   id_term: number | null;
   ruta: number | null;
   geocerca?: string | null;
+  last_known_location?: string | null;
 }
 type PaymentTerm = { id_term: string | number; term_desc: string }
 type Tax = { id_impuesto: string | number; impt_desc: string }
@@ -113,6 +115,7 @@ export default function CustomersPage() {
       id_term: undefined,
       ruta: undefined,
       geocerca: "",
+      last_known_location: "",
     },
   })
 
@@ -129,7 +132,7 @@ export default function CustomersPage() {
     // Construye la consulta a Supabase de forma dinámica.
     let query = supabase
       .from('customer')
-      .select('code_customer,customer_name,id_impuesto,id_term,ruta,geocerca', { count: 'exact' });
+      .select('code_customer,customer_name,id_impuesto,id_term,ruta,geocerca,last_known_location', { count: 'exact' });
 
     // Aplica el filtro de búsqueda si existe.
     if (searchQuery) {
@@ -221,6 +224,7 @@ export default function CustomersPage() {
         id_term: editingCustomer.id_term !== null ? Number(editingCustomer.id_term) : undefined,
         ruta: editingCustomer.ruta !== null ? Number(editingCustomer.ruta) : undefined,
         geocerca: editingCustomer.geocerca ?? "",
+        last_known_location: editingCustomer.last_known_location ?? "",
       });
     } else {
       form.reset({
@@ -230,6 +234,7 @@ export default function CustomersPage() {
         id_term: undefined,
         ruta: undefined,
         geocerca: "",
+        last_known_location: "",
       });
     }
   }, [editingCustomer, form]);
@@ -242,7 +247,7 @@ export default function CustomersPage() {
     let error;
 
     // Solo se envían los campos que no son de la geocerca
-    const { geocerca, ...customerData } = values;
+    const { geocerca, last_known_location, ...customerData } = values;
 
     if (editingCustomer) {
       // Actualiza un cliente existente.
@@ -365,7 +370,7 @@ export default function CustomersPage() {
             }
 
             // Valida los datos contra el esquema Zod.
-            const validatedCustomers = z.array(customerSchema).safeParse(nonEmptyData);
+            const validatedCustomers = z.array(customerSchema.omit({ geocerca: true, last_known_location: true })).safeParse(nonEmptyData);
 
             if (!validatedCustomers.success) {
                 // Muestra un mensaje de error detallado si la validación falla.
@@ -604,26 +609,48 @@ export default function CustomersPage() {
                       )}
                     />
                      {editingCustomer && (
-                       <FormField
-                        control={form.control}
-                        name="geocerca"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Geocerca</FormLabel>
-                            <FormControl>
-                              <Textarea
-                                placeholder="Datos de la geocerca (solo lectura)"
-                                {...field}
-                                value={field.value || ""}
-                                readOnly
-                                className="resize-none"
-                                rows={3}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                       <>
+                        <FormField
+                          control={form.control}
+                          name="geocerca"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Geocerca</FormLabel>
+                              <FormControl>
+                                <Textarea
+                                  placeholder="Datos de la geocerca (solo lectura)"
+                                  {...field}
+                                  value={field.value || ""}
+                                  readOnly
+                                  className="resize-none"
+                                  rows={3}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="last_known_location"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Última Ubicación Conocida</FormLabel>
+                              <FormControl>
+                                <Textarea
+                                  placeholder="Ubicación de la última entrega (solo lectura)"
+                                  {...field}
+                                  value={field.value || ""}
+                                  readOnly
+                                  className="resize-none"
+                                  rows={3}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                       </>
                      )}
                     <DialogFooter className="gap-2 pt-4">
                       <DialogClose asChild>
@@ -804,6 +831,3 @@ export default function CustomersPage() {
     </Card>
   )
 }
-
-
-    
