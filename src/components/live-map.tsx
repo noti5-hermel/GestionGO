@@ -19,9 +19,10 @@ interface LiveMapProps {
 }
 
 // Función para parsear el punto de la base de datos
-const parseLocation = (locationString: string): [number, number] | null => {
-  if (!locationString) {
-    return null; // Si el string es nulo o vacío, no se puede parsear.
+const parseLocation = (locationString: any): [number, number] | null => {
+  // Asegura que el valor sea un string antes de intentar usar .match()
+  if (typeof locationString !== 'string' || !locationString) {
+    return null;
   }
   const match = locationString.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
   if (match) {
