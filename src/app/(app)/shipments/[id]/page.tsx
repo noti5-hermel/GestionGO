@@ -40,6 +40,7 @@ const shipmentInvoiceEditSchema = (maxAmount: number) => z.object({
   forma_pago: z.enum(["Efectivo", "Tarjeta", "Transferencia"]),
   monto: z.coerce.number().min(0, "El monto debe ser un número positivo.").max(maxAmount, `El monto no puede ser mayor que el total de la factura: $${maxAmount.toFixed(2)}`),
   state: z.boolean(),
+  fecha_entrega: z.string().optional().nullable(),
 });
 
 type ShipmentInvoiceEditValues = z.infer<ReturnType<typeof shipmentInvoiceEditSchema>>;
@@ -69,6 +70,7 @@ export type ShipmentInvoice = {
   forma_pago: "Efectivo" | "Tarjeta" | "Transferencia"
   monto: number
   state: boolean
+  fecha_entrega: string | null;
   reference_number?: string | number // Opcional, se añade después desde la tabla `facturacion`
   tax_type?: string // Opcional, se añade después a través de joins
   grand_total: number // No es opcional para la validación
@@ -140,6 +142,7 @@ export default function ShipmentDetailPage() {
       forma_pago: "Efectivo",
       monto: 0,
       state: false,
+      fecha_entrega: null,
     },
   });
 
@@ -245,6 +248,7 @@ export default function ShipmentDetailPage() {
             forma_pago: editingShipmentInvoice.forma_pago,
             monto: editingShipmentInvoice.monto,
             state: editingShipmentInvoice.state,
+            fecha_entrega: editingShipmentInvoice.fecha_entrega,
         });
     }
     setSelectedFile(null);
@@ -334,14 +338,21 @@ export default function ShipmentDetailPage() {
         return; // Detiene si la carga falla.
     }
 
+    const dataToUpdate: any = {
+        comprobante: imageUrl,
+        forma_pago: values.forma_pago,
+        monto: values.monto,
+        state: values.state
+    };
+
+    // Si se subió un nuevo archivo, se establece la fecha de entrega.
+    if (selectedFile) {
+        dataToUpdate.fecha_entrega = new Date().toISOString();
+    }
+
     const { error } = await supabase
       .from('facturacion_x_despacho')
-      .update({
-          comprobante: imageUrl,
-          forma_pago: values.forma_pago,
-          monto: values.monto,
-          state: values.state
-      })
+      .update(dataToUpdate)
       .eq('id_fac_desp', editingShipmentInvoice.id_fac_desp);
     
     if (error) {
@@ -386,10 +397,13 @@ export default function ShipmentDetailPage() {
 
     const { data: { publicUrl } } = supabase.storage.from(BUCKET_NAME).getPublicUrl(fileName);
 
-    // Actualiza el registro en la base de datos con la nueva URL del comprobante.
+    // Actualiza el registro en la base de datos con la nueva URL y la fecha de entrega.
     const { error: dbError } = await supabase
       .from('facturacion_x_despacho')
-      .update({ comprobante: publicUrl })
+      .update({ 
+          comprobante: publicUrl,
+          fecha_entrega: new Date().toISOString(),
+       })
       .eq('id_fac_desp', invoiceForCamera.id_fac_desp);
 
     setLoading(false);
@@ -455,6 +469,11 @@ export default function ShipmentDetailPage() {
     const date = new Date(`${dateString}T00:00:00Z`);
     return date.toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
   };
+  const formatDateTime = (dateString: string | null) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
+  };
   const handleGeneratePdf = () => {
     if (shipment) {
       const pdfOutput = generateShipmentPDF(
@@ -502,6 +521,7 @@ export default function ShipmentDetailPage() {
             <TableRow>
               <TableHead>No. Factura</TableHead>
               <TableHead>Comprobante</TableHead>
+              <TableHead>Fecha Entrega</TableHead>
               <TableHead>Total Factura</TableHead>
               <TableHead>Forma de Pago</TableHead>
               <TableHead>Monto Pagado</TableHead>
@@ -528,6 +548,7 @@ export default function ShipmentDetailPage() {
                       <span className="text-muted-foreground">N/A</span>
                     )}
                 </TableCell>
+                <TableCell>{formatDateTime(invoice.fecha_entrega)}</TableCell>
                 <TableCell>${(invoice.grand_total ?? 0).toFixed(2)}</TableCell>
                 <TableCell>{invoice.forma_pago}</TableCell>
                 <TableCell>${invoice.monto.toFixed(2)}</TableCell>
@@ -549,7 +570,7 @@ export default function ShipmentDetailPage() {
               </TableRow>
             )) : (
               <TableRow>
-                  <TableCell colSpan={7} className="text-center">No hay facturas en esta categoría.</TableCell>
+                  <TableCell colSpan={8} className="text-center">No hay facturas en esta categoría.</TableCell>
               </TableRow>
             )}
           </TableBody>
@@ -670,6 +691,20 @@ export default function ShipmentDetailPage() {
                   )}
               </FormItem>
               
+               <FormField
+                control={form.control}
+                name="fecha_entrega"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Fecha de Entrega</FormLabel>
+                    <FormControl>
+                      <Input value={formatDateTime(field.value)} disabled />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               <FormField
                 control={form.control}
                 name="forma_pago"
@@ -835,3 +870,5 @@ export default function ShipmentDetailPage() {
     </div>
   )
 }
+
+    
