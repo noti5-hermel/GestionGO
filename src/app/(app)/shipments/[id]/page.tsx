@@ -589,18 +589,18 @@ export default function ShipmentDetailPage() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
               <CardTitle>Detalle del Despacho #{shipment.id_despacho}</CardTitle>
               <CardDescription>
                 Información detallada del despacho y su estado actual.
               </CardDescription>
             </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={handleGeneratePdf}>
+            <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 w-full md:w-auto">
+              <Button variant="outline" onClick={handleGeneratePdf} className="w-full md:w-auto">
                 <FileText className="mr-2 h-4 w-4" /> Ver Informe
               </Button>
-              <Button variant="outline" onClick={() => router.back()}>
+              <Button variant="outline" onClick={() => router.back()} className="w-full md:w-auto">
                 <ArrowLeft className="mr-2 h-4 w-4" /> Volver a Despachos
               </Button>
             </div>
@@ -870,5 +870,3 @@ export default function ShipmentDetailPage() {
     </div>
   )
 }
-
-    
