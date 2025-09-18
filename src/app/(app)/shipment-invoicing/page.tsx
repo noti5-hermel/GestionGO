@@ -24,11 +24,12 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { PlusCircle, Pencil, Trash2 } from "lucide-react"
+import { PlusCircle, Pencil, Trash2, FilterX } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 import Image from "next/image"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
 
 /**
  * @file shipment-invoicing/page.tsx
@@ -65,6 +66,8 @@ const statusOptions: { label: string; value: boolean }[] = [
   { label: "Pendiente", value: false },
 ]
 
+const ITEMS_PER_PAGE = 10;
+
 /**
  * Componente principal de la página de Facturación por Despacho.
  */
@@ -91,6 +94,15 @@ export default function ShipmentInvoicingPage() {
   const [selectedInvoicesForMassAssign, setSelectedInvoicesForMassAssign] = useState<Record<string, boolean>>({});
   
   const [availableInvoices, setAvailableInvoices] = useState<Invoice[]>([]);
+  
+  // Estados de filtrado y paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [filterShipmentId, setFilterShipmentId] = useState('');
+  const [filterAmount, setFilterAmount] = useState('');
+  const [filterDeliveryDate, setFilterDeliveryDate] = useState('');
+  const [filterPaymentMethod, setFilterPaymentMethod] = useState('');
+
 
   const form = useForm<z.infer<typeof shipmentInvoiceSchema>>({
     resolver: zodResolver(shipmentInvoiceSchema),
@@ -106,11 +118,16 @@ export default function ShipmentInvoicingPage() {
 
   // Carga los datos iniciales al montar el componente.
   useEffect(() => {
-    fetchShipmentInvoices()
     fetchInvoices()
     fetchShipments()
     fetchRoutes();
   }, [])
+  
+  // Carga los datos de facturación por despacho con filtros
+  useEffect(() => {
+    fetchShipmentInvoices()
+  }, [currentPage, filterShipmentId, filterAmount, filterDeliveryDate, filterPaymentMethod])
+
 
   // Rellena el formulario cuando se selecciona un registro para editar.
   useEffect(() => {
@@ -150,8 +167,14 @@ export default function ShipmentInvoicingPage() {
     }
     
     // Lista de IDs de facturas que ya están asignadas a CUALQUIER despacho
-    const usedInvoiceIds = new Set(shipmentInvoices.map(si => si.id_factura));
-
+    const { data: usedInvoices, error: usedInvoicesError } = await supabase.from('facturacion_x_despacho').select('id_factura');
+    if (usedInvoicesError) {
+      toast({ title: "Error", description: "No se pudo obtener la lista de facturas ya asignadas.", variant: "destructive" });
+      setLoading(false);
+      return;
+    }
+    const usedInvoiceIds = new Set(usedInvoices.map(si => si.id_factura));
+    
     // Obtener la geocerca de la ruta del despacho
     const { data: routeData, error: routeError } = await supabase
       .from('rutas')
@@ -180,6 +203,7 @@ export default function ShipmentInvoicingPage() {
     });
 
     if (rpcError) {
+      console.error(rpcError)
       toast({ title: "Error de Geocerca", description: "No se pudo consultar qué clientes están en la ruta.", variant: "destructive" });
       setLoading(false);
       return;
@@ -201,7 +225,7 @@ export default function ShipmentInvoicingPage() {
     setAvailableInvoices(filteredInvoices);
     setLoading(false);
 
-  }, [allShipments, allInvoices, shipmentInvoices, toast]);
+  }, [allShipments, allInvoices, toast]);
 
 
   // Efecto que se dispara cuando el usuario selecciona un despacho en el diálogo de asignación masiva.
@@ -211,14 +235,38 @@ export default function ShipmentInvoicingPage() {
   }, [selectedShipmentForMassAssign, getAvailableInvoices]);
 
   /** Obtiene los registros de facturación por despacho desde Supabase. */
-  const fetchShipmentInvoices = async () => {
-    const { data, error } = await supabase.from('facturacion_x_despacho').select('*')
-    if (error) {
-      toast({ title: "Error", description: "No se pudieron cargar los registros.", variant: "destructive" })
-    } else {
-      setShipmentInvoices(data as ShipmentInvoice[])
+    const fetchShipmentInvoices = useCallback(async () => {
+    const from = (currentPage - 1) * ITEMS_PER_PAGE;
+    const to = from + ITEMS_PER_PAGE - 1;
+
+    let query = supabase.from('facturacion_x_despacho').select('*', { count: 'exact' });
+
+    if (filterShipmentId) {
+        query = query.eq('id_despacho', filterShipmentId);
     }
-  }
+    if (filterAmount) {
+        query = query.gte('monto', filterAmount);
+    }
+    if (filterDeliveryDate) {
+        // Filtra por el día completo, ignorando la hora
+        const startDate = `${filterDeliveryDate}T00:00:00.000Z`;
+        const endDate = `${filterDeliveryDate}T23:59:59.999Z`;
+        query = query.gte('fecha_entrega', startDate).lte('fecha_entrega', endDate);
+    }
+    if (filterPaymentMethod) {
+        query = query.eq('forma_pago', filterPaymentMethod);
+    }
+    
+    query = query.range(from, to).order('id_fac_desp', { ascending: false });
+
+    const { data, error, count } = await query;
+    if (error) {
+        toast({ title: "Error", description: "No se pudieron cargar los registros.", variant: "destructive" })
+    } else {
+        setShipmentInvoices(data as ShipmentInvoice[]);
+        setTotalRecords(count ?? 0);
+    }
+  }, [currentPage, filterShipmentId, filterAmount, filterDeliveryDate, filterPaymentMethod, toast]);
   
   /** Obtiene todas las facturas para los selectores y la asignación. */
   const fetchInvoices = async () => {
@@ -476,6 +524,14 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
     setAvailableInvoices([]); // Limpia las facturas disponibles
   };
   
+  const clearFilters = () => {
+    setFilterShipmentId('');
+    setFilterAmount('');
+    setFilterDeliveryDate('');
+    setFilterPaymentMethod('');
+    setCurrentPage(1);
+  };
+  
   const getBadgeVariant = (status: boolean) => status ? "default" : "secondary"
   const getStatusLabel = (status: boolean) => status ? "Pagado" : "Pendiente"
   const getInvoiceNumber = (invoiceId: string) => allInvoices.find(inv => inv.id_factura === invoiceId)?.reference_number || invoiceId;
@@ -613,6 +669,51 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
             </DialogContent>
           </Dialog>
         </div>
+        <div className="flex flex-col sm:flex-row flex-wrap items-center gap-4 mt-4">
+            <Select value={filterShipmentId} onValueChange={setFilterShipmentId}>
+                <SelectTrigger className="w-full sm:w-auto min-w-[160px]">
+                    <SelectValue placeholder="Filtrar por Despacho" />
+                </SelectTrigger>
+                <SelectContent>
+                    {allShipments.map(shipment => (
+                        <SelectItem key={shipment.id_despacho} value={String(shipment.id_despacho)}>
+                            ID: {shipment.id_despacho} - {getShipmentDate(shipment.id_despacho)}
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+            <Input
+                type="number"
+                placeholder="Filtrar por monto >="
+                value={filterAmount}
+                onChange={(e) => setFilterAmount(e.target.value)}
+                className="w-full sm:w-auto"
+            />
+            <div className="flex items-center gap-2">
+                <Label htmlFor="deliveryDate">Fecha de Entrega</Label>
+                <Input
+                    id="deliveryDate"
+                    type="date"
+                    value={filterDeliveryDate}
+                    onChange={(e) => setFilterDeliveryDate(e.target.value)}
+                    className="w-full sm:w-auto"
+                />
+            </div>
+            <Select value={filterPaymentMethod} onValueChange={setFilterPaymentMethod}>
+                <SelectTrigger className="w-full sm:w-auto min-w-[160px]">
+                    <SelectValue placeholder="Filtrar por Pago" />
+                </SelectTrigger>
+                <SelectContent>
+                    {paymentMethods.map(method => (
+                        <SelectItem key={method} value={method}>{method}</SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+            <Button variant="ghost" onClick={clearFilters} className="text-sm">
+                <FilterX className="mr-2 h-4 w-4"/>
+                Limpiar Filtros
+            </Button>
+        </div>
       </CardHeader>
       <CardContent className="flex-1 overflow-auto">
         <div className="relative w-full overflow-auto">
@@ -688,7 +789,7 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
       </CardContent>
       <CardFooter className="pt-6">
         <div className="text-xs text-muted-foreground">
-          Mostrando <strong>{shipmentInvoices.length}</strong> de <strong>{shipmentInvoices.length}</strong> registros.
+          Mostrando <strong>{shipmentInvoices.length}</strong> de <strong>{totalRecords}</strong> registros.
         </div>
       </CardFooter>
       
