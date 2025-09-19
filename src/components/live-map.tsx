@@ -215,14 +215,11 @@ const LiveMap = ({ customers, bodegaLocation, motoristaPath, motoristaLocation, 
   };
 
   const motoristaIcon: google.maps.Icon = {
-    path: 'M19.9,13.75c-0.61,0-1.1,0.49-1.1,1.1s0.49,1.1,1.1,1.1s1.1-0.49,1.1-1.1S20.51,13.75,19.9,13.75z M6,13.75 c-0.61,0-1.1,0.49-1.1,1.1s0.49,1.1,1.1,1.1s1.1-0.49,1.1-1.1S6.61,13.75,6,13.75z M12.95,3c-0.83,0-1.5,0.67-1.5,1.5 c0,0.83,0.67,1.5,1.5,1.5s1.5-0.67,1.5-1.5C14.45,3.67,13.78,3,12.95,3z M19.45,4.01c-1.38,0-2.5,1.12-2.5,2.5 c0,0.58,0.2,1.1,0.52,1.5H8.52c0.32-0.4,0.52-0.92,0.52-1.5c0-1.38-1.12-2.5-2.5-2.5S4.04,5.13,4.04,6.51 c0,0.58,0.2,1.1,0.52,1.5h-0.5c-0.83,0-1.5,0.67-1.5,1.5v3c0,0.83,0.67,1.5,1.5,1.5h0.09c-0.33,0.44-0.54,0.98-0.54,1.58 c0,1.38,1.12,2.5,2.5,2.5s2.5-1.12,2.5-2.5c0-0.6-0.21-1.14-0.54-1.58h6.9c-0.33,0.44-0.54,0.98-0.54,1.58 c0,1.38,1.12,2.5,2.5,2.5s2.5-1.12,2.5-2.5c0-0.6-0.21-1.14-0.54-1.58H22.5c0.83,0,1.5-0.67,1.5-1.5v-3 c0-0.83-0.67-1.5-1.5-1.5h-0.5c0.32-0.4,0.52-0.92,0.52-1.5C21.95,5.13,20.83,4.01,19.45,4.01z',
-    fillColor: '#FF6F00',
-    fillOpacity: 1,
-    strokeWeight: 1,
-    strokeColor: '#FFFFFF',
-    scale: 1,
-    anchor: new google.maps.Point(12, 12),
+    url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAACYSURBVHja7c0xAQAgDMCwgW/YI4S3hQeD4AEDBw7g5V52sJtnfG/f9/3fGxw4cODAgQMHDis4cODAgQMHDrYCDhw4cODAgcNKDhw4cODAgYPNgAOHDhw4cOCwwgMHDhw4cOBgK+DAgQMHbhw4cODAgQMHDis4cODAgQMHDhxsBRw4cODAgQMHn7YCDhw4cODAgcNKDv4Hb4QCbsJmCRUAAAAASUVORK5CYII=',
+    scaledSize: new google.maps.Size(40, 40),
+    anchor: new google.maps.Point(20, 20),
   };
+
 
   const createMarkerIcon = (isCompleted: boolean): google.maps.Icon => ({
     path: google.maps.SymbolPath.CIRCLE,
@@ -273,3 +270,5 @@ const LiveMap = ({ customers, bodegaLocation, motoristaPath, motoristaLocation, 
 };
 
 export default React.memo(LiveMap);
+
+    
