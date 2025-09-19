@@ -148,32 +148,45 @@ export default function LiveMapPage() {
       }
 
       // --- 2. Obtener el historial de ubicación del motorista (recorrido real) ---
-      const { data: historyData, error: historyError } = await supabase.rpc('get_location_history_by_day', {
-          p_id_motorista: parseInt(despacho.id_motorista, 10),
-          p_date: despacho.fecha_despacho
-      });
-
-      if (historyError) {
-        console.warn("No se pudo obtener el historial de ruta del motorista:", historyError.message);
+      const motoristaIdAsInt = parseInt(despacho.id_motorista, 10);
+      if (isNaN(motoristaIdAsInt)) {
+        console.warn("ID de motorista inválido:", despacho.id_motorista);
         setMotoristaPath([]);
-      } else if (historyData) {
-        const path = (historyData as any[]).map((p: any) => ({ lat: p.lat, lng: p.lng }));
-        setMotoristaPath(path);
       } else {
-        setMotoristaPath([]);
+        const { data: historyData, error: historyError } = await supabase.rpc('get_location_history_by_day', {
+            p_id_motorista: motoristaIdAsInt,
+            p_date: despacho.fecha_despacho
+        });
+
+        if (historyError) {
+          console.warn("No se pudo obtener el historial de ruta del motorista (puede que no haya iniciado):", historyError.message);
+          setMotoristaPath([]);
+        } else if (historyData) {
+          const path = (historyData as any[]).map((p: any) => ({ lat: p.lat, lng: p.lng }));
+          setMotoristaPath(path);
+        } else {
+          setMotoristaPath([]);
+        }
       }
+
 
       // --- 3. Obtener la última ubicación conocida del motorista ---
       const { data: lastLocationData, error: lastLocationError } = await supabase
         .from('locations_motoristas')
         .select('location')
-        .eq('id_motorista', despacho.id_motorista)
+        .eq('id_motorista', motoristaIdAsInt)
         .single();
       
       if (lastLocationData && lastLocationData.location) {
-          const match = lastLocationData.location.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
-          if(match) {
-            setMotoristaLocation({ lat: parseFloat(match[2]), lng: parseFloat(match[1]) });
+          // PostGIS puede devolver GeoJSON, que es un objeto, no un string.
+          if (typeof lastLocationData.location === 'object' && lastLocationData.location.coordinates) {
+              const [lng, lat] = lastLocationData.location.coordinates;
+              setMotoristaLocation({ lat, lng });
+          } else if (typeof lastLocationData.location === 'string') {
+              const match = lastLocationData.location.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
+              if(match) {
+                setMotoristaLocation({ lat: parseFloat(match[2]), lng: parseFloat(match[1]) });
+              }
           }
       } else {
         setMotoristaLocation(null);
