@@ -240,7 +240,7 @@ const LiveMap = ({ customers, bodegaLocation, motoristaPath, motoristaLocation, 
       <MarkerF position={bodegaLocation} title="Bodega" icon={bodegaIcon} />
 
       {/* Ruta Planificada */}
-      {routePolyline.length > 0 && <Polyline path={routePolyline} options={{ strokeColor: '#FFC300', strokeWeight: 5, zIndex: 1 }} />}
+      {routePolyline.length > 0 && <Polyline path={routePolyline} options={{ strokeColor: '#e6b825', strokeWeight: 5, zIndex: 1 }} />}
 
       {/* Recorrido Real del Motorista */}
       {motoristaPath.length > 0 && <Polyline path={motoristaPath} options={{ strokeColor: '#FF6F00', strokeWeight: 3, zIndex: 2 }} />}
