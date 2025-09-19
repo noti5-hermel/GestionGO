@@ -246,7 +246,7 @@ export default function LiveMapPage() {
                 <SelectTrigger className="w-full md:w-[400px]">
                     <SelectValue placeholder="Vista Global (todos los motoristas)" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-50">
                      <SelectItem value="global">Vista Global (todos los motoristas)</SelectItem>
                     {allDespachos.map(d => (
                         <SelectItem key={d.id_despacho} value={String(d.id_despacho)}>
