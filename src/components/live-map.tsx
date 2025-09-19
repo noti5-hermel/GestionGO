@@ -152,7 +152,7 @@ const LiveMap = ({ customers, bodegaLocation, loading, viewMode }: LiveMapProps)
         destination = bodegaWaypoint;
         intermediates = waypoints.map(w => w.waypoint);
         optimize = true;
-        fieldMask += ",routes.waypointOrder";
+        // fieldMask += ",routes.waypointOrder";
       }
       
       const requestBody: any = {
@@ -166,6 +166,8 @@ const LiveMap = ({ customers, bodegaLocation, loading, viewMode }: LiveMapProps)
         requestBody.intermediates = intermediates;
         requestBody.optimizeWaypointOrder = optimize;
       }
+
+      console.log('JSON formato enviado:', JSON.stringify(requestBody, null, 2));
 
       const headers = {
         "Content-Type": "application/json",
