@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -51,7 +50,6 @@ const parseWktToLatLng = (locationData: any): google.maps.LatLngLiteral | null =
 const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode }: LiveMapProps) => {
   // --- ESTADOS ---
   const [routePath, setRoutePath] = useState<google.maps.LatLngLiteral[]>([]);
-  const [orderedWaypoints, setOrderedWaypoints] = useState<google.maps.LatLngLiteral[]>([]);
   const [map, setMap] = useState<google.maps.Map | null>(null);
 
   // --- CARGA DE API ---
@@ -65,7 +63,6 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
   useEffect(() => {
     if (!isLoaded || viewMode !== 'route' || waypoints.length === 0) {
       setRoutePath([]);
-      setOrderedWaypoints([]);
       return;
     }
 
@@ -73,23 +70,10 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
       const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
       const url = 'https://routes.googleapis.com/directions/v2:computeRoutes';
       
-      let destination;
-      let intermediates: { location: { latLng: google.maps.LatLngLiteral } }[] = [];
-      let optimize = false;
-      let fieldMask = 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs';
-
-      if (waypoints.length > 1) {
-        destination = { location: { latLng: origin } };
-        intermediates = waypoints.map(wp => ({ location: { latLng: wp.location as google.maps.LatLngLiteral } }));
-        optimize = true;
-        fieldMask += ',routes.waypointOrder';
-      } else {
-        destination = { location: { latLng: waypoints[0].location as google.maps.LatLngLiteral } };
-      }
-
+      const intermediates = waypoints.map(wp => ({ location: { latLng: wp.location as google.maps.LatLngLiteral } }));
+      
       const requestBody: any = {
         origin: { location: { latLng: origin } },
-        destination,
         travelMode: 'DRIVE',
         routingPreference: 'TRAFFIC_AWARE',
         computeAlternativeRoutes: false,
@@ -103,12 +87,20 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
         },
         languageCode: 'es-419',
         units: 'METRIC',
-        optimizeWaypointOrder: optimize,
       };
+      
+      const fieldMask = 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs';
 
-      if (intermediates.length > 0) {
-          requestBody.intermediates = intermediates;
+      if (intermediates.length > 1) {
+        requestBody.destination = { location: { latLng: origin } }; // Viaje de ida y vuelta
+        requestBody.intermediates = intermediates;
+        requestBody.optimizeWaypointOrder = true;
+      } else if (intermediates.length === 1) {
+        requestBody.destination = { location: { latLng: intermediates[0].location.latLng } };
+      } else {
+        return; // No hay puntos para trazar
       }
+
 
       try {
         const response = await fetch(url, {
@@ -132,14 +124,6 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
           const encodedPolyline = route.polyline.encodedPolyline;
           const decodedPath = decode(encodedPolyline, 5).map(([lat, lng]) => ({ lat, lng }));
           setRoutePath(decodedPath);
-          
-          let finalWaypoints: google.maps.LatLngLiteral[] = [];
-          if (route.waypointOrder) {
-              finalWaypoints = route.waypointOrder.map((index: number) => intermediates[index].location.latLng);
-          } else {
-              finalWaypoints = waypoints.map(wp => wp.location as google.maps.LatLngLiteral);
-          }
-          setOrderedWaypoints(finalWaypoints);
         }
       } catch (error) {
         console.error('Failed to fetch and decode route:', error);
@@ -232,17 +216,11 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
 
           <MarkerF position={origin} title={origin.name} icon={homeIcon} />
 
-          {orderedWaypoints.map((waypoint, index) => (
+          {waypoints.map((waypoint, index) => (
             <MarkerF
               key={`waypoint-${index}`}
-              position={waypoint}
+              position={waypoint.location as google.maps.LatLngLiteral}
               icon={userIcon}
-              label={{
-                text: String(index + 1),
-                color: "white",
-                fontSize: "12px",
-                fontWeight: "bold",
-              }}
             />
           ))}
         </>
@@ -266,4 +244,3 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
 };
 
 export default React.memo(LiveMap);
-
