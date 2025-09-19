@@ -132,28 +132,26 @@ const LiveMap = ({ customers, bodegaLocation, loading, viewMode }: LiveMapProps)
         return;
       }
       
-      const requestBody: any = {
-        travelMode: "DRIVE",
-        routingPreference: "TRAFFIC_AWARE",
-      };
-
-      let fieldMask = "routes.polyline.encodedPolyline";
-
-      // Traducir a formato de API de Rutas
+      // Función para convertir nuestro formato {lat, lng} al formato de la API {latitude, longitude}
       const toApiLatLng = (latLng: google.maps.LatLngLiteral) => ({
         location: { latLng: { latitude: latLng.lat, longitude: latLng.lng } }
       });
       
-      if (waypoints.length === 1) {
-          requestBody.origin = toApiLatLng(bodegaLocation);
-          requestBody.destination = toApiLatLng(waypoints[0].centroid);
-      } else {
-          requestBody.origin = toApiLatLng(bodegaLocation);
-          requestBody.destination = toApiLatLng(bodegaLocation);
-          requestBody.intermediates = waypoints.map(w => toApiLatLng(w.centroid));
-          requestBody.optimizeWaypointOrder = true;
-          fieldMask += ",routes.optimizedIntermediateWaypointIndex";
+      const intermediates = waypoints.map(w => toApiLatLng(w.centroid));
+
+      const requestBody: any = {
+        travelMode: "DRIVE",
+        routingPreference: "TRAFFIC_AWARE",
+        origin: toApiLatLng(bodegaLocation),
+        destination: toApiLatLng(bodegaLocation),
+      };
+
+      if (intermediates.length > 0) {
+        requestBody.intermediates = intermediates;
+        requestBody.optimizeWaypointOrder = true;
       }
+      
+      let fieldMask = "routes.polyline.encodedPolyline,routes.optimizedIntermediateWaypointIndex";
 
       console.log('JSON formato enviado:', JSON.stringify(requestBody, null, 2));
 
@@ -188,7 +186,7 @@ const LiveMap = ({ customers, bodegaLocation, loading, viewMode }: LiveMapProps)
             const sortedWaypoints = waypointOrder.map(index => waypoints[index]);
             setOrderedWaypoints(sortedWaypoints);
           } else {
-            setOrderedWaypoints(waypoints); // Para el caso de un solo destino
+            setOrderedWaypoints(waypoints);
           }
         }
       } catch (error) {
