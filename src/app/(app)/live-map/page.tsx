@@ -149,7 +149,7 @@ export default function LiveMapPage() {
 
       // --- 2. Obtener el historial de ubicación del motorista (recorrido real) ---
       const { data: historyData, error: historyError } = await supabase.rpc('get_location_history_by_day', {
-          p_id_motorista: despacho.id_motorista,
+          p_id_motorista: parseInt(despacho.id_motorista, 10),
           p_date: despacho.fecha_despacho
       });
 
@@ -157,7 +157,7 @@ export default function LiveMapPage() {
         toast({ title: "Error", description: "No se pudo obtener el historial de ruta del motorista.", variant: "destructive" });
         setMotoristaPath([]);
       } else if (historyData) {
-        const path = historyData.map((p: any) => ({ lat: p.lat, lng: p.lng }));
+        const path = (historyData as any[]).map((p: any) => ({ lat: p.lat, lng: p.lng }));
         setMotoristaPath(path);
       }
 

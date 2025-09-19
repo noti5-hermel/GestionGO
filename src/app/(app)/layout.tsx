@@ -52,12 +52,18 @@ const LocationTracker = () => {
       const { latitude, longitude } = position.coords;
       const locationPoint = `POINT(${longitude} ${latitude})`;
       const timestamp = new Date().toISOString();
+      const motoristaIdAsInt = parseInt(session.id, 10);
+
+      if (isNaN(motoristaIdAsInt)) {
+        console.error("Invalid motorista ID for location tracking");
+        return;
+      }
 
       // 1. Insertar en el historial de ubicaciones.
       const { error: historyError } = await supabase
         .from('location_history')
         .insert({
-          id_motorista: session.id,
+          id_motorista: motoristaIdAsInt,
           location: locationPoint,
           timestamp: timestamp,
         });
@@ -70,7 +76,7 @@ const LocationTracker = () => {
       const { error: upsertError } = await supabase
         .from('locations_motoristas')
         .upsert({
-          id_motorista: session.id,
+          id_motorista: motoristaIdAsInt,
           location: locationPoint,
           last_update: timestamp,
         }, { onConflict: 'id_motorista' });
