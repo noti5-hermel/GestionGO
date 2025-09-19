@@ -178,7 +178,7 @@ const LiveMap = ({ customers, bodegaLocation, motoristaPath, motoristaLocation, 
           
           if (data.routes[0].optimizedIntermediateWaypointIndex) {
             const waypointOrder: number[] = data.routes[0].optimizedIntermediateWaypointIndex;
-            const sortedWaypoints = waypointOrder.map(index => waypoints[index]);
+            const sortedWaypoints = waypointOrder.map(index => waypoints[index]).filter(Boolean);
             setOrderedWaypoints(sortedWaypoints);
           } else {
             setOrderedWaypoints(waypoints);
@@ -215,7 +215,7 @@ const LiveMap = ({ customers, bodegaLocation, motoristaPath, motoristaLocation, 
   };
 
   const motoristaIcon: google.maps.Icon = {
-    url: '/truck-icon.png',
+    url: '/car.svg',
     scaledSize: new google.maps.Size(40, 40),
     anchor: new google.maps.Point(20, 20),
   };
