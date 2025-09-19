@@ -108,8 +108,8 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
         });
 
         if (!response.ok) {
-          const errorData = await response.json();
-          console.error('Error fetching route from Routes API:', errorData);
+          const errorText = await response.text();
+          console.error('Error fetching route from Routes API:', errorText);
           throw new Error(`HTTP error! status: ${response.status}`);
         }
 
