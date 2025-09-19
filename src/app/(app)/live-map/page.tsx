@@ -69,11 +69,16 @@ export default function LiveMapPage() {
   const [selectedDespachoId, setSelectedDespachoId] = useState<string>('global');
   const { toast } = useToast();
 
-  const getRouteDescription = (routeId: string) => allRoutes.find(r => r.id_ruta === routeId)?.ruta_desc || routeId;
-  const getUserName = (userId: string) => allUsers.find(u => u.id_user === userId)?.name || userId;
+  const getRouteDescription = useCallback((routeId: string) => {
+    return allRoutes.find(r => r.id_ruta === routeId)?.ruta_desc || routeId;
+  }, [allRoutes]);
+  
+  const getUserName = useCallback((userId: string) => {
+    return allUsers.find(u => u.id_user === userId)?.name || userId;
+  }, [allUsers]);
 
   // Carga inicial de datos estáticos (despachos, usuarios, rutas).
-  const fetchStaticData = async () => {
+  const fetchStaticData = useCallback(async () => {
     const [despachosRes, usersRes, routesRes] = await Promise.all([
       supabase.from('despacho').select('*').order('fecha_despacho', { ascending: false }),
       supabase.from('usuario').select('id_user, name'),
@@ -88,11 +93,11 @@ export default function LiveMapPage() {
 
     if (routesRes.error) toast({ title: "Error", description: "No se pudieron cargar las rutas.", variant: "destructive" });
     else setAllRoutes(routesRes.data as Route[]);
-  };
+  }, [toast]);
   
   useEffect(() => {
     fetchStaticData();
-  }, [toast]);
+  }, [fetchStaticData]);
   
 
   // Efecto que gestiona las suscripciones en tiempo real.
