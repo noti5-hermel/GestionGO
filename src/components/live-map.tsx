@@ -173,15 +173,26 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
            {/* Marcador del punto de origen/destino */}
           <MarkerF position={origin} title={origin.name} icon={homeIcon} />
 
-          {/* Marcadores de clientes (waypoints) */}
-          {waypoints.map((wp, index) => (
-             <MarkerF 
-                key={index}
-                // @ts-ignore - La API de Google permite un LatLngLiteral aquí.
-                position={wp.location}
-                icon={userIcon} 
-             />
-          ))}
+          {/* Marcadores de clientes (waypoints) con números de orden */}
+          {directions.routes[0]?.waypoint_order.map((waypointIndex, orderIndex) => {
+            const waypoint = waypoints[waypointIndex];
+            if (!waypoint) return null;
+
+            return (
+              <MarkerF
+                key={`waypoint-${waypointIndex}`}
+                // @ts-ignore
+                position={waypoint.location}
+                icon={userIcon}
+                label={{
+                  text: String(orderIndex + 1), // El número de la parada (1, 2, 3...)
+                  color: "white",
+                  fontSize: "12px",
+                  fontWeight: "bold",
+                }}
+              />
+            )
+          })}
         </>
       )}
 
