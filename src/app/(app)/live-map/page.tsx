@@ -66,7 +66,7 @@ export default function LiveMapPage() {
   const [allDespachos, setAllDespachos] = useState<Despacho[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [allRoutes, setAllRoutes] = useState<Route[]>([]);
-  const [selectedDespachoId, setSelectedDespachoId] = useState<string>('');
+  const [selectedDespachoId, setSelectedDespachoId] = useState<string>('global');
   const { toast } = useToast();
 
   const getRouteDescription = (routeId: string) => allRoutes.find(r => r.id_ruta === routeId)?.ruta_desc || routeId;
@@ -97,8 +97,8 @@ export default function LiveMapPage() {
 
   // Efecto que gestiona las suscripciones en tiempo real.
   useEffect(() => {
-    // Si NO hay un despacho seleccionado, se suscribe a TODOS los motoristas.
-    if (!selectedDespachoId) {
+    // Si NO hay un despacho seleccionado (vista global), se suscribe a TODOS los motoristas.
+    if (selectedDespachoId === 'global') {
       // 1. Carga inicial de todas las ubicaciones de motoristas.
       const fetchAllMotoristas = async () => {
         const { data, error } = await supabase.from('locations_motoristas').select('*');
@@ -215,13 +215,22 @@ export default function LiveMapPage() {
   const allPoints = useMemo(() => {
     let points = allMotoristaLocations.map(m => ({ ...m, type: 'motorista' as const }));
 
-    if (selectedDespachoId) {
+    if (selectedDespachoId !== 'global') {
         points.push(...customerLocations.map(c => ({...c, type: 'customer' as const})));
         points.push({ location: `POINT(${STARTING_POINT.lon} ${STARTING_POINT.lat})`, name: STARTING_POINT.name, type: 'start' as const });
     }
     
     return points;
   }, [allMotoristaLocations, customerLocations, selectedDespachoId]);
+  
+  const handleViewChange = (value: string) => {
+    setSelectedDespachoId(value);
+    // Limpia los datos de la ruta anterior para evitar un flash de datos incorrectos
+    if (value !== 'global') {
+      setCustomerLocations([]);
+      setAllMotoristaLocations([]);
+    }
+  };
 
   return (
     <Card className="h-full flex flex-col">
@@ -233,12 +242,12 @@ export default function LiveMapPage() {
                 Vista global de motoristas. Seleccione un despacho para ver su ruta específica.
               </CardDescription>
             </div>
-             <Select value={selectedDespachoId} onValueChange={setSelectedDespachoId}>
+             <Select value={selectedDespachoId} onValueChange={handleViewChange}>
                 <SelectTrigger className="w-full md:w-[400px]">
                     <SelectValue placeholder="Vista Global (todos los motoristas)" />
                 </SelectTrigger>
                 <SelectContent>
-                     <SelectItem value="">Vista Global (todos los motoristas)</SelectItem>
+                     <SelectItem value="global">Vista Global (todos los motoristas)</SelectItem>
                     {allDespachos.map(d => (
                         <SelectItem key={d.id_despacho} value={String(d.id_despacho)}>
                            ID: {d.id_despacho} | {getRouteDescription(d.id_ruta)} | {getUserName(d.id_motorista)} | {new Date(d.fecha_despacho + 'T00:00:00Z').toLocaleDateString()}
@@ -256,5 +265,3 @@ export default function LiveMapPage() {
     </Card>
   );
 }
-
-    
