@@ -18,12 +18,6 @@ interface LiveMapProps {
   motoristas?: { id_motorista: string; name: string; location: any }[];
 }
 
-interface Waypoint {
-  location: {
-    latLng: google.maps.LatLngLiteral;
-  };
-}
-
 // --- CONFIGURACIÓN DEL MAPA ---
 const mapContainerStyle = {
   height: '100%',
@@ -117,10 +111,10 @@ const LiveMap = ({ customers, bodegaLocation, loading, viewMode }: LiveMapProps)
         if (!centroid) return null;
         return {
           customer,
-          waypoint: { location: { latLng: centroid } }
+          centroid
         };
       })
-      .filter((c): c is { customer: any; waypoint: Waypoint } => c !== null),
+      .filter((c): c is { customer: any; centroid: google.maps.LatLngLiteral } => c !== null),
     [customers]
   );
 
@@ -138,33 +132,27 @@ const LiveMap = ({ customers, bodegaLocation, loading, viewMode }: LiveMapProps)
         return;
       }
       
-      const bodegaWaypoint = { location: { latLng: bodegaLocation } };
-      let origin: Waypoint, destination: Waypoint, intermediates: Waypoint[];
-      let optimize = false;
-      let fieldMask = "routes.polyline.encodedPolyline";
-
-      if (waypoints.length === 1) {
-        origin = bodegaWaypoint;
-        destination = waypoints[0].waypoint;
-        intermediates = [];
-      } else {
-        origin = bodegaWaypoint;
-        destination = bodegaWaypoint;
-        intermediates = waypoints.map(w => w.waypoint);
-        optimize = true;
-        // fieldMask += ",routes.waypointOrder";
-      }
-      
       const requestBody: any = {
-        origin,
-        destination,
         travelMode: "DRIVE",
         routingPreference: "TRAFFIC_AWARE",
       };
 
-      if (intermediates.length > 0) {
-        requestBody.intermediates = intermediates;
-        requestBody.optimizeWaypointOrder = optimize;
+      let fieldMask = "routes.polyline.encodedPolyline";
+
+      // Traducir a formato de API de Rutas
+      const toApiLatLng = (latLng: google.maps.LatLngLiteral) => ({
+        location: { latLng: { latitude: latLng.lat, longitude: latLng.lng } }
+      });
+      
+      if (waypoints.length === 1) {
+          requestBody.origin = toApiLatLng(bodegaLocation);
+          requestBody.destination = toApiLatLng(waypoints[0].centroid);
+      } else {
+          requestBody.origin = toApiLatLng(bodegaLocation);
+          requestBody.destination = toApiLatLng(bodegaLocation);
+          requestBody.intermediates = waypoints.map(w => toApiLatLng(w.centroid));
+          requestBody.optimizeWaypointOrder = true;
+          fieldMask += ",routes.optimizedIntermediateWaypointIndex";
       }
 
       console.log('JSON formato enviado:', JSON.stringify(requestBody, null, 2));
@@ -195,8 +183,8 @@ const LiveMap = ({ customers, bodegaLocation, loading, viewMode }: LiveMapProps)
           const decodedPath = decode(polyline);
           setRoutePolyline(decodedPath.map(([lat, lng]) => ({ lat, lng })));
           
-          if (data.routes[0].waypointOrder) {
-            const waypointOrder: number[] = data.routes[0].waypointOrder;
+          if (data.routes[0].optimizedIntermediateWaypointIndex) {
+            const waypointOrder: number[] = data.routes[0].optimizedIntermediateWaypointIndex;
             const sortedWaypoints = waypointOrder.map(index => waypoints[index]);
             setOrderedWaypoints(sortedWaypoints);
           } else {
@@ -248,7 +236,7 @@ const LiveMap = ({ customers, bodegaLocation, loading, viewMode }: LiveMapProps)
           return (
             <MarkerF
               key={waypointData.customer.code_customer}
-              position={waypointData.waypoint.location.latLng}
+              position={waypointData.centroid}
               label={{
                 text: `${index + 1}`,
                 color: 'white',
