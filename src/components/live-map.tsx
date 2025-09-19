@@ -77,20 +77,20 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
     const fetchRoute = async () => {
       const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
       const url = 'https://routes.googleapis.com/directions/v2:computeRoutes';
-
+      
       let destination;
-      let intermediates = [];
+      let intermediates: { location: { latLng: google.maps.LatLngLiteral } }[] = [];
+      let optimize = false;
 
-      // Si hay más de un punto, es un viaje de ida y vuelta.
-      // Si solo hay uno, es un viaje de ida al cliente.
       if (waypoints.length > 1) {
-        destination = { location: { latLng: origin } }; // Volver al origen
-        intermediates = waypoints.map(wp => ({ location: { latLng: wp.location } }));
+        destination = { location: { latLng: origin } };
+        intermediates = waypoints.map(wp => ({ location: { latLng: wp.location as google.maps.LatLngLiteral } }));
+        optimize = true; // Solo optimizamos si hay múltiples paradas
       } else {
-        destination = { location: { latLng: waypoints[0].location } };
+        destination = { location: { latLng: waypoints[0].location as google.maps.LatLngLiteral } };
       }
 
-      const requestBody = {
+      const requestBody: any = {
         origin: { location: { latLng: origin } },
         destination,
         intermediates,
@@ -106,8 +106,11 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
           avoidFerries: false,
         },
         languageCode: 'es-419',
-        units: 'METRIC'
+        units: 'METRIC',
+        optimizeWaypointOrder: optimize,
       };
+
+      const fieldMask = 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline' + (optimize ? ',routes.waypointOrder' : '');
 
       try {
         const response = await fetch(url, {
@@ -115,7 +118,7 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
           headers: {
             'Content-Type': 'application/json',
             'X-Goog-Api-Key': API_KEY,
-            'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs,routes.waypointOrder'
+            'X-Goog-FieldMask': fieldMask,
           }
         });
 
@@ -132,14 +135,13 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
           const decodedPath = decode(encodedPolyline, 5).map(([lat, lng]) => ({ lat, lng }));
           setRoutePath(decodedPath);
           
-          let optimizedWaypoints: google.maps.LatLngLiteral[] = [];
+          let finalWaypoints: google.maps.LatLngLiteral[] = [];
           if (route.waypointOrder) {
-              const originalWaypoints = intermediates.length > 0 ? intermediates : [destination];
-              optimizedWaypoints = route.waypointOrder.map((index: number) => originalWaypoints[index].location.latLng);
-          } else if (waypoints.length > 0) {
-              optimizedWaypoints = waypoints.map(wp => wp.location as google.maps.LatLngLiteral);
+              finalWaypoints = route.waypointOrder.map((index: number) => intermediates[index].location.latLng);
+          } else {
+              finalWaypoints = waypoints.map(wp => wp.location as google.maps.LatLngLiteral);
           }
-          setOrderedWaypoints(optimizedWaypoints);
+          setOrderedWaypoints(finalWaypoints);
         }
       } catch (error) {
         console.error('Failed to fetch and decode route:', error);
@@ -172,14 +174,14 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
     return <div className="flex items-center justify-center h-full">Cargando mapa...</div>;
   }
   
-  const truckIcon = (color: string) => ({
+  const truckIcon = {
     path: 'M21 9V6a1 1 0 0 0-1-1h-2.1a3.98 3.98 0 0 0-7.8 0H4a1 1 0 0 0-1 1v3M2 19V9h19v10H2Zm0 0H1m1 0H3m17 0h1m-1 0h-1m-6-6a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z',
-    fillColor: color,
+    fillColor: '#03A6A6',
     fillOpacity: 1,
     strokeWeight: 1,
     scale: 1.2,
     anchor: new window.google.maps.Point(12, 12),
-  });
+  };
 
   const homeIcon = {
     path: 'm3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
@@ -222,11 +224,11 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
             }}
           />
 
-          {motoristaLocation && (
+          {motoristaLocation && parseWktToLatLng(motoristaLocation.location) && (
             <MarkerF
               position={parseWktToLatLng(motoristaLocation.location)!}
               title={motoristaLocation.name}
-              icon={truckIcon('#03A6A6')}
+              icon={truckIcon}
             />
           )}
 
@@ -251,12 +253,13 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
       {viewMode === 'global' && allMotoristas.map((motorista, index) => {
         const position = parseWktToLatLng(motorista.location);
         if (!position) return null;
+        const globalTruckIcon = {...truckIcon, fillColor: '#04BFAD' };
         return (
           <MarkerF
             key={`motorista-${index}`}
             position={position}
             title={motorista.name}
-            icon={truckIcon('#04BFAD')}
+            icon={globalTruckIcon}
           />
         );
       })}
