@@ -65,7 +65,7 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
     libraries: ['routes'],
   });
-  
+
   // --- LÓGICA DE CÁLCULO DE RUTA ---
   useEffect(() => {
     if (!isLoaded || viewMode !== 'route' || waypoints.length === 0) {
@@ -81,19 +81,22 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
       let destination;
       let intermediates: { location: { latLng: google.maps.LatLngLiteral } }[] = [];
       let optimize = false;
+      let fieldMask = 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs';
 
       if (waypoints.length > 1) {
+        // Viaje de ida y vuelta con optimización
         destination = { location: { latLng: origin } };
         intermediates = waypoints.map(wp => ({ location: { latLng: wp.location as google.maps.LatLngLiteral } }));
-        optimize = true; // Solo optimizamos si hay múltiples paradas
+        optimize = true;
+        fieldMask += ',routes.waypointOrder'; // Solo pedir waypointOrder si se optimiza
       } else {
+        // Viaje simple de ida
         destination = { location: { latLng: waypoints[0].location as google.maps.LatLngLiteral } };
       }
 
       const requestBody: any = {
         origin: { location: { latLng: origin } },
         destination,
-        intermediates,
         travelMode: 'DRIVE',
         routingPreference: 'TRAFFIC_AWARE',
         computeAlternativeRoutes: false,
@@ -110,7 +113,9 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
         optimizeWaypointOrder: optimize,
       };
 
-      const fieldMask = 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline' + (optimize ? ',routes.waypointOrder' : '');
+      if (intermediates.length > 0) {
+        requestBody.intermediates = intermediates;
+      }
 
       try {
         const response = await fetch(url, {
@@ -164,7 +169,7 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
         <div className="flex items-center justify-center h-full bg-red-100 text-red-700 p-4 text-center">
             <p>
                 <b>Error al cargar el mapa.</b><br/>
-                Asegúrate de que la variable `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` esté configurada correctamente en tu archivo `.env.local` y que la clave de API sea válida y tenga la "Routes API" habilitada.
+                Asegúrate de que la variable `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` esté configurada correctamente en tu archivo `.env.local` y que la clave de API sea válida y tenga la "Routes API" y "Maps JavaScript API" habilitadas.
             </p>
         </div>
     );
