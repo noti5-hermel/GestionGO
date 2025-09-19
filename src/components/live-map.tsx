@@ -11,6 +11,8 @@ interface LiveMapProps {
     code_customer: string;
     customer_name: string;
     geocerca: any;
+    state: boolean; // Estado de pago de la factura
+    comprobante: string | null; // URL del comprobante
   }[];
   bodegaLocation: { lat: number; lng: number };
   loading: boolean;
@@ -110,7 +112,7 @@ const LiveMap = ({ customers, bodegaLocation, loading, viewMode }: LiveMapProps)
         const centroid = parseGeofenceToCentroid(customer.geocerca);
         if (!centroid) return null;
         return {
-          customer,
+          customer, // Incluye toda la información del cliente
           centroid
         };
       })
@@ -214,14 +216,22 @@ const LiveMap = ({ customers, bodegaLocation, loading, viewMode }: LiveMapProps)
     return <div className="flex items-center justify-center h-full w-full bg-muted text-muted-foreground p-4 text-center rounded-lg"><p>Cargando datos del despacho...</p></div>;
   }
 
-  const homeIcon: google.maps.Icon = {
+  const bodegaIcon: google.maps.Icon = {
       path: 'm12 5.69 5 4.5V18h-2v-6H9v6H7v-7.81l5-4.5M12 3 2 12h3v8h6v-6h2v6h6v-8h3L12 3z',
-      fillColor: '#34A853',
+      fillColor: '#4285F4',
       fillOpacity: 1,
       strokeWeight: 0,
       scale: 1.2,
       anchor: new google.maps.Point(12, 12),
   };
+
+  const createMarkerIcon = (isCompleted: boolean): google.maps.Icon => ({
+    path: google.maps.SymbolPath.CIRCLE,
+    scale: 8,
+    fillColor: isCompleted ? '#34A853' : '#EA4335', // Verde si está completado, rojo si no
+    fillOpacity: 1,
+    strokeWeight: 0,
+  });
 
   return (
     <GoogleMap
@@ -230,11 +240,12 @@ const LiveMap = ({ customers, bodegaLocation, loading, viewMode }: LiveMapProps)
       zoom={9}
       options={mapOptions}
     >
-      <MarkerF position={bodegaLocation} title="Bodega" icon={homeIcon} />
+      <MarkerF position={bodegaLocation} title="Bodega" icon={bodegaIcon} />
 
       {routePolyline.length > 0 && <Polyline path={routePolyline} options={{ strokeColor: '#4285F4', strokeWeight: 5 }} />}
 
       {orderedWaypoints.filter(Boolean).map((waypointData, index) => {
+          const isCompleted = waypointData.customer.state || !!waypointData.customer.comprobante;
           return (
             <MarkerF
               key={waypointData.customer.code_customer}
@@ -244,6 +255,7 @@ const LiveMap = ({ customers, bodegaLocation, loading, viewMode }: LiveMapProps)
                 color: 'white',
                 fontWeight: 'bold',
               }}
+              icon={createMarkerIcon(isCompleted)}
               title={waypointData.customer.customer_name}
             />
           )

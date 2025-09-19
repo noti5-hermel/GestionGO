@@ -21,7 +21,9 @@ import { Label } from '@/components/ui/label';
 type Customer = {
   code_customer: string;
   customer_name: string;
-  geocerca: any; 
+  geocerca: any;
+  state: boolean;
+  comprobante: string | null;
 };
 
 type Despacho = {
@@ -91,19 +93,19 @@ export default function LiveMapPage() {
   }, [fetchStaticData]);
 
   // Efecto que se dispara al cambiar el despacho seleccionado.
-  // Obtiene las geocercas de los clientes para ese despacho.
+  // Obtiene las geocercas y el estado de las facturas de los clientes para ese despacho.
   useEffect(() => {
-    const fetchCustomerGeofences = async () => {
+    const fetchCustomerDataForShipment = async () => {
       if (!selectedDespachoId) {
         setCustomerGeofences([]);
         return;
       }
       setLoading(true);
 
-      // 1. Obtener los `id_factura` de 'facturacion_x_despacho'.
+      // 1. Obtener los `id_factura` de 'facturacion_x_despacho' para el despacho seleccionado.
       const { data: facDespacho, error: facDespachoError } = await supabase
         .from('facturacion_x_despacho')
-        .select('id_factura')
+        .select('id_factura, state, comprobante')
         .eq('id_despacho', selectedDespachoId);
 
       if (facDespachoError) {
@@ -119,10 +121,13 @@ export default function LiveMapPage() {
         return;
       }
 
-      // 2. Obtener los `code_customer` de 'facturacion'.
+      // Crea un mapa para acceder fácilmente al estado de cada factura
+      const invoiceStatusMap = new Map(facDespacho.map(item => [item.id_factura, { state: item.state, comprobante: item.comprobante }]));
+
+      // 2. Obtener los `code_customer` de 'facturacion' para esas facturas.
       const { data: facturacionData, error: facturacionError } = await supabase
         .from('facturacion')
-        .select('code_customer')
+        .select('id_factura, code_customer')
         .in('id_factura', invoiceIds);
         
       if (facturacionError) {
@@ -131,6 +136,8 @@ export default function LiveMapPage() {
         return;
       }
         
+      // Crea un mapa para relacionar `id_factura` con `code_customer`.
+      const invoiceCustomerMap = new Map(facturacionData.map(item => [item.id_factura, item.code_customer]));
       const customerCodes = [...new Set(facturacionData.map(item => item.code_customer))];
 
       // 3. Obtener los clientes con sus geocercas.
@@ -143,12 +150,24 @@ export default function LiveMapPage() {
       if (customersError) {
         toast({ title: "Error", description: "No se pudieron cargar las geocercas de los clientes.", variant: "destructive" });
       } else {
-        setCustomerGeofences(customersData as Customer[]);
+        // 4. Enriquecer los datos del cliente con el estado de su factura en este despacho.
+        const enrichedCustomers = customersData.map(customer => {
+            // Encuentra la factura correspondiente a este cliente en este despacho.
+            const invoiceId = [...invoiceCustomerMap.entries()].find(([_, cCode]) => cCode === customer.code_customer)?.[0];
+            const status = invoiceId ? invoiceStatusMap.get(invoiceId) : { state: false, comprobante: null };
+
+            return {
+                ...customer,
+                state: status?.state || false,
+                comprobante: status?.comprobante || null,
+            };
+        });
+        setCustomerGeofences(enrichedCustomers as Customer[]);
       }
       setLoading(false);
     };
 
-    fetchCustomerGeofences();
+    fetchCustomerDataForShipment();
   }, [selectedDespachoId, toast]);
   
   // --- FUNCIONES AUXILIARES ---
