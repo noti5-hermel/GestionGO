@@ -32,20 +32,15 @@ interface LiveMapProps {
  */
 const parseWktToLatLng = (locationData: any): google.maps.LatLngLiteral | null => {
     if (!locationData) return null;
-
-    // Caso 1: Es un string en formato WKT
+    if (typeof locationData === 'object' && locationData.type === 'Point' && Array.isArray(locationData.coordinates)) {
+        return { lng: locationData.coordinates[0], lat: locationData.coordinates[1] };
+    }
     if (typeof locationData === 'string') {
         const match = locationData.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
         if (match) {
             return { lng: parseFloat(match[1]), lat: parseFloat(match[2]) };
         }
     }
-
-    // Caso 2: Es un objeto GeoJSON
-    if (typeof locationData === 'object' && locationData.type === 'Point' && Array.isArray(locationData.coordinates)) {
-        return { lng: locationData.coordinates[0], lat: locationData.coordinates[1] };
-    }
-
     return null;
 };
 
@@ -84,13 +79,11 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
       let fieldMask = 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs';
 
       if (waypoints.length > 1) {
-        // Viaje de ida y vuelta con optimización
         destination = { location: { latLng: origin } };
         intermediates = waypoints.map(wp => ({ location: { latLng: wp.location as google.maps.LatLngLiteral } }));
         optimize = true;
-        fieldMask += ',routes.waypointOrder'; // Solo pedir waypointOrder si se optimiza
+        fieldMask += ',routes.waypointOrder';
       } else {
-        // Viaje simple de ida
         destination = { location: { latLng: waypoints[0].location as google.maps.LatLngLiteral } };
       }
 
@@ -114,7 +107,7 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
       };
 
       if (intermediates.length > 0) {
-        requestBody.intermediates = intermediates;
+          requestBody.intermediates = intermediates;
       }
 
       try {
@@ -273,3 +266,4 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
 };
 
 export default React.memo(LiveMap);
+
