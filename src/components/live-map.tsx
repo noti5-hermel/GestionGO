@@ -2,13 +2,14 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { GoogleMap, useJsApiLoader, DirectionsRenderer, MarkerF } from '@react-google-maps/api';
+import { GoogleMap, useJsApiLoader, Polyline, MarkerF } from '@react-google-maps/api';
+import { decode } from '@googlemaps/polyline-codec';
 
 /**
  * @file live-map.tsx
  * @description Componente de mapa basado en Google Maps.
- * Carga la API de Google Maps, muestra una ruta calculada por DirectionsService,
- * y/o marcadores de motoristas en tiempo real.
+ * Carga la API de Google Maps, calcula una ruta óptima usando la Routes API,
+ * y muestra marcadores en tiempo real.
  */
 
 // --- CONFIGURACIÓN DEL MAPA ---
@@ -24,29 +25,28 @@ interface LiveMapProps {
   viewMode: 'global' | 'route';
 }
 
-
 /**
  * Parsea una ubicación en formato WKT "POINT(lng lat)" o un objeto GeoJSON a un objeto LatLng de Google Maps.
  * @param locationData - La ubicación en formato WKT (string) o como objeto GeoJSON.
  * @returns Un objeto LatLng o null si el formato es inválido.
  */
 const parseWktToLatLng = (locationData: any): google.maps.LatLngLiteral | null => {
-  if (!locationData) return null;
+    if (!locationData) return null;
 
-  // Caso 1: Es un string en formato WKT
-  if (typeof locationData === 'string') {
-    const match = locationData.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
-    if (match) {
-      return { lng: parseFloat(match[1]), lat: parseFloat(match[2]) };
+    // Caso 1: Es un string en formato WKT
+    if (typeof locationData === 'string') {
+        const match = locationData.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
+        if (match) {
+            return { lng: parseFloat(match[1]), lat: parseFloat(match[2]) };
+        }
     }
-  }
 
-  // Caso 2: Es un objeto GeoJSON
-  if (typeof locationData === 'object' && locationData.type === 'Point' && Array.isArray(locationData.coordinates)) {
-    return { lng: locationData.coordinates[0], lat: locationData.coordinates[1] };
-  }
+    // Caso 2: Es un objeto GeoJSON
+    if (typeof locationData === 'object' && locationData.type === 'Point' && Array.isArray(locationData.coordinates)) {
+        return { lng: locationData.coordinates[0], lat: locationData.coordinates[1] };
+    }
 
-  return null;
+    return null;
 };
 
 
@@ -55,42 +55,88 @@ const parseWktToLatLng = (locationData: any): google.maps.LatLngLiteral | null =
  */
 const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode }: LiveMapProps) => {
   // --- ESTADOS ---
-  const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
+  const [routePath, setRoutePath] = useState<google.maps.LatLngLiteral[]>([]);
+  const [orderedWaypoints, setOrderedWaypoints] = useState<google.maps.LatLngLiteral[]>([]);
   const [map, setMap] = useState<google.maps.Map | null>(null);
-  
+
   // --- CARGA DE API ---
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "", // ¡IMPORTANTE! Añade tu clave aquí.
-    libraries: ['places'],
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
+    libraries: ['places', 'routes'], // 'routes' podría ser necesario para decodificar
   });
-
+  
   // --- LÓGICA DE CÁLCULO DE RUTA ---
   useEffect(() => {
     if (!isLoaded || viewMode !== 'route' || waypoints.length === 0) {
-      setDirections(null); // Limpia la ruta si cambiamos de modo o no hay waypoints.
+      setRoutePath([]);
+      setOrderedWaypoints([]);
       return;
     }
 
-    const directionsService = new google.maps.DirectionsService();
-    directionsService.route(
-      {
-        origin: origin,
-        destination: origin, // La ruta termina donde empieza.
-        waypoints: waypoints,
-        optimizeWaypoints: true,
-        travelMode: google.maps.TravelMode.DRIVING,
-      },
-      (result, status) => {
-        if (status === google.maps.DirectionsStatus.OK) {
-          setDirections(result);
-        } else {
-          console.error(`Error al obtener direcciones: ${status}`);
+    const fetchRoute = async () => {
+      const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
+      const url = 'https://routes.googleapis.com/directions/v2:computeRoutes';
+
+      const requestBody = {
+        origin: { location: { latLng: origin } },
+        destination: { location: { latLng: origin } },
+        intermediates: waypoints.map(wp => ({ location: { latLng: wp.location } })),
+        travelMode: 'DRIVE',
+        routingPreference: 'TRAFFIC_AWARE',
+        computeAlternativeRoutes: false,
+        routeModifiers: {
+          vehicleInfo: {
+            vehicleType: 'TWO_WHEELER',
+          },
+          avoidTolls: false,
+          avoidHighways: false,
+          avoidFerries: false,
+        },
+        languageCode: 'es-419',
+        units: 'METRIC'
+      };
+
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': API_KEY,
+            'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs'
+          }
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('Error fetching route from Routes API:', errorData);
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
+
+        const data = await response.json();
+        if (data.routes && data.routes.length > 0) {
+          const encodedPolyline = data.routes[0].polyline.encodedPolyline;
+          const decodedPath = decode(encodedPolyline, 5).map(([lat, lng]) => ({ lat, lng }));
+          setRoutePath(decodedPath);
+          
+           // Extraer el orden optimizado de los waypoints
+          const orderedLegs = data.routes[0].legs;
+          const optimizedWaypoints = orderedLegs.map((leg: any) => leg.endLocation.latLng);
+           // El último leg te lleva de vuelta al origen, así que lo quitamos si es el caso.
+          if (optimizedWaypoints.length > waypoints.length) {
+            optimizedWaypoints.pop();
+          }
+          setOrderedWaypoints(optimizedWaypoints);
+
+        }
+      } catch (error) {
+        console.error('Failed to fetch and decode route:', error);
       }
-    );
+    };
+
+    fetchRoute();
   }, [isLoaded, origin, waypoints, viewMode]);
-  
+
   const onMapLoad = useCallback((mapInstance: google.maps.Map) => {
     setMap(mapInstance);
   }, []);
@@ -98,14 +144,13 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
   const onMapUnmount = useCallback(() => {
     setMap(null);
   }, []);
-
-  // --- RENDERIZADO ---
+  
   if (loadError) {
     return (
         <div className="flex items-center justify-center h-full bg-red-100 text-red-700 p-4 text-center">
             <p>
                 <b>Error al cargar el mapa.</b><br/>
-                Asegúrate de que la variable `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` esté configurada correctamente en tu archivo `.env.local` y que la clave de API sea válida.
+                Asegúrate de que la variable `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` esté configurada correctamente en tu archivo `.env.local` y que la clave de API sea válida y tenga la "Routes API" habilitada.
             </p>
         </div>
     );
@@ -115,15 +160,15 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
     return <div className="flex items-center justify-center h-full">Cargando mapa...</div>;
   }
   
-  // --- ÍCONOS PERSONALIZADOS (SVG como string) ---
-  // Se definen aquí para asegurar que `window.google` exista.
+  // --- ÍCONOS PERSONALIZADOS ---
+  // Se definen dentro del componente para asegurar que 'google' exista.
   const truckIcon = (color: string) => ({
     path: 'M21 9V6a1 1 0 0 0-1-1h-2.1a3.98 3.98 0 0 0-7.8 0H4a1 1 0 0 0-1 1v3M2 19V9h19v10H2Zm0 0H1m1 0H3m17 0h1m-1 0h-1m-6-6a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z',
     fillColor: color,
     fillOpacity: 1,
     strokeWeight: 1,
     scale: 1.2,
-    anchor: new google.maps.Point(12, 12),
+    anchor: new window.google.maps.Point(12, 12),
   });
 
   const homeIcon = {
@@ -132,7 +177,7 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
     fillOpacity: 1,
     strokeWeight: 1,
     scale: 1.2,
-    anchor: new google.maps.Point(12, 24),
+    anchor: new window.google.maps.Point(12, 24),
   };
 
   const userIcon = {
@@ -141,7 +186,7 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
     fillOpacity: 1,
     strokeWeight: 1,
     scale: 1,
-    anchor: new google.maps.Point(12, 24),
+    anchor: new window.google.maps.Point(12, 24),
   };
 
   return (
@@ -156,10 +201,17 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
         streetViewControl: false,
       }}
     >
-      {viewMode === 'route' && directions && (
+      {viewMode === 'route' && routePath.length > 0 && (
         <>
-          {/* Renderiza la ruta calculada */}
-          <DirectionsRenderer directions={directions} options={{ suppressMarkers: true }} />
+          {/* Dibuja la polilínea de la ruta */}
+          <Polyline
+            path={routePath}
+            options={{
+              strokeColor: '#03A6A6',
+              strokeOpacity: 0.8,
+              strokeWeight: 6,
+            }}
+          />
 
           {/* Marcador del motorista específico de la ruta */}
           {motoristaLocation && (
@@ -170,29 +222,23 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
             />
           )}
 
-           {/* Marcador del punto de origen/destino */}
+          {/* Marcador del punto de origen/destino */}
           <MarkerF position={origin} title={origin.name} icon={homeIcon} />
 
           {/* Marcadores de clientes (waypoints) con números de orden */}
-          {directions.routes[0]?.waypoint_order.map((waypointIndex, orderIndex) => {
-            const waypoint = waypoints[waypointIndex];
-            if (!waypoint) return null;
-
-            return (
-              <MarkerF
-                key={`waypoint-${waypointIndex}`}
-                // @ts-ignore
-                position={waypoint.location}
-                icon={userIcon}
-                label={{
-                  text: String(orderIndex + 1), // El número de la parada (1, 2, 3...)
-                  color: "white",
-                  fontSize: "12px",
-                  fontWeight: "bold",
-                }}
-              />
-            )
-          })}
+          {orderedWaypoints.map((waypoint, index) => (
+            <MarkerF
+              key={`waypoint-${index}`}
+              position={waypoint}
+              icon={userIcon}
+              label={{
+                text: String(index + 1), // El número de la parada (1, 2, 3...)
+                color: "white",
+                fontSize: "12px",
+                fontWeight: "bold",
+              }}
+            />
+          ))}
         </>
       )}
 
