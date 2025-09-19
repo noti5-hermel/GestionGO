@@ -50,16 +50,33 @@ const LocationTracker = () => {
 
     const handleSuccess = async (position: GeolocationPosition) => {
       const { latitude, longitude } = position.coords;
-      const { error } = await supabase
+      const locationPoint = `POINT(${longitude} ${latitude})`;
+      const timestamp = new Date().toISOString();
+
+      // 1. Insertar en el historial de ubicaciones.
+      const { error: historyError } = await supabase
+        .from('location_history')
+        .insert({
+          id_motorista: session.id,
+          location: locationPoint,
+          timestamp: timestamp,
+        });
+
+      if (historyError) {
+        console.error("Error inserting into location_history:", historyError);
+      }
+
+      // 2. Actualizar la última ubicación conocida (upsert).
+      const { error: upsertError } = await supabase
         .from('locations_motoristas')
         .upsert({
           id_motorista: session.id,
-          location: `POINT(${longitude} ${latitude})`,
-          last_update: new Date().toISOString(),
+          location: locationPoint,
+          last_update: timestamp,
         }, { onConflict: 'id_motorista' });
 
-      if (error) {
-        console.error("Error updating location:", error);
+      if (upsertError) {
+        console.error("Error updating location:", upsertError);
       }
     };
 
@@ -91,6 +108,7 @@ const LocationTracker = () => {
 
   return null;
 };
+
 
 export default function AppLayout({
   children,

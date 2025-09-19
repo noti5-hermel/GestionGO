@@ -12,8 +12,8 @@ import { Label } from '@/components/ui/label';
 
 /**
  * @file live-map/page.tsx
- * @description Página que muestra un mapa con las geocercas de los clientes de un despacho específico
- * y traza una ruta entre ellas. Permite filtrar por fecha y luego por despacho.
+ * @description Página que muestra un mapa con la ruta planificada (geocercas),
+ * el recorrido real del motorista y su posición actual.
  */
 
 // --- TIPOS DE DATOS ---
@@ -43,6 +43,9 @@ type Route = {
   ruta_desc: string;
 };
 
+// Tipo para un punto del historial de ubicación.
+type LocationPoint = { lat: number; lng: number };
+
 // Carga dinámica del componente de mapa para evitar problemas con SSR.
 const LiveMap = dynamic(() => import('@/components/live-map'), {
   ssr: false,
@@ -57,6 +60,9 @@ const BODEGA_LOCATION = { lat: 13.725410116705362, lng: -89.21911777270175 };
 export default function LiveMapPage() {
   // --- ESTADOS ---
   const [customerGeofences, setCustomerGeofences] = useState<Customer[]>([]);
+  const [motoristaPath, setMotoristaPath] = useState<LocationPoint[]>([]);
+  const [motoristaLocation, setMotoristaLocation] = useState<LocationPoint | null>(null);
+
   const [allDespachos, setAllDespachos] = useState<Despacho[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [allRoutes, setAllRoutes] = useState<Route[]>([]);
@@ -67,7 +73,6 @@ export default function LiveMapPage() {
 
   // --- OBTENCIÓN DE DATOS ---
 
-  // Obtiene datos estáticos que no cambian frecuentemente (todos los despachos, usuarios, rutas).
   const fetchStaticData = useCallback(async () => {
     setLoading(true);
     const [despachosRes, usersRes, routesRes] = await Promise.all([
@@ -87,22 +92,27 @@ export default function LiveMapPage() {
     setLoading(false);
   }, [toast]);
 
-  // Se ejecuta una vez al montar el componente.
   useEffect(() => {
     fetchStaticData();
   }, [fetchStaticData]);
 
-  // Efecto que se dispara al cambiar el despacho seleccionado.
-  // Obtiene las geocercas y el estado de las facturas de los clientes para ese despacho.
   useEffect(() => {
-    const fetchCustomerDataForShipment = async () => {
+    const fetchShipmentData = async () => {
       if (!selectedDespachoId) {
         setCustomerGeofences([]);
+        setMotoristaPath([]);
+        setMotoristaLocation(null);
         return;
       }
       setLoading(true);
+      
+      const despacho = allDespachos.find(d => String(d.id_despacho) === selectedDespachoId);
+      if (!despacho) {
+        setLoading(false);
+        return;
+      }
 
-      // 1. Obtener los `id_factura` de 'facturacion_x_despacho' para el despacho seleccionado.
+      // --- 1. Obtener datos de las facturas y clientes (ruta planificada) ---
       const { data: facDespacho, error: facDespachoError } = await supabase
         .from('facturacion_x_despacho')
         .select('id_factura, state, comprobante')
@@ -110,79 +120,83 @@ export default function LiveMapPage() {
 
       if (facDespachoError) {
         toast({ title: "Error", description: "No se pudieron obtener las facturas del despacho.", variant: "destructive" });
-        setLoading(false);
-        return;
-      }
-      
-      const invoiceIds = facDespacho.map(item => item.id_factura);
-      if (invoiceIds.length === 0) {
-        setCustomerGeofences([]);
-        setLoading(false);
-        return;
-      }
-
-      // Crea un mapa para acceder fácilmente al estado de cada factura
-      const invoiceStatusMap = new Map(facDespacho.map(item => [item.id_factura, { state: item.state, comprobante: item.comprobante }]));
-
-      // 2. Obtener los `code_customer` de 'facturacion' para esas facturas.
-      const { data: facturacionData, error: facturacionError } = await supabase
-        .from('facturacion')
-        .select('id_factura, code_customer')
-        .in('id_factura', invoiceIds);
-        
-      if (facturacionError) {
-        toast({ title: "Error", description: "No se pudieron obtener los clientes de las facturas.", variant: "destructive" });
-        setLoading(false);
-        return;
-      }
-        
-      // Crea un mapa para relacionar `id_factura` con `code_customer`.
-      const invoiceCustomerMap = new Map(facturacionData.map(item => [item.id_factura, item.code_customer]));
-      const customerCodes = [...new Set(facturacionData.map(item => item.code_customer))];
-
-      // 3. Obtener los clientes con sus geocercas.
-      const { data: customersData, error: customersError } = await supabase
-        .from('customer')
-        .select('code_customer, customer_name, geocerca')
-        .in('code_customer', customerCodes)
-        .not('geocerca', 'is', null);
-      
-      if (customersError) {
-        toast({ title: "Error", description: "No se pudieron cargar las geocercas de los clientes.", variant: "destructive" });
       } else {
-        // 4. Enriquecer los datos del cliente con el estado de su factura en este despacho.
-        const enrichedCustomers = customersData.map(customer => {
-            // Encuentra la factura correspondiente a este cliente en este despacho.
-            const invoiceId = [...invoiceCustomerMap.entries()].find(([_, cCode]) => cCode === customer.code_customer)?.[0];
-            const status = invoiceId ? invoiceStatusMap.get(invoiceId) : { state: false, comprobante: null };
+        const invoiceIds = facDespacho.map(item => item.id_factura);
+        if (invoiceIds.length > 0) {
+          const invoiceStatusMap = new Map(facDespacho.map(item => [item.id_factura, { state: item.state, comprobante: item.comprobante }]));
 
-            return {
-                ...customer,
-                state: status?.state || false,
-                comprobante: status?.comprobante || null,
-            };
-        });
-        setCustomerGeofences(enrichedCustomers as Customer[]);
+          const { data: facturacionData, error: facturacionError } = await supabase.from('facturacion').select('id_factura, code_customer').in('id_factura', invoiceIds);
+          
+          if (facturacionData) {
+            const invoiceCustomerMap = new Map(facturacionData.map(item => [item.id_factura, item.code_customer]));
+            const customerCodes = [...new Set(facturacionData.map(item => item.code_customer))];
+
+            const { data: customersData, error: customersError } = await supabase.from('customer').select('code_customer, customer_name, geocerca').in('code_customer', customerCodes).not('geocerca', 'is', null);
+            
+            if (customersData) {
+              const enrichedCustomers = customersData.map(customer => {
+                  const invoiceId = [...invoiceCustomerMap.entries()].find(([_, cCode]) => cCode === customer.code_customer)?.[0];
+                  const status = invoiceId ? invoiceStatusMap.get(invoiceId) : { state: false, comprobante: null };
+                  return { ...customer, state: status?.state || false, comprobante: status?.comprobante || null };
+              });
+              setCustomerGeofences(enrichedCustomers as Customer[]);
+            }
+          }
+        } else {
+            setCustomerGeofences([]);
+        }
       }
+
+      // --- 2. Obtener el historial de ubicación del motorista (recorrido real) ---
+      const { data: historyData, error: historyError } = await supabase.rpc('get_location_history_by_day', {
+          p_id_motorista: despacho.id_motorista,
+          p_date: despacho.fecha_despacho
+      });
+
+      if (historyError) {
+        toast({ title: "Error", description: "No se pudo obtener el historial de ruta del motorista.", variant: "destructive" });
+        setMotoristaPath([]);
+      } else if (historyData) {
+        const path = historyData.map((p: any) => ({ lat: p.lat, lng: p.lng }));
+        setMotoristaPath(path);
+      }
+
+      // --- 3. Obtener la última ubicación conocida del motorista ---
+      const { data: lastLocationData, error: lastLocationError } = await supabase
+        .from('locations_motoristas')
+        .select('location')
+        .eq('id_motorista', despacho.id_motorista)
+        .single();
+      
+      if (lastLocationData && lastLocationData.location) {
+          const match = lastLocationData.location.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
+          if(match) {
+            setMotoristaLocation({ lat: parseFloat(match[2]), lng: parseFloat(match[1]) });
+          }
+      } else {
+        setMotoristaLocation(null);
+      }
+      
       setLoading(false);
     };
 
-    fetchCustomerDataForShipment();
-  }, [selectedDespachoId, toast]);
+    fetchShipmentData();
+  }, [selectedDespachoId, toast, allDespachos]);
   
   // --- FUNCIONES AUXILIARES ---
 
   const handleDateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedDate(event.target.value);
-    setSelectedDespachoId(''); // Resetea el despacho al cambiar la fecha.
-    setCustomerGeofences([]); // Limpia las geocercas del mapa.
+    setSelectedDespachoId('');
+    setCustomerGeofences([]);
+    setMotoristaPath([]);
+    setMotoristaLocation(null);
   };
 
   const handleShipmentChange = (despachoId: string) => {
     setSelectedDespachoId(despachoId);
   };
   
-  // Filtra los despachos que coinciden con la fecha seleccionada.
   const despachosDelDia = useMemo(() => {
     if (!selectedDate) return [];
     return allDespachos.filter(d => d.fecha_despacho === selectedDate);
@@ -196,7 +210,6 @@ export default function LiveMapPage() {
     return allUsers.find(u => u.id_user === userId)?.name || userId;
   }, [allUsers]);
 
-
   return (
     <Card className="h-full flex flex-col">
       <CardHeader>
@@ -204,7 +217,7 @@ export default function LiveMapPage() {
             <div>
               <CardTitle>Mapa de Rutas por Despacho</CardTitle>
               <CardDescription>
-                Seleccione una fecha y un despacho para visualizar la ruta y las geocercas de los clientes.
+                Visualice la ruta planificada (azul) y el recorrido real del motorista (naranja).
               </CardDescription>
             </div>
             <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
@@ -234,6 +247,8 @@ export default function LiveMapPage() {
         <LiveMap
           customers={customerGeofences}
           bodegaLocation={BODEGA_LOCATION}
+          motoristaPath={motoristaPath}
+          motoristaLocation={motoristaLocation}
           loading={loading}
           viewMode="route"
         />

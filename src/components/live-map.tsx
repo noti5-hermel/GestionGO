@@ -11,13 +11,14 @@ interface LiveMapProps {
     code_customer: string;
     customer_name: string;
     geocerca: any;
-    state: boolean; // Estado de pago de la factura
-    comprobante: string | null; // URL del comprobante
+    state: boolean;
+    comprobante: string | null;
   }[];
   bodegaLocation: { lat: number; lng: number };
+  motoristaPath: { lat: number; lng: number }[];
+  motoristaLocation: { lat: number; lng: number } | null;
   loading: boolean;
   viewMode: 'global' | 'route';
-  motoristas?: { id_motorista: string; name: string; location: any }[];
 }
 
 // --- CONFIGURACIÓN DEL MAPA ---
@@ -41,62 +42,56 @@ const mapOptions: google.maps.MapOptions = {
 };
 
 // --- FUNCIONES AUXILIARES ---
-
-/**
- * Parsea una geocerca (WKT o GeoJSON) y calcula su centroide.
- * @param geofenceData - El dato de la geocerca.
- * @returns Un objeto con lat y lng del centroide, o null si es inválido.
- */
 const parseGeofenceToCentroid = (geofenceData: any): google.maps.LatLngLiteral | null => {
-  if (!geofenceData) return null;
+    if (!geofenceData) return null;
 
-  let allPoints: { lng: number; lat: number }[] = [];
+    let allPoints: { lng: number; lat: number }[] = [];
 
-  const getPointsFromPolygonString = (polygonString: string): { lng: number; lat: number }[] => {
-    const coordsMatch = polygonString.match(/\(\((.*)\)\)/);
-    if (!coordsMatch || !coordsMatch[1]) return [];
-    return coordsMatch[1].split(',').map(pair => {
-      const [lng, lat] = pair.trim().split(' ').map(Number);
-      return { lng, lat };
-    }).filter(p => !isNaN(p.lng) && !isNaN(p.lat));
-  };
+    const getPointsFromPolygonString = (polygonString: string): { lng: number; lat: number }[] => {
+        const coordsMatch = polygonString.match(/\(\((.*)\)\)/);
+        if (!coordsMatch || !coordsMatch[1]) return [];
+        return coordsMatch[1].split(',').map(pair => {
+        const [lng, lat] = pair.trim().split(' ').map(Number);
+        return { lng, lat };
+        }).filter(p => !isNaN(p.lng) && !isNaN(p.lat));
+    };
 
-  if (typeof geofenceData === 'string') {
-    const wktString = geofenceData.toUpperCase();
-    if (wktString.startsWith('GEOMETRYCOLLECTION')) {
-      const polygonStrings = geofenceData.match(/POLYGON\s*\(\(.*?\)\)/gi) || [];
-      polygonStrings.forEach(polyStr => {
-        allPoints.push(...getPointsFromPolygonString(polyStr));
-      });
-    } else if (wktString.startsWith('POLYGON')) {
-      allPoints = getPointsFromPolygonString(geofenceData);
-    }
-  } else if (typeof geofenceData === 'object' && geofenceData.type) {
-    if (geofenceData.type === 'Polygon') {
-      allPoints = geofenceData.coordinates[0].map((p: number[]) => ({ lng: p[0], lat: p[1] }));
-    } else if (geofenceData.type === 'GeometryCollection') {
-      geofenceData.geometries.forEach((geom: any) => {
-        if (geom.type === 'Polygon') {
-          allPoints.push(...geom.coordinates[0].map((p: number[]) => ({ lng: p[0], lat: p[1] })));
+    if (typeof geofenceData === 'string') {
+        const wktString = geofenceData.toUpperCase();
+        if (wktString.startsWith('GEOMETRYCOLLECTION')) {
+        const polygonStrings = geofenceData.match(/POLYGON\s*\(\(.*?\)\)/gi) || [];
+        polygonStrings.forEach(polyStr => {
+            allPoints.push(...getPointsFromPolygonString(polyStr));
+        });
+        } else if (wktString.startsWith('POLYGON')) {
+        allPoints = getPointsFromPolygonString(geofenceData);
         }
-      });
+    } else if (typeof geofenceData === 'object' && geofenceData.type) {
+        if (geofenceData.type === 'Polygon') {
+        allPoints = geofenceData.coordinates[0].map((p: number[]) => ({ lng: p[0], lat: p[1] }));
+        } else if (geofenceData.type === 'GeometryCollection') {
+        geofenceData.geometries.forEach((geom: any) => {
+            if (geom.type === 'Polygon') {
+            allPoints.push(...geom.coordinates[0].map((p: number[]) => ({ lng: p[0], lat: p[1] })));
+            }
+        });
+        }
     }
-  }
 
-  if (allPoints.length === 0) return null;
+    if (allPoints.length === 0) return null;
 
-  const centroid = allPoints.reduce((acc, point) => ({
-    lng: acc.lng + point.lng,
-    lat: acc.lat + point.lat
-  }), { lng: 0, lat: 0 });
+    const centroid = allPoints.reduce((acc, point) => ({
+        lng: acc.lng + point.lng,
+        lat: acc.lat + point.lat
+    }), { lng: 0, lat: 0 });
 
-  return {
-    lng: centroid.lng / allPoints.length,
-    lat: centroid.lat / allPoints.length,
-  };
+    return {
+        lng: centroid.lng / allPoints.length,
+        lat: centroid.lat / allPoints.length,
+    };
 };
 
-const LiveMap = ({ customers, bodegaLocation, loading, viewMode }: LiveMapProps) => {
+const LiveMap = ({ customers, bodegaLocation, motoristaPath, motoristaLocation, loading, viewMode }: LiveMapProps) => {
   const [routePolyline, setRoutePolyline] = useState<google.maps.LatLngLiteral[]>([]);
   const [orderedWaypoints, setOrderedWaypoints] = useState<any[]>([]);
 
@@ -105,16 +100,12 @@ const LiveMap = ({ customers, bodegaLocation, loading, viewMode }: LiveMapProps)
     libraries: ['marker'],
   });
 
-  // Mapea clientes a waypoints con sus centroides calculados
   const waypoints = useMemo(() =>
     customers
       .map(customer => {
         const centroid = parseGeofenceToCentroid(customer.geocerca);
         if (!centroid) return null;
-        return {
-          customer, // Incluye toda la información del cliente
-          centroid
-        };
+        return { customer, centroid };
       })
       .filter((c): c is { customer: any; centroid: google.maps.LatLngLiteral } => c !== null),
     [customers]
@@ -159,8 +150,6 @@ const LiveMap = ({ customers, bodegaLocation, loading, viewMode }: LiveMapProps)
         requestBody.destination = toApiLatLng(bodegaLocation);
       }
       
-      console.log('JSON formato enviado:', JSON.stringify(requestBody, null, 2));
-
       const headers = {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": apiKey,
@@ -225,6 +214,16 @@ const LiveMap = ({ customers, bodegaLocation, loading, viewMode }: LiveMapProps)
       anchor: new google.maps.Point(12, 12),
   };
 
+  const motoristaIcon: google.maps.Icon = {
+    path: 'M19.9,13.75c-0.61,0-1.1,0.49-1.1,1.1s0.49,1.1,1.1,1.1s1.1-0.49,1.1-1.1S20.51,13.75,19.9,13.75z M6,13.75 c-0.61,0-1.1,0.49-1.1,1.1s0.49,1.1,1.1,1.1s1.1-0.49,1.1-1.1S6.61,13.75,6,13.75z M12.95,3c-0.83,0-1.5,0.67-1.5,1.5 c0,0.83,0.67,1.5,1.5,1.5s1.5-0.67,1.5-1.5C14.45,3.67,13.78,3,12.95,3z M19.45,4.01c-1.38,0-2.5,1.12-2.5,2.5 c0,0.58,0.2,1.1,0.52,1.5H8.52c0.32-0.4,0.52-0.92,0.52-1.5c0-1.38-1.12-2.5-2.5-2.5S4.04,5.13,4.04,6.51 c0,0.58,0.2,1.1,0.52,1.5h-0.5c-0.83,0-1.5,0.67-1.5,1.5v3c0,0.83,0.67,1.5,1.5,1.5h0.09c-0.33,0.44-0.54,0.98-0.54,1.58 c0,1.38,1.12,2.5,2.5,2.5s2.5-1.12,2.5-2.5c0-0.6-0.21-1.14-0.54-1.58h6.9c-0.33,0.44-0.54,0.98-0.54,1.58 c0,1.38,1.12,2.5,2.5,2.5s2.5-1.12,2.5-2.5c0-0.6-0.21-1.14-0.54-1.58H22.5c0.83,0,1.5-0.67,1.5-1.5v-3 c0-0.83-0.67-1.5-1.5-1.5h-0.5c0.32-0.4,0.52-0.92,0.52-1.5C21.95,5.13,20.83,4.01,19.45,4.01z',
+    fillColor: '#FF6F00',
+    fillOpacity: 1,
+    strokeWeight: 1,
+    strokeColor: '#FFFFFF',
+    scale: 1,
+    anchor: new google.maps.Point(12, 12),
+  };
+
   const createMarkerIcon = (isCompleted: boolean): google.maps.Icon => ({
     path: google.maps.SymbolPath.CIRCLE,
     scale: 8,
@@ -240,10 +239,19 @@ const LiveMap = ({ customers, bodegaLocation, loading, viewMode }: LiveMapProps)
       zoom={9}
       options={mapOptions}
     >
+      {/* Marcador de la bodega */}
       <MarkerF position={bodegaLocation} title="Bodega" icon={bodegaIcon} />
 
-      {routePolyline.length > 0 && <Polyline path={routePolyline} options={{ strokeColor: '#4285F4', strokeWeight: 5 }} />}
+      {/* Ruta Planificada */}
+      {routePolyline.length > 0 && <Polyline path={routePolyline} options={{ strokeColor: '#4285F4', strokeWeight: 5, zIndex: 1 }} />}
 
+      {/* Recorrido Real del Motorista */}
+      {motoristaPath.length > 0 && <Polyline path={motoristaPath} options={{ strokeColor: '#FF6F00', strokeWeight: 3, zIndex: 2 }} />}
+      
+      {/* Ubicación actual del motorista */}
+      {motoristaLocation && <MarkerF position={motoristaLocation} title="Motorista" icon={motoristaIcon} zIndex={100} />}
+
+      {/* Marcadores de clientes */}
       {orderedWaypoints.filter(Boolean).map((waypointData, index) => {
           const isCompleted = waypointData.customer.state || !!waypointData.customer.comprobante;
           return (
