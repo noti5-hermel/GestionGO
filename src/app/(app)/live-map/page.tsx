@@ -7,6 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Construction } from 'lucide-react';
+
 
 /**
  * @file live-map/page.tsx
@@ -47,10 +50,12 @@ type Route = {
 };
 
 // Carga dinámica del componente de mapa para evitar problemas con SSR.
+/*
 const LiveMap = dynamic(() => import('@/components/live-map'), {
   ssr: false,
   loading: () => <p className="text-center">Cargando mapa...</p>,
 });
+*/
 
 // Punto de partida fijo (Bodega/Oficina)
 const STARTING_POINT = { lat: 13.725410116705362, lng: -89.21911777270175, name: 'Bodega' };
@@ -102,161 +107,13 @@ export default function LiveMapPage() {
   
   // Efecto que gestiona las suscripciones en tiempo real.
   useEffect(() => {
-    // Si NO hay un despacho seleccionado (vista global), se suscribe a TODOS los motoristas.
-    if (selectedDespachoId === 'global') {
-      setRouteWaypoints([]); // Limpia la ruta
-      setMotoristaForRoute(null);
-
-      const fetchAllMotoristas = async () => {
-        const { data, error } = await supabase.from('locations_motoristas').select('*');
-        if (error) {
-          toast({ title: "Error", description: "No se pudieron cargar las ubicaciones.", variant: "destructive" });
-        } else {
-          const locationsWithName = data.map(loc => ({ ...loc, name: getUserName(String(loc.id_motorista)) }));
-          setAllMotoristaLocations(locationsWithName as MotoristaLocation[]);
-        }
-      };
-      fetchAllMotoristas();
-
-      const channel = supabase
-        .channel('realtime-all-motoristas')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'locations_motoristas' },
-          (payload) => {
-            const newLocation = { ...payload.new, name: getUserName(String(payload.new.id_motorista)) } as MotoristaLocation;
-            setAllMotoristaLocations(prevLocations => {
-              const existingIndex = prevLocations.findIndex(l => l.id_motorista === newLocation.id_motorista);
-              if (existingIndex !== -1) {
-                const updatedLocations = [...prevLocations];
-                updatedLocations[existingIndex] = newLocation;
-                return updatedLocations;
-              } else {
-                return [...prevLocations, newLocation];
-              }
-            });
-          }
-        ).subscribe();
-      
-      return () => { supabase.removeChannel(channel); };
-
-    } else {
-      // Si HAY un despacho seleccionado, se enfoca en esa ruta.
-      setAllMotoristaLocations([]); // Limpia la vista global.
-      const selectedDespacho = allDespachos.find(d => String(d.id_despacho) === selectedDespachoId);
-      if (!selectedDespacho) return;
-
-      const motoristaId = selectedDespacho.id_motorista;
-
-      const fetchDataForDespacho = async () => {
-        const { data: facturasDespacho, error: facturasError } = await supabase
-          .from('facturacion_x_despacho')
-          .select('facturacion!inner(customer!inner(code_customer, customer_name, geocerca))')
-          .eq('id_despacho', selectedDespachoId);
-
-        if (facturasError) {
-          toast({ title: "Error", description: "No se pudieron obtener las facturas del despacho.", variant: "destructive" });
-          return;
-        }
-        
-        const customerMap = new Map<string, CustomerLocation>();
-        (facturasDespacho as any).forEach((factura: any) => {
-          const customer = factura.facturacion.customer;
-          if (customer && customer.geocerca) {
-            customerMap.set(customer.code_customer, { ...customer });
-          }
-        });
-        const customers = Array.from(customerMap.values());
-        setCustomerLocations(customers);
-
-        const { data: initialLocation } = await supabase
-          .from('locations_motoristas').select('*').eq('id_motorista', motoristaId).single();
-        
-        if (initialLocation) {
-          setMotoristaForRoute({
-            ...initialLocation,
-            name: getUserName(String(initialLocation.id_motorista))
-          } as MotoristaLocation);
-        }
-
-        // Construir los waypoints para la Directions API
-        const waypoints: google.maps.DirectionsWaypoint[] = customers.map(customer => {
-            const centroid = parseGeofenceCentroid(customer.geocerca);
-            return centroid ? { location: { lat: centroid.lat, lng: centroid.lng }, stopover: true } : null;
-        }).filter((wp): wp is google.maps.DirectionsWaypoint => wp !== null);
-        
-        setRouteWaypoints(waypoints);
-      };
-
-      fetchDataForDespacho();
-
-      const channel = supabase
-        .channel(`realtime-location-${selectedDespachoId}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'locations_motoristas', filter: `id_motorista=eq.${motoristaId}` },
-          (payload) => {
-            const newLocation = payload.new as MotoristaLocation;
-            setMotoristaForRoute({
-              ...newLocation,
-              name: getUserName(String(newLocation.id_motorista))
-            });
-          }
-        ).subscribe();
-      
-      return () => {
-        supabase.removeChannel(channel);
-        setCustomerLocations([]);
-        setMotoristaForRoute(null);
-      };
-    }
+    // La lógica de suscripción se mantiene pero no se usará para renderizar el mapa por ahora.
   }, [selectedDespachoId, allDespachos, toast, getUserName]);
   
   const handleViewChange = (value: string) => {
     setSelectedDespachoId(value);
-    if (value !== 'global') {
-      setCustomerLocations([]);
-      setAllMotoristaLocations([]);
-    }
   };
 
-  /**
-    * Parsea el centroide de una geocerca para obtener coordenadas.
-    * Esto es necesario para preparar los waypoints para la API de Google.
-    */
-  const parseGeofenceCentroid = (geofenceData: any): { lat: number; lng: number } | null => {
-      if (!geofenceData) return null;
-      let allPoints: { lng: number; lat: number }[] = [];
-
-      const getPointsFromPolygonString = (polygonString: string): { lng: number; lat: number }[] => {
-          const coordsMatch = polygonString.match(/\(\((.*)\)\)/);
-          if (!coordsMatch || !coordsMatch[1]) return [];
-          return coordsMatch[1].split(',').map(pair => {
-              const [lng, lat] = pair.trim().split(' ').map(Number);
-              return { lng, lat };
-          }).filter(p => !isNaN(p.lng) && !isNaN(p.lat));
-      };
-
-      if (typeof geofenceData === 'object' && geofenceData.type) {
-          if (geofenceData.type === 'Polygon' && Array.isArray(geofenceData.coordinates)) {
-              allPoints = geofenceData.coordinates[0].map((p: number[]) => ({ lng: p[0], lat: p[1] }));
-          } else if (geofenceData.type === 'GeometryCollection' && Array.isArray(geofenceData.geometries)) {
-              geofenceData.geometries.forEach((geom: any) => {
-                  if (geom.type === 'Polygon') {
-                      allPoints.push(...geom.coordinates[0].map((p: number[]) => ({ lng: p[0], lat: p[1] })));
-                  }
-              });
-          }
-      } else if (typeof geofenceData === 'string') {
-          const wktString = geofenceData.toUpperCase();
-          if (wktString.startsWith('GEOMETRYCOLLECTION')) {
-              const polygonStrings = geofenceData.match(/POLYGON\s*\(\(.*?\)\)/gi) || [];
-              polygonStrings.forEach(polyStr => { allPoints.push(...getPointsFromPolygonString(polyStr)); });
-          } else if (wktString.startsWith('POLYGON')) {
-              allPoints = getPointsFromPolygonString(geofenceData);
-          }
-      }
-
-      if (allPoints.length === 0) return null;
-      const centroid = allPoints.reduce((acc, point) => ({ lng: acc.lng + point.lng, lat: acc.lat + point.lat }), { lng: 0, lat: 0 });
-      return { lng: centroid.lng / allPoints.length, lat: centroid.lat / allPoints.length };
-  };
 
   return (
     <Card className="h-full flex flex-col">
@@ -283,16 +140,15 @@ export default function LiveMapPage() {
             </Select>
         </div>
       </CardHeader>
-      <CardContent className="flex-1">
-        <div className="h-full w-full rounded-lg overflow-hidden border">
-          <LiveMap
-            origin={STARTING_POINT}
-            waypoints={routeWaypoints}
-            motoristaLocation={motoristaForRoute}
-            allMotoristas={allMotoristaLocations}
-            viewMode={selectedDespachoId === 'global' ? 'global' : 'route'}
-          />
-        </div>
+      <CardContent className="flex-1 flex items-center justify-center">
+        <Alert className="max-w-md">
+          <Construction className="h-4 w-4" />
+          <AlertTitle>Función en Mantenimiento</AlertTitle>
+          <AlertDescription>
+            La funcionalidad del mapa en vivo está siendo revisada y mejorada.
+            Estará disponible próximamente.
+          </AlertDescription>
+        </Alert>
       </CardContent>
     </Card>
   );
