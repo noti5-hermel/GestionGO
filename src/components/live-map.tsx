@@ -1,7 +1,7 @@
 
 'use client';
 
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import { Icon, LatLngExpression } from 'leaflet';
 import { Truck, Home, User } from 'lucide-react';
 import ReactDOMServer from 'react-dom/server';
@@ -22,6 +22,7 @@ type Point = {
 
 interface LiveMapProps {
   points: Point[];
+  routePath?: [number, number][];
 }
 
 /**
@@ -133,7 +134,7 @@ const getIconForPoint = (point: Point) => {
 /**
  * Componente funcional que renderiza el mapa y los marcadores.
  */
-const LiveMap = ({ points }: LiveMapProps) => {
+const LiveMap = ({ points, routePath }: LiveMapProps) => {
   const defaultPosition: LatLngExpression = [13.7942, -88.8965];
 
   // Filtra los puntos que tienen coordenadas válidas.
@@ -157,6 +158,10 @@ const LiveMap = ({ points }: LiveMapProps) => {
           </Popup>
         </Marker>
       ))}
+
+      {routePath && routePath.length > 1 && (
+        <Polyline pathOptions={{ color: 'blue' }} positions={routePath} />
+      )}
     </MapContainer>
   );
 };

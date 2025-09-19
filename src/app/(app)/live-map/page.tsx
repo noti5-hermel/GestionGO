@@ -67,6 +67,7 @@ export default function LiveMapPage() {
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [allRoutes, setAllRoutes] = useState<Route[]>([]);
   const [selectedDespachoId, setSelectedDespachoId] = useState<string>('global');
+  const [routePath, setRoutePath] = useState<[number, number][]>([]);
   const { toast } = useToast();
 
   const getRouteDescription = useCallback((routeId: string) => {
@@ -104,6 +105,7 @@ export default function LiveMapPage() {
   useEffect(() => {
     // Si NO hay un despacho seleccionado (vista global), se suscribe a TODOS los motoristas.
     if (selectedDespachoId === 'global') {
+      setRoutePath([]); // Limpia la ruta dibujada.
       // 1. Carga inicial de todas las ubicaciones de motoristas.
       const fetchAllMotoristas = async () => {
         const { data, error } = await supabase.from('locations_motoristas').select('*');
@@ -173,7 +175,8 @@ export default function LiveMapPage() {
             });
           }
         });
-        setCustomerLocations(Array.from(customerMap.values()));
+        const customers = Array.from(customerMap.values());
+        setCustomerLocations(customers);
 
         const { data: initialLocation, error: initialLocationError } = await supabase
           .from('locations_motoristas')
@@ -187,6 +190,42 @@ export default function LiveMapPage() {
             name: getUserName(String(initialLocation.id_motorista))
           } as MotoristaLocation]);
         }
+
+        // Construir la ruta para la polilínea
+        const path: [number, number][] = [];
+        path.push([STARTING_POINT.lat, STARTING_POINT.lon]); // Punto de inicio
+        
+        // Función para parsear la ubicación de los clientes
+        const parseCentroid = (geofenceData: any): [number, number] | null => {
+            try {
+                if (typeof geofenceData === 'string') {
+                    const match = geofenceData.match(/POLYGON\(\((.*?)\)\)/);
+                    if (!match) return null;
+                    const points = match[1].split(',').map(p => p.trim().split(' ').map(Number));
+                    const lat = points.reduce((sum, p) => sum + p[1], 0) / points.length;
+                    const lon = points.reduce((sum, p) => sum + p[0], 0) / points.length;
+                    return [lat, lon];
+                } else if (typeof geofenceData === 'object' && geofenceData.coordinates) {
+                    const points = geofenceData.coordinates[0];
+                    const lat = points.reduce((sum: number, p: number[]) => sum + p[1], 0) / points.length;
+                    const lon = points.reduce((sum: number, p: number[]) => sum + p[0], 0) / points.length;
+                    return [lat, lon];
+                }
+            } catch (e) {
+                return null;
+            }
+            return null;
+        };
+
+        customers.sort((a,b) => a.customer_name.localeCompare(b.customer_name)).forEach(customer => {
+            const centroid = parseCentroid(customer.geocerca);
+            if (centroid) {
+                path.push(centroid);
+            }
+        });
+
+        path.push([STARTING_POINT.lat, STARTING_POINT.lon]); // Regreso al punto de inicio
+        setRoutePath(path);
       };
 
       fetchDataForDespacho();
@@ -264,7 +303,7 @@ export default function LiveMapPage() {
       </CardHeader>
       <CardContent className="flex-1">
         <div className="h-full w-full rounded-lg overflow-hidden border">
-          <LiveMap points={allPoints} />
+          <LiveMap points={allPoints} routePath={routePath} />
         </div>
       </CardContent>
     </Card>
