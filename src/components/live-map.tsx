@@ -132,27 +132,31 @@ const LiveMap = ({ customers, bodegaLocation, loading, viewMode }: LiveMapProps)
         return;
       }
       
-      // Función para convertir nuestro formato {lat, lng} al formato de la API {latitude, longitude}
       const toApiLatLng = (latLng: google.maps.LatLngLiteral) => ({
         location: { latLng: { latitude: latLng.lat, longitude: latLng.lng } }
       });
       
-      const intermediates = waypoints.map(w => toApiLatLng(w.centroid));
-
       const requestBody: any = {
         travelMode: "DRIVE",
         routingPreference: "TRAFFIC_AWARE",
-        origin: toApiLatLng(bodegaLocation),
-        destination: toApiLatLng(bodegaLocation),
       };
 
-      if (intermediates.length > 0) {
-        requestBody.intermediates = intermediates;
-        requestBody.optimizeWaypointOrder = true;
+      let fieldMask = "routes.polyline.encodedPolyline";
+
+      if (waypoints.length === 1) {
+        requestBody.origin = toApiLatLng(bodegaLocation);
+        requestBody.destination = toApiLatLng(waypoints[0].centroid);
+      } else {
+        const intermediates = waypoints.map(w => toApiLatLng(w.centroid));
+        if (intermediates.length > 0) {
+            requestBody.intermediates = intermediates;
+            requestBody.optimizeWaypointOrder = true;
+            fieldMask += ",routes.optimizedIntermediateWaypointIndex";
+        }
+        requestBody.origin = toApiLatLng(bodegaLocation);
+        requestBody.destination = toApiLatLng(bodegaLocation);
       }
       
-      let fieldMask = "routes.polyline.encodedPolyline,routes.optimizedIntermediateWaypointIndex";
-
       console.log('JSON formato enviado:', JSON.stringify(requestBody, null, 2));
 
       const headers = {
@@ -230,7 +234,7 @@ const LiveMap = ({ customers, bodegaLocation, loading, viewMode }: LiveMapProps)
 
       {routePolyline.length > 0 && <Polyline path={routePolyline} options={{ strokeColor: '#4285F4', strokeWeight: 5 }} />}
 
-      {orderedWaypoints.map((waypointData, index) => {
+      {orderedWaypoints.filter(Boolean).map((waypointData, index) => {
           return (
             <MarkerF
               key={waypointData.customer.code_customer}
