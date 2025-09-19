@@ -19,22 +19,33 @@ const defaultCenter = { lat: 13.7942, lng: -88.8965 }; // Centro de El Salvador
 interface LiveMapProps {
   origin: { lat: number; lng: number, name: string };
   waypoints: google.maps.DirectionsWaypoint[];
-  motoristaLocation: { location: string; name?: string } | null;
-  allMotoristas: { location: string; name?: string; last_update?: string }[];
+  motoristaLocation: { location: string | { type: string, coordinates: number[] }; name?: string } | null;
+  allMotoristas: { location: string | { type: string, coordinates: number[] }; name?: string; last_update?: string }[];
   viewMode: 'global' | 'route';
 }
 
+
 /**
- * Parsea una ubicación en formato WKT "POINT(lng lat)" a un objeto LatLng de Google Maps.
- * @param locationString - La ubicación en formato WKT.
+ * Parsea una ubicación en formato WKT "POINT(lng lat)" o un objeto GeoJSON a un objeto LatLng de Google Maps.
+ * @param locationData - La ubicación en formato WKT (string) o como objeto GeoJSON.
  * @returns Un objeto LatLng o null si el formato es inválido.
  */
-const parseWktToLatLng = (locationString: string): google.maps.LatLngLiteral | null => {
-  if (!locationString) return null;
-  const match = locationString.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
-  if (match) {
-    return { lng: parseFloat(match[1]), lat: parseFloat(match[2]) };
+const parseWktToLatLng = (locationData: any): google.maps.LatLngLiteral | null => {
+  if (!locationData) return null;
+
+  // Caso 1: Es un string en formato WKT
+  if (typeof locationData === 'string') {
+    const match = locationData.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
+    if (match) {
+      return { lng: parseFloat(match[1]), lat: parseFloat(match[2]) };
+    }
   }
+
+  // Caso 2: Es un objeto GeoJSON
+  if (typeof locationData === 'object' && locationData.type === 'Point' && Array.isArray(locationData.coordinates)) {
+    return { lng: locationData.coordinates[0], lat: locationData.coordinates[1] };
+  }
+
   return null;
 };
 
