@@ -215,7 +215,7 @@ const LiveMap = ({ customers, bodegaLocation, motoristaPath, motoristaLocation, 
   };
 
   const motoristaIcon: google.maps.Icon = {
-    url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAACYSURBVHja7c0xAQAgDMCwgW/YI4S3hQeD4AEDBw7g5V52sJtnfG/f9/3fGxw4cODAgQMHDis4cODAgQMHDrYCDhw4cODAgcNKDhw4cODAgYPNgAOHDhw4cOCwwgMHDhw4cOBgK+DAgQMHbhw4cODAgQMHDis4cODAgQMHDhxsBRw4cODAgQMHn7YCDhw4cODAgcNKDv4Hb4QCbsJmCRUAAAAASUVORK5CYII=',
+    url: '/truck-icon.png',
     scaledSize: new google.maps.Size(40, 40),
     anchor: new google.maps.Point(20, 20),
   };
@@ -270,5 +270,3 @@ const LiveMap = ({ customers, bodegaLocation, motoristaPath, motoristaLocation, 
 };
 
 export default React.memo(LiveMap);
-
-    
