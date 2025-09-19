@@ -154,11 +154,13 @@ export default function LiveMapPage() {
       });
 
       if (historyError) {
-        toast({ title: "Error", description: "No se pudo obtener el historial de ruta del motorista.", variant: "destructive" });
+        console.warn("No se pudo obtener el historial de ruta del motorista:", historyError.message);
         setMotoristaPath([]);
       } else if (historyData) {
         const path = (historyData as any[]).map((p: any) => ({ lat: p.lat, lng: p.lng }));
         setMotoristaPath(path);
+      } else {
+        setMotoristaPath([]);
       }
 
       // --- 3. Obtener la última ubicación conocida del motorista ---
