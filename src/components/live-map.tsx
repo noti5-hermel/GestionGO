@@ -37,25 +37,50 @@ interface LiveMapProps {
 }
 
 /**
- * Parsea una geocerca en formato WKT (Well-Known Text) para obtener un array de coordenadas.
- * @param wkt - La geocerca en formato WKT (string) de un POLYGON.
+ * Parsea datos de geocerca (WKT o GeoJSON) para obtener un array de coordenadas.
+ * @param geofenceData - La geocerca en formato WKT (string) o como objeto GeoJSON.
  * @returns Un array de coordenadas [lat, lon], o un array vacío si el formato es inválido.
  */
-const parseWktPolygon = (wkt: string): LatLngExpression[] => {
-  if (!wkt || !wkt.toUpperCase().startsWith('POLYGON')) {
+const parseGeofenceToPolygon = (geofenceData: any): LatLngExpression[] => {
+    if (!geofenceData) {
+        return [];
+    }
+    
+    // Caso 1: Es un string en formato WKT (Well-Known Text)
+    if (typeof geofenceData === 'string') {
+        const wkt = geofenceData.trim().toUpperCase();
+        if (!wkt.startsWith('POLYGON')) {
+            return [];
+        }
+        try {
+            const coordPairs = wkt.match(/\(\((.*)\)\)/)?.[1].split(',') || [];
+            return coordPairs.map(pair => {
+                const [lon, lat] = pair.trim().split(' ').map(Number);
+                return [lat, lon] as LatLngExpression;
+            }).filter(p => !isNaN(p[0]) && !isNaN(p[1]));
+        } catch (error) {
+            console.error("Error parsing WKT polygon:", error);
+            return [];
+        }
+    }
+    
+    // Caso 2: Es un objeto GeoJSON
+    if (typeof geofenceData === 'object' && geofenceData.type === 'Polygon' && Array.isArray(geofenceData.coordinates)) {
+        try {
+            // En GeoJSON, las coordenadas son [lon, lat] y necesitamos [lat, lon] para Leaflet
+            const coordinateRing = geofenceData.coordinates[0];
+            if (!Array.isArray(coordinateRing)) return [];
+            return coordinateRing.map(p => [p[1], p[0]] as LatLngExpression)
+                .filter(p => !isNaN(p[0]) && !isNaN(p[1]));
+        } catch (error) {
+            console.error("Error parsing GeoJSON polygon:", error);
+            return [];
+        }
+    }
+    
     return [];
-  }
-  try {
-    const coordPairs = wkt.match(/\(([^)]+)\)/)?.[1].split(',') || [];
-    return coordPairs.map(pair => {
-      const [lon, lat] = pair.trim().split(' ').map(Number);
-      return [lat, lon] as LatLngExpression;
-    }).filter(p => !isNaN(p[0]) && !isNaN(p[1]));
-  } catch (error) {
-    console.error("Error parsing WKT polygon:", error);
-    return [];
-  }
 };
+
 
 /**
  * Calcula el centroide de un polígono.
@@ -82,7 +107,7 @@ const LiveMap = ({ customers, bodegaLocation, loading }: LiveMapProps) => {
 
     // 1. Procesa los clientes para obtener geocercas y centroides.
     const customerData = React.useMemo(() => customers.map(customer => {
-        const polygon = parseWktPolygon(customer.geocerca);
+        const polygon = parseGeofenceToPolygon(customer.geocerca);
         const centroid = getPolygonCentroid(polygon);
         return { ...customer, polygon, centroid };
     }).filter(c => c.polygon.length > 0 && c.centroid), [customers]);
@@ -93,7 +118,7 @@ const LiveMap = ({ customers, bodegaLocation, loading }: LiveMapProps) => {
         
         let remaining = [...customerData];
         const sorted: { centroid: LatLngExpression }[] = [];
-        let currentLocation = bodegaLocation;
+        let currentLocation: L.LatLngExpression = [bodegaLocation.lat, bodegaLocation.lng];
 
         while (remaining.length > 0) {
             let nearestIndex = -1;
@@ -111,7 +136,7 @@ const LiveMap = ({ customers, bodegaLocation, loading }: LiveMapProps) => {
             
             const nearestCustomer = remaining.splice(nearestIndex, 1)[0];
             sorted.push(nearestCustomer);
-            currentLocation = {lat: nearestCustomer.centroid![0], lng: nearestCustomer.centroid![1]};
+            currentLocation = nearestCustomer.centroid!;
         }
         return sorted.map(c => c.centroid!);
     }, [customerData, bodegaLocation]);
