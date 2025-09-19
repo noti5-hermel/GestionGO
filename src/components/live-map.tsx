@@ -1,29 +1,9 @@
 
 'use client';
 
-import React from 'react';
-import { MapContainer, TileLayer, Polygon, Polyline, Tooltip, Marker } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import L, { LatLngExpression } from 'leaflet';
-
-/**
- * @file live-map.tsx
- * @description Componente de mapa basado en react-leaflet para mostrar geocercas y una ruta.
- */
-
-// --- CONFIGURACIÓN DEL MAPA ---
-const defaultCenter: LatLngExpression = [13.7942, -88.8965]; // Centro de El Salvador
-
-// Corrige el problema de los íconos de marcadores por defecto en Leaflet con Webpack.
-const markerIcon = new L.Icon({
-    iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-    iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-    shadowSize: [41, 41],
-});
+import React, { useState, useEffect, useMemo } from 'react';
+import { GoogleMap, useJsApiLoader, MarkerF, Polyline, InfoWindow } from '@react-google-maps/api';
+import { decode } from '@googlemaps/polyline-codec';
 
 // --- TIPOS DE DATOS ---
 interface LiveMapProps {
@@ -34,155 +14,253 @@ interface LiveMapProps {
   }[];
   bodegaLocation: { lat: number; lng: number };
   loading: boolean;
+  viewMode: 'global' | 'route';
+  motoristas?: { id_motorista: string; name: string; location: any }[];
 }
 
-/**
- * Parsea datos de geocerca (WKT o GeoJSON) para obtener un array de coordenadas.
- * @param geofenceData - La geocerca en formato WKT (string) o como objeto GeoJSON.
- * @returns Un array de coordenadas [lat, lon], o un array vacío si el formato es inválido.
- */
-const parseGeofenceToPolygon = (geofenceData: any): LatLngExpression[] => {
-    if (!geofenceData) {
-        return [];
-    }
-    
-    // Caso 1: Es un string en formato WKT (Well-Known Text)
-    if (typeof geofenceData === 'string') {
-        const wkt = geofenceData.trim().toUpperCase();
-        if (!wkt.startsWith('POLYGON')) {
-            return [];
-        }
-        try {
-            const coordPairs = wkt.match(/\(\((.*)\)\)/)?.[1].split(',') || [];
-            return coordPairs.map(pair => {
-                const [lon, lat] = pair.trim().split(' ').map(Number);
-                return [lat, lon] as LatLngExpression;
-            }).filter(p => !isNaN(p[0]) && !isNaN(p[1]));
-        } catch (error) {
-            console.error("Error parsing WKT polygon:", error);
-            return [];
-        }
-    }
-    
-    // Caso 2: Es un objeto GeoJSON
-    if (typeof geofenceData === 'object' && geofenceData.type === 'Polygon' && Array.isArray(geofenceData.coordinates)) {
-        try {
-            // En GeoJSON, las coordenadas son [lon, lat] y necesitamos [lat, lon] para Leaflet
-            const coordinateRing = geofenceData.coordinates[0];
-            if (!Array.isArray(coordinateRing)) return [];
-            return coordinateRing.map(p => [p[1], p[0]] as LatLngExpression)
-                .filter(p => !isNaN(p[0]) && !isNaN(p[1]));
-        } catch (error) {
-            console.error("Error parsing GeoJSON polygon:", error);
-            return [];
-        }
-    }
-    
-    return [];
+interface Waypoint {
+  location: {
+    latLng: google.maps.LatLngLiteral;
+  };
+}
+
+// --- CONFIGURACIÓN DEL MAPA ---
+const mapContainerStyle = {
+  height: '100%',
+  width: '100%',
+  borderRadius: '0.5rem',
 };
 
-
-/**
- * Calcula el centroide de un polígono.
- * @param polygon - Un array de coordenadas que forman el polígono.
- * @returns El centroide como una coordenada [lat, lon].
- */
-const getPolygonCentroid = (polygon: LatLngExpression[]): LatLngExpression | null => {
-    if (polygon.length === 0) return null;
-    let latSum = 0;
-    let lonSum = 0;
-    polygon.forEach(p => {
-        if(Array.isArray(p)) {
-            latSum += p[0];
-            lonSum += p[1];
-        }
-    });
-    return [latSum / polygon.length, lonSum / polygon.length];
+const defaultCenter = {
+  lat: 13.7942,
+  lng: -88.8965, // Centro de El Salvador
 };
 
-/**
- * Componente principal del mapa.
- */
-const LiveMap = ({ customers, bodegaLocation, loading }: LiveMapProps) => {
+const mapOptions: google.maps.MapOptions = {
+  disableDefaultUI: true,
+  zoomControl: true,
+  mapTypeControl: false,
+  streetViewControl: false,
+  fullscreenControl: false,
+};
 
-    // 1. Procesa los clientes para obtener geocercas y centroides.
-    const customerData = React.useMemo(() => customers.map(customer => {
-        const polygon = parseGeofenceToPolygon(customer.geocerca);
-        const centroid = getPolygonCentroid(polygon);
-        return { ...customer, polygon, centroid };
-    }).filter(c => c.polygon.length > 0 && c.centroid), [customers]);
+// --- FUNCIONES AUXILIARES ---
 
-    // 2. Ordena los clientes para trazar una ruta lógica (algoritmo del vecino más cercano simplificado).
-    const sortedCustomerCentroids = React.useMemo(() => {
-        if (customerData.length === 0) return [];
-        
-        let remaining = [...customerData];
-        const sorted: { centroid: LatLngExpression }[] = [];
-        let currentLocation: L.LatLngExpression = [bodegaLocation.lat, bodegaLocation.lng];
+const parseGeofenceToCentroid = (geofenceData: any): google.maps.LatLngLiteral | null => {
+  if (!geofenceData) return null;
 
-        while (remaining.length > 0) {
-            let nearestIndex = -1;
-            let minDistance = Infinity;
+  let allPoints: { lng: number; lat: number }[] = [];
 
-            remaining.forEach((customer, index) => {
-                const customerLoc = customer.centroid!;
-                 // @ts-ignore
-                const distance = L.latLng(currentLocation).distanceTo(customerLoc);
-                if (distance < minDistance) {
-                    minDistance = distance;
-                    nearestIndex = index;
-                }
-            });
-            
-            const nearestCustomer = remaining.splice(nearestIndex, 1)[0];
-            sorted.push(nearestCustomer);
-            currentLocation = nearestCustomer.centroid!;
-        }
-        return sorted.map(c => c.centroid!);
-    }, [customerData, bodegaLocation]);
+  const getPointsFromPolygonString = (polygonString: string): { lng: number; lat: number }[] => {
+    const coordsMatch = polygonString.match(/\(\((.*)\)\)/);
+    if (!coordsMatch || !coordsMatch[1]) return [];
+    return coordsMatch[1].split(',').map(pair => {
+      const [lng, lat] = pair.trim().split(' ').map(Number);
+      return { lng, lat };
+    }).filter(p => !isNaN(lng) && !isNaN(lat));
+  };
 
-    // 3. Crea la polilínea de la ruta, desde la bodega, pasando por los clientes y volviendo.
-    const routePath: LatLngExpression[] = [
-        [bodegaLocation.lat, bodegaLocation.lng],
-        ...sortedCustomerCentroids,
-        [bodegaLocation.lat, bodegaLocation.lng]
-    ];
-    
-    // Si no hay clientes, no muestra el mapa, solo un mensaje.
-    if (customers.length === 0) {
-        return (
-             <div className="flex items-center justify-center h-full w-full bg-muted text-muted-foreground p-4 text-center rounded-lg">
-                <p>
-                    {loading ? 'Cargando datos del despacho...' : 'Por favor, seleccione un despacho para ver la ruta.'}
-                </p>
-            </div>
-        )
+  if (typeof geofenceData === 'string') {
+    const wktString = geofenceData.toUpperCase();
+    if (wktString.startsWith('GEOMETRYCOLLECTION')) {
+      const polygonStrings = geofenceData.match(/POLYGON\s*\(\(.*?\)\)/gi) || [];
+      polygonStrings.forEach(polyStr => {
+        allPoints.push(...getPointsFromPolygonString(polyStr));
+      });
+    } else if (wktString.startsWith('POLYGON')) {
+      allPoints = getPointsFromPolygonString(geofenceData);
     }
+  } else if (typeof geofenceData === 'object' && geofenceData.type) {
+    if (geofenceData.type === 'Polygon') {
+      allPoints = geofenceData.coordinates[0].map((p: number[]) => ({ lng: p[0], lat: p[1] }));
+    } else if (geofenceData.type === 'GeometryCollection') {
+      geofenceData.geometries.forEach((geom: any) => {
+        if (geom.type === 'Polygon') {
+          allPoints.push(...geom.coordinates[0].map((p: number[]) => ({ lng: p[0], lat: p[1] })));
+        }
+      });
+    }
+  }
+
+  if (allPoints.length === 0) return null;
+
+  const centroid = allPoints.reduce((acc, point) => ({
+    lng: acc.lng + point.lng,
+    lat: acc.lat + point.lat
+  }), { lng: 0, lat: 0 });
+
+  return {
+    lng: centroid.lng / allPoints.length,
+    lat: centroid.lat / allPoints.length,
+  };
+};
+
+const LiveMap = ({ customers, bodegaLocation, loading, viewMode }: LiveMapProps) => {
+  const [routePolyline, setRoutePolyline] = useState<google.maps.LatLngLiteral[]>([]);
+  const [orderedWaypoints, setOrderedWaypoints] = useState<any[]>([]);
+
+  const { isLoaded, loadError } = useJsApiLoader({
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
+    libraries: ['marker'],
+  });
+
+  const waypoints = useMemo(() =>
+    customers
+      .map(customer => ({
+        ...customer,
+        centroid: parseGeofenceToCentroid(customer.geocerca)
+      }))
+      .filter(customer => customer.centroid)
+      .map(customer => ({
+        location: { latLng: customer.centroid! }
+      })),
+    [customers]
+  );
+
+  useEffect(() => {
+    if (!isLoaded || waypoints.length === 0 || viewMode !== 'route') {
+      setRoutePolyline([]);
+      setOrderedWaypoints([]);
+      return;
+    }
+
+    const fetchRoute = async () => {
+      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+      if (!apiKey) {
+        console.error("Google Maps API key is not set.");
+        return;
+      }
+
+      const headers = {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask": "routes.polyline.encodedPolyline,routes.waypointOrder",
+      };
+
+      let origin: Waypoint;
+      let destination: Waypoint;
+      let intermediates: Waypoint[] = [];
+      let optimize = false;
+      
+      const bodegaWaypoint = { location: { latLng: bodegaLocation } };
+
+      if (waypoints.length === 1) {
+        origin = bodegaWaypoint;
+        destination = waypoints[0];
+      } else {
+        origin = bodegaWaypoint;
+        destination = bodegaWaypoint;
+        intermediates = waypoints;
+        optimize = true;
+      }
+      
+      const requestBody: any = {
+        origin,
+        destination,
+        travelMode: "DRIVE",
+        routingPreference: "TRAFFIC_AWARE",
+      };
+
+      if (intermediates.length > 0) {
+        requestBody.intermediates = intermediates;
+        requestBody.optimizeWaypointOrder = optimize;
+      }
+
+
+      try {
+        const response = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
+          method: "POST",
+          headers,
+          body: JSON.stringify(requestBody),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Error fetching route from Routes API:', errorText);
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (data.routes && data.routes.length > 0) {
+          const polyline = data.routes[0].polyline.encodedPolyline;
+          const decodedPath = decode(polyline);
+          setRoutePolyline(decodedPath.map(([lat, lng]) => ({ lat, lng })));
+          
+          const waypointOrder = data.routes[0].waypointOrder || [];
+          const originalWaypoints = requestBody.intermediates || [requestBody.destination];
+
+          const sortedWaypoints = waypointOrder.map((index: number) => originalWaypoints[index]);
+          if(waypoints.length === 1) {
+             setOrderedWaypoints(originalWaypoints);
+          } else {
+             setOrderedWaypoints(sortedWaypoints);
+          }
+
+        }
+      } catch (error) {
+        console.error("Failed to fetch Google route:", error);
+      }
+    };
+
+    fetchRoute();
+  }, [isLoaded, waypoints, bodegaLocation, viewMode]);
+
+  if (loadError) return <div className="p-4 text-center text-red-500">Error al cargar el mapa. Verifica tu API Key.</div>;
+  if (!isLoaded) return <div className="p-4 text-center">Cargando mapa...</div>;
+  if (!customers.length && viewMode === 'route') {
+    return (
+      <div className="flex items-center justify-center h-full w-full bg-muted text-muted-foreground p-4 text-center rounded-lg">
+        <p>{loading ? 'Cargando datos del despacho...' : 'Por favor, seleccione un despacho para ver la ruta.'}</p>
+      </div>
+    );
+  }
+
+  const truckIcon: google.maps.Icon = {
+      path: 'M21.92,10.62,19,9.36V6a1,1,0,0,0-1-1H3a1,1,0,0,0-1,1V17a1,1,0,0,0,1,1H4.37a2.5,2.5,0,0,0,4.26,0H15.37a2.5,2.5,0,0,0,4.26,0H21a1,1,0,0,0,1-1V12.27A2,2,0,0,0,21.92,10.62ZM6.5,19A1.5,1.5,0,1,1,8,17.5,1.5,1.5,0,0,1,6.5,19Zm11,0A1.5,1.5,0,1,1,19,17.5,1.5,1.5,0,0,1,17.5,19ZM20,15H18V11.23l3-1.55V15Z',
+      fillColor: '#4285F4',
+      fillOpacity: 1,
+      strokeWeight: 0,
+      scale: 1.2,
+      anchor: new google.maps.Point(12, 12),
+  };
+
+  const homeIcon: google.maps.Icon = {
+      path: 'm12 5.69 5 4.5V18h-2v-6H9v6H7v-7.81l5-4.5M12 3 2 12h3v8h6v-6h2v6h6v-8h3L12 3z',
+      fillColor: '#34A853',
+      fillOpacity: 1,
+      strokeWeight: 0,
+      scale: 1.2,
+      anchor: new google.maps.Point(12, 12),
+  };
 
   return (
-    <MapContainer center={defaultCenter} zoom={9} style={{ height: '100%', width: '100%' }} scrollWheelZoom={true}>
-      <TileLayer
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-      />
-      
-      {/* Marcador para la bodega */}
-      <Marker position={[bodegaLocation.lat, bodegaLocation.lng]} icon={markerIcon}>
-        <Tooltip permanent>Bodega</Tooltip>
-      </Marker>
+    <GoogleMap
+      mapContainerStyle={mapContainerStyle}
+      center={defaultCenter}
+      zoom={9}
+      options={mapOptions}
+    >
+      <MarkerF position={bodegaLocation} title="Bodega" icon={homeIcon} />
 
-      {/* Dibuja las geocercas de los clientes */}
-      {customerData.map(customer => (
-        <Polygon key={customer.code_customer} positions={customer.polygon}>
-          <Tooltip>{customer.customer_name}</Tooltip>
-        </Polygon>
-      ))}
+      {routePolyline.length > 0 && <Polyline path={routePolyline} options={{ strokeColor: '#4285F4', strokeWeight: 5 }} />}
 
-      {/* Dibuja la ruta que conecta los centroides */}
-      {routePath.length > 1 && (
-        <Polyline pathOptions={{ color: 'blue' }} positions={routePath} />
-      )}
-    </MapContainer>
+      {orderedWaypoints.map((waypoint, index) => {
+          const customer = customers.find(c => c.centroid?.lat === waypoint.location.latLng.lat && c.centroid?.lng === waypoint.location.latLng.lng);
+          return (
+            <MarkerF
+              key={index}
+              position={waypoint.location.latLng}
+              label={{
+                text: `${index + 1}`,
+                color: 'white',
+                fontWeight: 'bold',
+              }}
+              title={customer?.customer_name}
+            />
+          )
+      })}
+    </GoogleMap>
   );
 };
 

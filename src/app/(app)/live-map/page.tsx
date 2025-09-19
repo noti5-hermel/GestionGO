@@ -216,6 +216,7 @@ export default function LiveMapPage() {
           customers={customerGeofences}
           bodegaLocation={BODEGA_LOCATION}
           loading={loading}
+          viewMode="route"
         />
       </CardContent>
     </Card>
