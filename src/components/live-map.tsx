@@ -63,7 +63,7 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
-    libraries: ['places', 'routes'], // 'routes' podría ser necesario para decodificar
+    libraries: ['routes'],
   });
   
   // --- LÓGICA DE CÁLCULO DE RUTA ---
@@ -78,10 +78,22 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
       const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
       const url = 'https://routes.googleapis.com/directions/v2:computeRoutes';
 
+      let destination;
+      let intermediates = [];
+
+      // Si hay más de un punto, es un viaje de ida y vuelta.
+      // Si solo hay uno, es un viaje de ida al cliente.
+      if (waypoints.length > 1) {
+        destination = { location: { latLng: origin } }; // Volver al origen
+        intermediates = waypoints.map(wp => ({ location: { latLng: wp.location } }));
+      } else {
+        destination = { location: { latLng: waypoints[0].location } };
+      }
+
       const requestBody = {
         origin: { location: { latLng: origin } },
-        destination: { location: { latLng: origin } },
-        intermediates: waypoints.map(wp => ({ location: { latLng: wp.location } })),
+        destination,
+        intermediates,
         travelMode: 'DRIVE',
         routingPreference: 'TRAFFIC_AWARE',
         computeAlternativeRoutes: false,
@@ -103,7 +115,7 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
           headers: {
             'Content-Type': 'application/json',
             'X-Goog-Api-Key': API_KEY,
-            'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs'
+            'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs,routes.waypointOrder'
           }
         });
 
@@ -115,19 +127,19 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
 
         const data = await response.json();
         if (data.routes && data.routes.length > 0) {
-          const encodedPolyline = data.routes[0].polyline.encodedPolyline;
+          const route = data.routes[0];
+          const encodedPolyline = route.polyline.encodedPolyline;
           const decodedPath = decode(encodedPolyline, 5).map(([lat, lng]) => ({ lat, lng }));
           setRoutePath(decodedPath);
           
-           // Extraer el orden optimizado de los waypoints
-          const orderedLegs = data.routes[0].legs;
-          const optimizedWaypoints = orderedLegs.map((leg: any) => leg.endLocation.latLng);
-           // El último leg te lleva de vuelta al origen, así que lo quitamos si es el caso.
-          if (optimizedWaypoints.length > waypoints.length) {
-            optimizedWaypoints.pop();
+          let optimizedWaypoints: google.maps.LatLngLiteral[] = [];
+          if (route.waypointOrder) {
+              const originalWaypoints = intermediates.length > 0 ? intermediates : [destination];
+              optimizedWaypoints = route.waypointOrder.map((index: number) => originalWaypoints[index].location.latLng);
+          } else if (waypoints.length > 0) {
+              optimizedWaypoints = waypoints.map(wp => wp.location as google.maps.LatLngLiteral);
           }
           setOrderedWaypoints(optimizedWaypoints);
-
         }
       } catch (error) {
         console.error('Failed to fetch and decode route:', error);
@@ -160,8 +172,6 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
     return <div className="flex items-center justify-center h-full">Cargando mapa...</div>;
   }
   
-  // --- ÍCONOS PERSONALIZADOS ---
-  // Se definen dentro del componente para asegurar que 'google' exista.
   const truckIcon = (color: string) => ({
     path: 'M21 9V6a1 1 0 0 0-1-1h-2.1a3.98 3.98 0 0 0-7.8 0H4a1 1 0 0 0-1 1v3M2 19V9h19v10H2Zm0 0H1m1 0H3m17 0h1m-1 0h-1m-6-6a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z',
     fillColor: color,
@@ -203,7 +213,6 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
     >
       {viewMode === 'route' && routePath.length > 0 && (
         <>
-          {/* Dibuja la polilínea de la ruta */}
           <Polyline
             path={routePath}
             options={{
@@ -213,7 +222,6 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
             }}
           />
 
-          {/* Marcador del motorista específico de la ruta */}
           {motoristaLocation && (
             <MarkerF
               position={parseWktToLatLng(motoristaLocation.location)!}
@@ -222,17 +230,15 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
             />
           )}
 
-          {/* Marcador del punto de origen/destino */}
           <MarkerF position={origin} title={origin.name} icon={homeIcon} />
 
-          {/* Marcadores de clientes (waypoints) con números de orden */}
           {orderedWaypoints.map((waypoint, index) => (
             <MarkerF
               key={`waypoint-${index}`}
               position={waypoint}
               icon={userIcon}
               label={{
-                text: String(index + 1), // El número de la parada (1, 2, 3...)
+                text: String(index + 1),
                 color: "white",
                 fontSize: "12px",
                 fontWeight: "bold",
