@@ -3,7 +3,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { GoogleMap, useJsApiLoader, DirectionsRenderer, MarkerF } from '@react-google-maps/api';
-import { Truck, Home, User } from 'lucide-react';
 
 /**
  * @file live-map.tsx
@@ -18,7 +17,7 @@ const defaultCenter = { lat: 13.7942, lng: -88.8965 }; // Centro de El Salvador
 
 // --- TIPOS DE DATOS ---
 interface LiveMapProps {
-  origin: { lat: number; lng: number };
+  origin: { lat: number; lng: number, name: string };
   waypoints: google.maps.DirectionsWaypoint[];
   motoristaLocation: { location: string; name?: string } | null;
   allMotoristas: { location: string; name?: string; last_update?: string }[];
@@ -37,34 +36,6 @@ const parseWktToLatLng = (locationString: string): google.maps.LatLngLiteral | n
     return { lng: parseFloat(match[1]), lat: parseFloat(match[2]) };
   }
   return null;
-};
-
-// --- ÍCONOS PERSONALIZADOS (SVG como string) ---
-const truckIcon = (color: string) => ({
-  path: 'M21 9V6a1 1 0 0 0-1-1h-2.1a3.98 3.98 0 0 0-7.8 0H4a1 1 0 0 0-1 1v3M2 19V9h19v10H2Zm0 0H1m1 0H3m17 0h1m-1 0h-1m-6-6a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z',
-  fillColor: color,
-  fillOpacity: 1,
-  strokeWeight: 1,
-  scale: 1.2,
-  anchor: new google.maps.Point(12, 12),
-});
-
-const homeIcon = {
-  path: 'm3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
-  fillColor: '#c7342a',
-  fillOpacity: 1,
-  strokeWeight: 1,
-  scale: 1.2,
-  anchor: new google.maps.Point(12, 24),
-};
-
-const userIcon = {
-  path: 'M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2m8-10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z',
-  fillColor: '#2a9d8f',
-  fillOpacity: 1,
-  strokeWeight: 1,
-  scale: 1,
-  anchor: new google.maps.Point(12, 24),
 };
 
 
@@ -132,6 +103,35 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
   if (!isLoaded) {
     return <div className="flex items-center justify-center h-full">Cargando mapa...</div>;
   }
+  
+  // --- ÍCONOS PERSONALIZADOS (SVG como string) ---
+  // Se definen aquí para asegurar que `window.google` exista.
+  const truckIcon = (color: string) => ({
+    path: 'M21 9V6a1 1 0 0 0-1-1h-2.1a3.98 3.98 0 0 0-7.8 0H4a1 1 0 0 0-1 1v3M2 19V9h19v10H2Zm0 0H1m1 0H3m17 0h1m-1 0h-1m-6-6a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z',
+    fillColor: color,
+    fillOpacity: 1,
+    strokeWeight: 1,
+    scale: 1.2,
+    anchor: new google.maps.Point(12, 12),
+  });
+
+  const homeIcon = {
+    path: 'm3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+    fillColor: '#c7342a',
+    fillOpacity: 1,
+    strokeWeight: 1,
+    scale: 1.2,
+    anchor: new google.maps.Point(12, 24),
+  };
+
+  const userIcon = {
+    path: 'M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2m8-10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z',
+    fillColor: '#2a9d8f',
+    fillOpacity: 1,
+    strokeWeight: 1,
+    scale: 1,
+    anchor: new google.maps.Point(12, 24),
+  };
 
   return (
     <GoogleMap
@@ -160,7 +160,7 @@ const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode
           )}
 
            {/* Marcador del punto de origen/destino */}
-          <MarkerF position={origin} title="Bodega" icon={homeIcon} />
+          <MarkerF position={origin} title={origin.name} icon={homeIcon} />
 
           {/* Marcadores de clientes (waypoints) */}
           {waypoints.map((wp, index) => (
