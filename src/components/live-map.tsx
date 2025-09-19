@@ -1,169 +1,193 @@
 
 'use client';
 
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
-import { Icon, LatLngExpression } from 'leaflet';
+import React, { useState, useEffect, useCallback } from 'react';
+import { GoogleMap, useJsApiLoader, DirectionsRenderer, MarkerF } from '@react-google-maps/api';
 import { Truck, Home, User } from 'lucide-react';
-import ReactDOMServer from 'react-dom/server';
 
 /**
  * @file live-map.tsx
- * @description Componente que renderiza el mapa de Leaflet y los marcadores para un despacho.
- * Muestra el punto de partida, los clientes y la ubicación en vivo del motorista.
+ * @description Componente de mapa basado en Google Maps.
+ * Carga la API de Google Maps, muestra una ruta calculada por DirectionsService,
+ * y/o marcadores de motoristas en tiempo real.
  */
 
-// Tipos de datos para este componente.
-type Point = {
-  location: any;
-  name?: string;
-  type: 'motorista' | 'customer' | 'start';
-  last_update?: string;
-};
+// --- CONFIGURACIÓN DEL MAPA ---
+const containerStyle = { width: '100%', height: '100%' };
+const defaultCenter = { lat: 13.7942, lng: -88.8965 }; // Centro de El Salvador
 
+// --- TIPOS DE DATOS ---
 interface LiveMapProps {
-  points: Point[];
-  routePath?: [number, number][];
+  origin: { lat: number; lng: number };
+  waypoints: google.maps.DirectionsWaypoint[];
+  motoristaLocation: { location: string; name?: string } | null;
+  allMotoristas: { location: string; name?: string; last_update?: string }[];
+  viewMode: 'global' | 'route';
 }
 
 /**
- * Parsea una geocerca para obtener su centroide.
- * Admite formatos WKT (string) para POLYGON y GEOMETRYCOLLECTION, y objetos GeoJSON.
+ * Parsea una ubicación en formato WKT "POINT(lng lat)" a un objeto LatLng de Google Maps.
+ * @param locationString - La ubicación en formato WKT.
+ * @returns Un objeto LatLng o null si el formato es inválido.
  */
-const parseGeofenceCentroid = (geofenceData: any): { lat: string; lon: string } | null => {
-    if (!geofenceData) return null;
-
-    let allPoints: { lon: number; lat: number }[] = [];
-
-    const getPointsFromPolygonString = (polygonString: string): { lon: number; lat: number }[] => {
-        const coordsMatch = polygonString.match(/\(\((.*)\)\)/);
-        if (!coordsMatch || !coordsMatch[1]) return [];
-        
-        return coordsMatch[1].split(',').map(pair => {
-            const [lon, lat] = pair.trim().split(' ').map(Number);
-            return { lon, lat };
-        }).filter(p => !isNaN(p.lon) && !isNaN(p.lat));
-    };
-
-    if (typeof geofenceData === 'object' && geofenceData.type) {
-        if (geofenceData.type === 'Polygon' && Array.isArray(geofenceData.coordinates)) {
-            const coordinateRing = geofenceData.coordinates[0];
-            if (Array.isArray(coordinateRing)) {
-                allPoints = coordinateRing.map((p: number[]) => ({ lon: p[0], lat: p[1] }))
-                    .filter(p => !isNaN(p.lon) && !isNaN(p.lat));
-            }
-        }
-        else if (geofenceData.type === 'GeometryCollection' && Array.isArray(geofenceData.geometries)) {
-             geofenceData.geometries.forEach((geom: any) => {
-                if (geom.type === 'Polygon' && Array.isArray(geom.coordinates)) {
-                    const coordinateRing = geom.coordinates[0];
-                    if(Array.isArray(coordinateRing)) {
-                        const points = coordinateRing.map((p: number[]) => ({ lon: p[0], lat: p[1] }))
-                            .filter(p => !isNaN(p.lon) && !isNaN(p.lat));
-                        allPoints.push(...points);
-                    }
-                }
-            });
-        }
-    } else if (typeof geofenceData === 'string') {
-        const wktString = geofenceData.toUpperCase();
-        if (wktString.startsWith('GEOMETRYCOLLECTION')) {
-            const polygonStrings = geofenceData.match(/POLYGON\s*\(\(.*?\)\)/gi) || [];
-            polygonStrings.forEach(polyStr => {
-                allPoints.push(...getPointsFromPolygonString(polyStr));
-            });
-        } else if (wktString.startsWith('POLYGON')) {
-            allPoints = getPointsFromPolygonString(geofenceData);
-        }
-    }
-
-    if (allPoints.length === 0) return null;
-
-    const centroid = allPoints.reduce((acc, point) => ({ lon: acc.lon + point.lon, lat: acc.lat + point.lat }), { lon: 0, lat: 0 });
-    return {
-        lon: String(centroid.lon / allPoints.length),
-        lat: String(centroid.lat / allPoints.length)
-    };
-};
-
-/**
- * Parsea el valor de ubicación de la base de datos para obtener coordenadas [lat, lon].
- * Puede manejar formato de string WKT "POINT(lon lat)" o formato de objeto GeoJSON.
- */
-const parseLocation = (point: Point): [number, number] | null => {
-  const locationData = point.location;
-  if (point.type === 'customer') {
-    const centroid = parseGeofenceCentroid(point.location);
-    if(centroid) return [parseFloat(centroid.lat), parseFloat(centroid.lon)];
+const parseWktToLatLng = (locationString: string): google.maps.LatLngLiteral | null => {
+  if (!locationString) return null;
+  const match = locationString.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
+  if (match) {
+    return { lng: parseFloat(match[1]), lat: parseFloat(match[2]) };
   }
-  
-  if (typeof locationData === 'object' && locationData !== null && locationData.type === 'Point' && Array.isArray(locationData.coordinates)) {
-    const [lon, lat] = locationData.coordinates;
-    if (typeof lon === 'number' && typeof lat === 'number') {
-      return [lat, lon];
-    }
-  }
-
-  if (typeof locationData === 'string') {
-    const match = locationData.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
-    if (match) {
-      return [parseFloat(match[2]), parseFloat(match[1])];
-    }
-  }
-
   return null;
 };
 
-// Generador de íconos personalizados
-const createIcon = (icon: React.ReactElement) => new Icon({
-  iconUrl: `data:image/svg+xml;base64,${btoa(ReactDOMServer.renderToString(icon))}`,
-  iconSize: [32, 32],
-  iconAnchor: [16, 32],
-  popupAnchor: [0, -32],
+// --- ÍCONOS PERSONALIZADOS (SVG como string) ---
+const truckIcon = (color: string) => ({
+  path: 'M21 9V6a1 1 0 0 0-1-1h-2.1a3.98 3.98 0 0 0-7.8 0H4a1 1 0 0 0-1 1v3M2 19V9h19v10H2Zm0 0H1m1 0H3m17 0h1m-1 0h-1m-6-6a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z',
+  fillColor: color,
+  fillOpacity: 1,
+  strokeWeight: 1,
+  scale: 1.2,
+  anchor: new google.maps.Point(12, 12),
 });
 
-const icons = {
-  motorista: createIcon(<Truck className="text-primary" fill="#fff" size={32} />),
-  customer: createIcon(<User className="text-green-600" fill="#fff" size={32} />),
-  start: createIcon(<Home className="text-red-600" fill="#fff" size={32} />),
+const homeIcon = {
+  path: 'm3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+  fillColor: '#c7342a',
+  fillOpacity: 1,
+  strokeWeight: 1,
+  scale: 1.2,
+  anchor: new google.maps.Point(12, 24),
 };
 
-const getIconForPoint = (point: Point) => {
-  return icons[point.type] || icons.customer;
+const userIcon = {
+  path: 'M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2m8-10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z',
+  fillColor: '#2a9d8f',
+  fillOpacity: 1,
+  strokeWeight: 1,
+  scale: 1,
+  anchor: new google.maps.Point(12, 24),
 };
+
 
 /**
- * Componente funcional que renderiza el mapa y los marcadores.
+ * Componente principal del mapa.
  */
-const LiveMap = ({ points, routePath }: LiveMapProps) => {
-  const defaultPosition: LatLngExpression = [13.7942, -88.8965];
-
-  // Filtra los puntos que tienen coordenadas válidas.
-  const validPoints = points.map((p, index) => ({ ...p, position: parseLocation(p), id: index })).filter(p => p.position);
+const LiveMap = ({ origin, waypoints, motoristaLocation, allMotoristas, viewMode }: LiveMapProps) => {
+  // --- ESTADOS ---
+  const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
+  const [map, setMap] = useState<google.maps.Map | null>(null);
   
-  // Centra el mapa en el motorista si está disponible, si no, usa la posición por defecto.
-  const mapCenter = validPoints.find(p => p.type === 'motorista')?.position || defaultPosition;
+  // --- CARGA DE API ---
+  const { isLoaded, loadError } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "", // ¡IMPORTANTE! Añade tu clave aquí.
+    libraries: ['places'],
+  });
+
+  // --- LÓGICA DE CÁLCULO DE RUTA ---
+  useEffect(() => {
+    if (!isLoaded || viewMode !== 'route' || waypoints.length === 0) {
+      setDirections(null); // Limpia la ruta si cambiamos de modo o no hay waypoints.
+      return;
+    }
+
+    const directionsService = new google.maps.DirectionsService();
+    directionsService.route(
+      {
+        origin: origin,
+        destination: origin, // La ruta termina donde empieza.
+        waypoints: waypoints,
+        optimizeWaypoints: true,
+        travelMode: google.maps.TravelMode.DRIVING,
+      },
+      (result, status) => {
+        if (status === google.maps.DirectionsStatus.OK) {
+          setDirections(result);
+        } else {
+          console.error(`Error al obtener direcciones: ${status}`);
+        }
+      }
+    );
+  }, [isLoaded, origin, waypoints, viewMode]);
+  
+  const onMapLoad = useCallback((mapInstance: google.maps.Map) => {
+    setMap(mapInstance);
+  }, []);
+
+  const onMapUnmount = useCallback(() => {
+    setMap(null);
+  }, []);
+
+  // --- RENDERIZADO ---
+  if (loadError) {
+    return (
+        <div className="flex items-center justify-center h-full bg-red-100 text-red-700 p-4 text-center">
+            <p>
+                <b>Error al cargar el mapa.</b><br/>
+                Asegúrate de que la variable `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` esté configurada correctamente en tu archivo `.env.local` y que la clave de API sea válida.
+            </p>
+        </div>
+    );
+  }
+
+  if (!isLoaded) {
+    return <div className="flex items-center justify-center h-full">Cargando mapa...</div>;
+  }
 
   return (
-    <MapContainer center={mapCenter} zoom={13} style={{ height: '100%', width: '100%' }}>
-      <TileLayer
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-      />
-      
-      {validPoints.map(point => (
-        <Marker key={`${point.type}-${point.id}`} position={point.position!} icon={getIconForPoint(point)}>
-          <Popup>
-            <strong>{point.name}</strong>
-            {point.last_update && <><br />Última actualización: {new Date(point.last_update).toLocaleString()}</>}
-          </Popup>
-        </Marker>
-      ))}
+    <GoogleMap
+      mapContainerStyle={containerStyle}
+      center={defaultCenter}
+      zoom={10}
+      onLoad={onMapLoad}
+      onUnmount={onMapUnmount}
+      options={{
+        mapTypeControl: false,
+        streetViewControl: false,
+      }}
+    >
+      {viewMode === 'route' && directions && (
+        <>
+          {/* Renderiza la ruta calculada */}
+          <DirectionsRenderer directions={directions} options={{ suppressMarkers: true }} />
 
-      {routePath && routePath.length > 1 && (
-        <Polyline pathOptions={{ color: 'blue' }} positions={routePath} />
+          {/* Marcador del motorista específico de la ruta */}
+          {motoristaLocation && (
+            <MarkerF
+              position={parseWktToLatLng(motoristaLocation.location)!}
+              title={motoristaLocation.name}
+              icon={truckIcon('#03A6A6')}
+            />
+          )}
+
+           {/* Marcador del punto de origen/destino */}
+          <MarkerF position={origin} title="Bodega" icon={homeIcon} />
+
+          {/* Marcadores de clientes (waypoints) */}
+          {waypoints.map((wp, index) => (
+             <MarkerF 
+                key={index}
+                // @ts-ignore - La API de Google permite un LatLngLiteral aquí.
+                position={wp.location}
+                icon={userIcon} 
+             />
+          ))}
+        </>
       )}
-    </MapContainer>
+
+      {viewMode === 'global' && allMotoristas.map((motorista, index) => {
+        const position = parseWktToLatLng(motorista.location);
+        if (!position) return null;
+        return (
+          <MarkerF
+            key={`motorista-${index}`}
+            position={position}
+            title={motorista.name}
+            icon={truckIcon('#04BFAD')}
+          />
+        );
+      })}
+    </GoogleMap>
   );
 };
 
-export default LiveMap;
+export default React.memo(LiveMap);
