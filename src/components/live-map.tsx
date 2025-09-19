@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { GoogleMap, useJsApiLoader, MarkerF, Polyline, InfoWindow } from '@react-google-maps/api';
+import { GoogleMap, useJsApiLoader, MarkerF, Polyline } from '@react-google-maps/api';
 import { decode } from '@googlemaps/polyline-codec';
 
 // --- TIPOS DE DATOS ---
@@ -46,6 +46,11 @@ const mapOptions: google.maps.MapOptions = {
 
 // --- FUNCIONES AUXILIARES ---
 
+/**
+ * Parsea una geocerca (WKT o GeoJSON) y calcula su centroide.
+ * @param geofenceData - El dato de la geocerca.
+ * @returns Un objeto con lat y lng del centroide, o null si es inválido.
+ */
 const parseGeofenceToCentroid = (geofenceData: any): google.maps.LatLngLiteral | null => {
   if (!geofenceData) return null;
 
@@ -57,7 +62,7 @@ const parseGeofenceToCentroid = (geofenceData: any): google.maps.LatLngLiteral |
     return coordsMatch[1].split(',').map(pair => {
       const [lng, lat] = pair.trim().split(' ').map(Number);
       return { lng, lat };
-    }).filter(p => !isNaN(lng) && !isNaN(lat));
+    }).filter(p => !isNaN(p.lng) && !isNaN(p.lat));
   };
 
   if (typeof geofenceData === 'string') {
@@ -104,16 +109,18 @@ const LiveMap = ({ customers, bodegaLocation, loading, viewMode }: LiveMapProps)
     libraries: ['marker'],
   });
 
+  // Mapea clientes a waypoints con sus centroides calculados
   const waypoints = useMemo(() =>
     customers
-      .map(customer => ({
-        ...customer,
-        centroid: parseGeofenceToCentroid(customer.geocerca)
-      }))
-      .filter(customer => customer.centroid)
-      .map(customer => ({
-        location: { latLng: customer.centroid! }
-      })),
+      .map(customer => {
+        const centroid = parseGeofenceToCentroid(customer.geocerca);
+        if (!centroid) return null;
+        return {
+          customer,
+          waypoint: { location: { latLng: centroid } }
+        };
+      })
+      .filter((c): c is { customer: any; waypoint: Waypoint } => c !== null),
     [customers]
   );
 
@@ -130,28 +137,22 @@ const LiveMap = ({ customers, bodegaLocation, loading, viewMode }: LiveMapProps)
         console.error("Google Maps API key is not set.");
         return;
       }
-
-      const headers = {
-        "Content-Type": "application/json",
-        "X-Goog-Api-Key": apiKey,
-        "X-Goog-FieldMask": "routes.polyline.encodedPolyline,routes.waypointOrder",
-      };
-
-      let origin: Waypoint;
-      let destination: Waypoint;
-      let intermediates: Waypoint[] = [];
-      let optimize = false;
       
       const bodegaWaypoint = { location: { latLng: bodegaLocation } };
+      let origin: Waypoint, destination: Waypoint, intermediates: Waypoint[];
+      let optimize = false;
+      let fieldMask = "routes.polyline.encodedPolyline";
 
       if (waypoints.length === 1) {
         origin = bodegaWaypoint;
-        destination = waypoints[0];
+        destination = waypoints[0].waypoint;
+        intermediates = [];
       } else {
         origin = bodegaWaypoint;
         destination = bodegaWaypoint;
-        intermediates = waypoints;
+        intermediates = waypoints.map(w => w.waypoint);
         optimize = true;
+        fieldMask += ",routes.waypointOrder";
       }
       
       const requestBody: any = {
@@ -166,6 +167,11 @@ const LiveMap = ({ customers, bodegaLocation, loading, viewMode }: LiveMapProps)
         requestBody.optimizeWaypointOrder = optimize;
       }
 
+      const headers = {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask": fieldMask,
+      };
 
       try {
         const response = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
@@ -187,16 +193,13 @@ const LiveMap = ({ customers, bodegaLocation, loading, viewMode }: LiveMapProps)
           const decodedPath = decode(polyline);
           setRoutePolyline(decodedPath.map(([lat, lng]) => ({ lat, lng })));
           
-          const waypointOrder = data.routes[0].waypointOrder || [];
-          const originalWaypoints = requestBody.intermediates || [requestBody.destination];
-
-          const sortedWaypoints = waypointOrder.map((index: number) => originalWaypoints[index]);
-          if(waypoints.length === 1) {
-             setOrderedWaypoints(originalWaypoints);
+          if (data.routes[0].waypointOrder) {
+            const waypointOrder: number[] = data.routes[0].waypointOrder;
+            const sortedWaypoints = waypointOrder.map(index => waypoints[index]);
+            setOrderedWaypoints(sortedWaypoints);
           } else {
-             setOrderedWaypoints(sortedWaypoints);
+            setOrderedWaypoints(waypoints); // Para el caso de un solo destino
           }
-
         }
       } catch (error) {
         console.error("Failed to fetch Google route:", error);
@@ -207,23 +210,17 @@ const LiveMap = ({ customers, bodegaLocation, loading, viewMode }: LiveMapProps)
   }, [isLoaded, waypoints, bodegaLocation, viewMode]);
 
   if (loadError) return <div className="p-4 text-center text-red-500">Error al cargar el mapa. Verifica tu API Key.</div>;
-  if (!isLoaded) return <div className="p-4 text-center">Cargando mapa...</div>;
-  if (!customers.length && viewMode === 'route') {
+  if (!isLoaded) return <div className="p-4 text-center">Cargando API de Google Maps...</div>;
+  if (viewMode === 'route' && !customers.length && !loading) {
     return (
       <div className="flex items-center justify-center h-full w-full bg-muted text-muted-foreground p-4 text-center rounded-lg">
-        <p>{loading ? 'Cargando datos del despacho...' : 'Por favor, seleccione un despacho para ver la ruta.'}</p>
+        <p>Por favor, seleccione un despacho para ver la ruta.</p>
       </div>
     );
   }
-
-  const truckIcon: google.maps.Icon = {
-      path: 'M21.92,10.62,19,9.36V6a1,1,0,0,0-1-1H3a1,1,0,0,0-1,1V17a1,1,0,0,0,1,1H4.37a2.5,2.5,0,0,0,4.26,0H15.37a2.5,2.5,0,0,0,4.26,0H21a1,1,0,0,0,1-1V12.27A2,2,0,0,0,21.92,10.62ZM6.5,19A1.5,1.5,0,1,1,8,17.5,1.5,1.5,0,0,1,6.5,19Zm11,0A1.5,1.5,0,1,1,19,17.5,1.5,1.5,0,0,1,17.5,19ZM20,15H18V11.23l3-1.55V15Z',
-      fillColor: '#4285F4',
-      fillOpacity: 1,
-      strokeWeight: 0,
-      scale: 1.2,
-      anchor: new google.maps.Point(12, 12),
-  };
+   if (loading) {
+    return <div className="flex items-center justify-center h-full w-full bg-muted text-muted-foreground p-4 text-center rounded-lg"><p>Cargando datos del despacho...</p></div>;
+  }
 
   const homeIcon: google.maps.Icon = {
       path: 'm12 5.69 5 4.5V18h-2v-6H9v6H7v-7.81l5-4.5M12 3 2 12h3v8h6v-6h2v6h6v-8h3L12 3z',
@@ -245,18 +242,17 @@ const LiveMap = ({ customers, bodegaLocation, loading, viewMode }: LiveMapProps)
 
       {routePolyline.length > 0 && <Polyline path={routePolyline} options={{ strokeColor: '#4285F4', strokeWeight: 5 }} />}
 
-      {orderedWaypoints.map((waypoint, index) => {
-          const customer = customers.find(c => c.centroid?.lat === waypoint.location.latLng.lat && c.centroid?.lng === waypoint.location.latLng.lng);
+      {orderedWaypoints.map((waypointData, index) => {
           return (
             <MarkerF
-              key={index}
-              position={waypoint.location.latLng}
+              key={waypointData.customer.code_customer}
+              position={waypointData.waypoint.location.latLng}
               label={{
                 text: `${index + 1}`,
                 color: 'white',
                 fontWeight: 'bold',
               }}
-              title={customer?.customer_name}
+              title={waypointData.customer.customer_name}
             />
           )
       })}
