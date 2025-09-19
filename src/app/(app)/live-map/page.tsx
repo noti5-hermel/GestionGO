@@ -243,10 +243,10 @@ export default function LiveMapPage() {
               </CardDescription>
             </div>
              <Select value={selectedDespachoId} onValueChange={handleViewChange}>
-                <SelectTrigger className="w-full md:w-[400px]">
+                <SelectTrigger className="w-full md:w-[400px] z-[1000]">
                     <SelectValue placeholder="Vista Global (todos los motoristas)" />
                 </SelectTrigger>
-                <SelectContent className="z-50">
+                <SelectContent className="z-[1000]">
                      <SelectItem value="global">Vista Global (todos los motoristas)</SelectItem>
                     {allDespachos.map(d => (
                         <SelectItem key={d.id_despacho} value={String(d.id_despacho)}>
