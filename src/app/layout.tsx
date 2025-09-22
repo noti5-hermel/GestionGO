@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster"
 export const metadata: Metadata = {
   title: 'GestiónGo',
   description: 'Aplicación de gestión',
+  manifest: '/manifest.json',
 };
 
 export default function RootLayout({
@@ -18,6 +19,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet" />
+        <meta name="theme-color" content="#03A6A6" />
       </head>
       <body className="font-body antialiased">
         {children}

@@ -1,0 +1,21 @@
+{
+  "name": "GestiónGo",
+  "short_name": "GestiónGo",
+  "description": "Aplicación de gestión integral para clientes, facturación y despachos.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F2F2F2",
+  "theme_color": "#03A6A6",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

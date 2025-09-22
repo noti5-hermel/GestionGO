@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button"
 import { LogOut } from 'lucide-react'
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
+import { InstallButton } from '@/components/ui/install-button';
 
 // Definir un tipo para la sesión del usuario
 interface UserSession {
@@ -210,7 +211,7 @@ export default function AppLayout({
           {/* Botón para desplegar el menú en vista móvil. Siempre visible. */}
           <SidebarTrigger className="flex md:hidden" />
           <div className="flex-1 text-right">
-            
+             <InstallButton />
           </div>
         </header>
         <main className="flex-1 overflow-auto p-4 md:p-6">
