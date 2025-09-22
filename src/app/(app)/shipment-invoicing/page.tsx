@@ -663,7 +663,10 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
                                 </TableCell>
                                 <TableCell>{invoice.id_factura}</TableCell>
                                 <TableCell>{String(invoice.reference_number)}</TableCell>
-                                <TableCell>{invoice.customer_name}</TableCell>
+                                <TableCell>
+                                  {invoice.customer_name}
+                                  {invoice.geocerca === null && <span className="text-muted-foreground text-xs ml-2">(Sin geocerca)</span>}
+                                </TableCell>
                                 <TableCell>${invoice.grand_total.toFixed(2)}</TableCell>
                               </TableRow>
                             ))
