@@ -1,5 +1,4 @@
 
-
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from "react"
@@ -101,6 +100,119 @@ const StatusBadge = ({ checked, text }: { checked: boolean, text: string }) => {
         </div>
     )
 }
+
+/**
+ * Componente para renderizar una tabla de facturas para una categoría específica.
+ */
+const InvoicesTable = ({ 
+  invoiceList, 
+  title, 
+  description, 
+  handleOpenImageModal, 
+  handleEditInvoice,
+  openCameraDialog,
+  verifyingLocationInvoiceId
+}: { 
+  invoiceList: ShipmentInvoice[], 
+  title: string, 
+  description: string,
+  handleOpenImageModal: (imageUrl: string) => void,
+  handleEditInvoice: (invoice: ShipmentInvoice) => void,
+  openCameraDialog: (invoice: ShipmentInvoice) => void,
+  verifyingLocationInvoiceId: number | null
+}) => {
+  const getStatusLabel = (status: boolean) => status ? "Pagado" : "Pendiente";
+  const getBadgeVariant = (status: boolean) => status ? "default" : "secondary";
+  const formatDateTime = (dateString: string | null) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>No. Factura</TableHead>
+              <TableHead>Nombre del Cliente</TableHead>
+              <TableHead>Geocerca</TableHead>
+              <TableHead>Comprobante</TableHead>
+              <TableHead>Fecha Entrega</TableHead>
+              <TableHead>Total Factura</TableHead>
+              <TableHead>Forma de Pago</TableHead>
+              <TableHead>Monto Pagado</TableHead>
+              <TableHead>Estado</TableHead>
+              <TableHead className="text-right">Acciones</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {invoiceList.length > 0 ? invoiceList.map((invoice) => (
+              <TableRow key={invoice.id_fac_desp}>
+                <TableCell className="font-medium">{String(invoice.reference_number || invoice.id_factura)}</TableCell>
+                <TableCell>{invoice.customer_name || 'N/A'}</TableCell>
+                <TableCell>
+                    <Badge variant={invoice.geocerca ? 'default' : 'outline'}>
+                      {invoice.geocerca ? 'Sí' : 'No'}
+                    </Badge>
+                </TableCell>
+                <TableCell>
+                    {invoice.comprobante ? (
+                      <button onClick={() => handleOpenImageModal(invoice.comprobante)}>
+                        <Image
+                            src={invoice.comprobante}
+                            alt={`Comprobante de ${invoice.id_factura}`}
+                            width={60}
+                            height={60}
+                            className="h-16 w-16 rounded-md object-cover"
+                        />
+                      </button>
+                    ) : (
+                      <span className="text-muted-foreground">N/A</span>
+                    )}
+                </TableCell>
+                <TableCell>{formatDateTime(invoice.fecha_entrega)}</TableCell>
+                <TableCell>${(invoice.grand_total ?? 0).toFixed(2)}</TableCell>
+                <TableCell>{invoice.forma_pago}</TableCell>
+                <TableCell>${invoice.monto.toFixed(2)}</TableCell>
+                <TableCell>
+                  <Badge variant={getBadgeVariant(invoice.state)}>
+                    {getStatusLabel(invoice.state)}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex justify-end items-center gap-2">
+                    <Button variant="ghost" size="icon" onClick={() => handleEditInvoice(invoice)} disabled={verifyingLocationInvoiceId === invoice.id_fac_desp}>
+                      {verifyingLocationInvoiceId === invoice.id_fac_desp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => openCameraDialog(invoice)} disabled={verifyingLocationInvoiceId === invoice.id_fac_desp}>
+                       {verifyingLocationInvoiceId === invoice.id_fac_desp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            )) : (
+              <TableRow>
+                  <TableCell colSpan={10} className="text-center">No hay facturas en esta categoría.</TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </CardContent>
+      <CardFooter>
+          <div className="text-xs text-muted-foreground">
+              Mostrando <strong>{invoiceList.length}</strong> de <strong>{invoiceList.length}</strong> facturas.
+          </div>
+      </CardFooter>
+    </Card>
+  );
+}
+
 
 /**
  * Componente principal de la página de detalle de despacho.
@@ -570,16 +682,9 @@ export default function ShipmentDetailPage() {
   };
   const getRouteDescription = (routeId: string) => routes.find(route => String(route.id_ruta) === String(routeId))?.ruta_desc || routeId
   const getUserName = (userId: string) => users.find(user => String(user.id_user) === String(userId))?.name || userId
-  const getStatusLabel = (status: boolean) => status ? "Pagado" : "Pendiente"
-  const getBadgeVariant = (status: boolean) => status ? "default" : "secondary"
   const formatDate = (dateString: string) => {
     const date = new Date(`${dateString}T00:00:00Z`);
     return date.toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
-  };
-  const formatDateTime = (dateString: string | null) => {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
   };
   const handleGeneratePdf = () => {
     if (shipment) {
@@ -615,90 +720,6 @@ export default function ShipmentDetailPage() {
     return <p>Despacho no encontrado.</p>
   }
   
-  /** Renderiza una tabla de facturas para una categoría específica. */
-  const renderInvoicesTable = (invoiceList: ShipmentInvoice[], title: string, description: string) => (
-    <Card className="mt-6">
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>No. Factura</TableHead>
-              <TableHead>Nombre del Cliente</TableHead>
-              <TableHead>Geocerca</TableHead>
-              <TableHead>Comprobante</TableHead>
-              <TableHead>Fecha Entrega</TableHead>
-              <TableHead>Total Factura</TableHead>
-              <TableHead>Forma de Pago</TableHead>
-              <TableHead>Monto Pagado</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {invoiceList.length > 0 ? invoiceList.map((invoice) => (
-              <TableRow key={invoice.id_fac_desp}>
-                <TableCell className="font-medium">{String(invoice.reference_number || invoice.id_factura)}</TableCell>
-                <TableCell>{invoice.customer_name || 'N/A'}</TableCell>
-                <TableCell>
-                  <Badge variant={invoice.geocerca ? 'default' : 'outline'}>
-                    {invoice.geocerca ? 'Sí' : 'No'}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                    {invoice.comprobante ? (
-                      <button onClick={() => handleOpenImageModal(invoice.comprobante)}>
-                        <Image
-                            src={invoice.comprobante}
-                            alt={`Comprobante de ${invoice.id_factura}`}
-                            width={60}
-                            height={60}
-                            className="h-16 w-16 rounded-md object-cover"
-                        />
-                      </button>
-                    ) : (
-                      <span className="text-muted-foreground">N/A</span>
-                    )}
-                </TableCell>
-                <TableCell>{formatDateTime(invoice.fecha_entrega)}</TableCell>
-                <TableCell>${(invoice.grand_total ?? 0).toFixed(2)}</TableCell>
-                <TableCell>{invoice.forma_pago}</TableCell>
-                <TableCell>${invoice.monto.toFixed(2)}</TableCell>
-                <TableCell>
-                  <Badge variant={getBadgeVariant(invoice.state)}>
-                    {getStatusLabel(invoice.state)}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end items-center gap-2">
-                    <Button variant="ghost" size="icon" onClick={() => handleEditInvoice(invoice)} disabled={verifyingLocationInvoiceId === invoice.id_fac_desp}>
-                      {verifyingLocationInvoiceId === invoice.id_fac_desp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => openCameraDialog(invoice)} disabled={verifyingLocationInvoiceId === invoice.id_fac_desp}>
-                       {verifyingLocationInvoiceId === invoice.id_fac_desp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            )) : (
-              <TableRow>
-                  <TableCell colSpan={10} className="text-center">No hay facturas en esta categoría.</TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </CardContent>
-      <CardFooter>
-          <div className="text-xs text-muted-foreground">
-              Mostrando <strong>{invoiceList.length}</strong> de <strong>{invoiceList.length}</strong> facturas.
-          </div>
-      </CardFooter>
-    </Card>
-  );
-
   // --- RENDERIZADO DEL COMPONENTE ---
   return (
     <div className="space-y-6">
@@ -768,9 +789,35 @@ export default function ShipmentDetailPage() {
       </Card>
 
       <div className="space-y-6">
-        {renderInvoicesTable(fiscalCreditInvoices, "Facturación - Crédito Fiscal", "Facturas asociadas a clientes de tipo Crédito Fiscal.")}
-        {renderInvoicesTable(finalConsumerInvoices, "Facturación - Consumidor Final", "Facturas asociadas a clientes de tipo Consumidor Final.")}
-        {otherInvoices.length > 0 && renderInvoicesTable(otherInvoices, "Facturación - Otros", "Facturas sin un tipo de cliente especificado.")}
+        <InvoicesTable 
+          invoiceList={fiscalCreditInvoices} 
+          title="Facturación - Crédito Fiscal" 
+          description="Facturas asociadas a clientes de tipo Crédito Fiscal."
+          handleOpenImageModal={handleOpenImageModal}
+          handleEditInvoice={handleEditInvoice}
+          openCameraDialog={openCameraDialog}
+          verifyingLocationInvoiceId={verifyingLocationInvoiceId}
+        />
+        <InvoicesTable 
+          invoiceList={finalConsumerInvoices} 
+          title="Facturación - Consumidor Final" 
+          description="Facturas asociadas a clientes de tipo Consumidor Final."
+          handleOpenImageModal={handleOpenImageModal}
+          handleEditInvoice={handleEditInvoice}
+          openCameraDialog={openCameraDialog}
+          verifyingLocationInvoiceId={verifyingLocationInvoiceId}
+        />
+        {otherInvoices.length > 0 && 
+          <InvoicesTable 
+            invoiceList={otherInvoices} 
+            title="Facturación - Otros" 
+            description="Facturas sin un tipo de cliente especificado."
+            handleOpenImageModal={handleOpenImageModal}
+            handleEditInvoice={handleEditInvoice}
+            openCameraDialog={openCameraDialog}
+            verifyingLocationInvoiceId={verifyingLocationInvoiceId}
+          />
+        }
       </div>
 
       {/* Diálogo para editar una factura del despacho */}
@@ -813,7 +860,7 @@ export default function ShipmentDetailPage() {
                   <FormItem>
                     <FormLabel>Fecha de Entrega</FormLabel>
                     <FormControl>
-                      <Input value={formatDateTime(field.value)} disabled />
+                      <Input value={new Date(field.value || '').toLocaleString()} disabled />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -870,7 +917,7 @@ export default function ShipmentDetailPage() {
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Seleccione un estado" />
-                        </Trigger>
+                        </SelectTrigger>
                       </FormControl>
                       <SelectContent>
                         {statusOptions.map((option) => (
@@ -985,3 +1032,5 @@ export default function ShipmentDetailPage() {
     </div>
   )
 }
+
+    
