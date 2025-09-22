@@ -628,6 +628,7 @@ export default function ShipmentDetailPage() {
             <TableRow>
               <TableHead>No. Factura</TableHead>
               <TableHead>Nombre del Cliente</TableHead>
+              <TableHead>Geocerca</TableHead>
               <TableHead>Comprobante</TableHead>
               <TableHead>Fecha Entrega</TableHead>
               <TableHead>Total Factura</TableHead>
@@ -642,6 +643,11 @@ export default function ShipmentDetailPage() {
               <TableRow key={invoice.id_fac_desp}>
                 <TableCell className="font-medium">{String(invoice.reference_number || invoice.id_factura)}</TableCell>
                 <TableCell>{invoice.customer_name || 'N/A'}</TableCell>
+                <TableCell>
+                  <Badge variant={invoice.geocerca ? 'default' : 'secondary'}>
+                    {invoice.geocerca ? 'Sí' : 'No'}
+                  </Badge>
+                </TableCell>
                 <TableCell>
                     {invoice.comprobante ? (
                       <button onClick={() => handleOpenImageModal(invoice.comprobante)}>
@@ -679,7 +685,7 @@ export default function ShipmentDetailPage() {
               </TableRow>
             )) : (
               <TableRow>
-                  <TableCell colSpan={9} className="text-center">No hay facturas en esta categoría.</TableCell>
+                  <TableCell colSpan={10} className="text-center">No hay facturas en esta categoría.</TableCell>
               </TableRow>
             )}
           </TableBody>
@@ -979,5 +985,3 @@ export default function ShipmentDetailPage() {
     </div>
   )
 }
-
-    
