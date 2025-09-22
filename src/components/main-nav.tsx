@@ -18,6 +18,7 @@ import {
   Globe,
   Map,
   ScanEye,
+  Download,
 } from 'lucide-react'
 import {
   SidebarMenu,
@@ -53,6 +54,10 @@ const adminMenuItems = [
     { href: '/users', label: 'Usuarios', icon: User },
     { href: '/user-roles', label: 'Roles de Usuario', icon: Shield },
     { href: '/image-test', label: 'Test de Imágenes', icon: ImageIcon },
+]
+
+const utilityMenuItems = [
+    { href: '/install', label: 'Instalar App', icon: Download },
 ]
 
 export function MainNav({ session }: MainNavProps) {
@@ -97,13 +102,28 @@ export function MainNav({ session }: MainNavProps) {
         </SidebarMenuItem>
       ))}
       
-      {adminItemsToRender.length > 0 && (
+      {(adminItemsToRender.length > 0 || utilityMenuItems.length > 0) && (
         <SidebarMenuItem>
           <div className="my-2 border-t border-sidebar-border" />
         </SidebarMenuItem>
       )}
 
       {adminItemsToRender.map((item) => (
+        <SidebarMenuItem key={item.href}>
+          <SidebarMenuButton
+            asChild
+            isActive={pathname.startsWith(item.href)}
+            tooltip={{children: item.label, side: "right", align: "center" }}
+          >
+            <Link href={item.href}>
+              <item.icon className="size-4 shrink-0" />
+              <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
+            </Link>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      ))}
+
+      {utilityMenuItems.map((item) => (
         <SidebarMenuItem key={item.href}>
           <SidebarMenuButton
             asChild
