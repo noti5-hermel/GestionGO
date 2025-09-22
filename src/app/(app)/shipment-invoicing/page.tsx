@@ -54,7 +54,7 @@ const shipmentInvoiceSchema = z.object({
 
 // Tipos de datos para la gestión de facturación por despacho.
 type ShipmentInvoice = z.infer<typeof shipmentInvoiceSchema> & { id_fac_desp: number, comprobante: string, fecha_entrega: string | null }
-type Invoice = { id_factura: string, reference_number: string | number, fecha: string, grand_total: number, customer_name: string, code_customer: string }
+type Invoice = { id_factura: string, reference_number: string | number, fecha: string, grand_total: number, customer_name: string, code_customer: string, geocerca: any | null }
 type Shipment = { id_despacho: number, fecha_despacho: string, id_ruta: string }
 type Route = { id_ruta: string; ruta_desc: string };
 
@@ -200,13 +200,17 @@ export default function ShipmentInvoicingPage() {
     const selectedDate = new Date(selectedShipment.fecha_despacho + 'T00:00:00Z').toISOString().split('T')[0];
 
     const filteredInvoices = allInvoices.filter(inv => {
-      const invoiceDate = new Date(inv.fecha + 'T00:00:00Z').toISOString().split('T')[0];
-      const isDateMatch = invoiceDate === selectedDate;
-      const isNotUsed = !usedInvoiceIds.has(inv.id_factura);
-      // @ts-ignore - 'code_customer' is not on the base type but it is in the data
-      const isInRoute = customerCodesInRoute.has(inv.code_customer);
+        const invoiceDate = new Date(inv.fecha + 'T00:00:00Z').toISOString().split('T')[0];
+        const isDateMatch = invoiceDate === selectedDate;
+        const isNotUsed = !usedInvoiceIds.has(inv.id_factura);
+        
+        // El cliente asociado a la factura no tiene geocerca
+        const hasNoGeofence = inv.geocerca === null;
+        // El cliente asociado a la factura está en la geocerca de la ruta
+        const isInRoute = customerCodesInRoute.has(inv.code_customer);
 
-      return isDateMatch && isNotUsed && isInRoute;
+        // Incluir la factura si la fecha coincide, no está usada Y (está en la ruta O no tiene geocerca)
+        return isDateMatch && isNotUsed && (isInRoute || hasNoGeofence);
     });
 
     setAvailableInvoices(filteredInvoices);
@@ -260,11 +264,28 @@ export default function ShipmentInvoicingPage() {
   
   /** Obtiene todas las facturas para los selectores y la asignación. */
   const fetchInvoices = async () => {
-    const { data, error } = await supabase.from('facturacion').select('id_factura, reference_number, fecha, grand_total, customer_name, code_customer')
+    // Añadimos el join con 'customer' para obtener la geocerca
+    const { data, error } = await supabase
+        .from('facturacion')
+        .select(`
+            id_factura, 
+            reference_number, 
+            fecha, 
+            grand_total, 
+            customer_name, 
+            code_customer,
+            customer ( geocerca )
+        `);
     if (error) {
-      toast({ title: "Error", description: "No se pudieron cargar las facturas.", variant: "destructive" })
+      toast({ title: "Error", description: "No se pudieron cargar las facturas.", variant: "destructive" });
     } else {
-      setAllInvoices(data as Invoice[])
+      // Mapeamos los datos para aplanar la estructura y que 'geocerca' sea una propiedad directa
+      const formattedInvoices = data.map(inv => ({
+          ...inv,
+          geocerca: inv.customer ? (inv.customer as any).geocerca : null,
+          customer: undefined // eliminamos el objeto anidado
+      }));
+      setAllInvoices(formattedInvoices as Invoice[]);
     }
   }
   
