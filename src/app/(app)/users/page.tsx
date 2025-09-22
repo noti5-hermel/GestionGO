@@ -58,6 +58,11 @@ type Role = {
   id_rol: string | number
   rol_desc: string
 }
+type UserSession = {
+  id: string;
+  name: string;
+  role: string;
+}
 
 // Se lee la clave secreta desde las variables de entorno para el hash de contraseñas.
 const HMAC_SECRET_KEY = process.env.NEXT_PUBLIC_HMAC_SECRET_KEY;
@@ -86,6 +91,8 @@ export default function UsersPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const { toast } = useToast()
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
+
 
   // --- FORMULARIO ---
   const form = useForm<z.infer<typeof userSchema>>({
@@ -99,6 +106,19 @@ export default function UsersPage() {
   })
 
   // --- LÓGICA DE DATOS Y EFECTOS ---
+
+  // Obtiene el rol del usuario actual desde la sesión.
+  useEffect(() => {
+    try {
+      const userSessionString = localStorage.getItem('user-session');
+      if (userSessionString) {
+        const userSession: UserSession = JSON.parse(userSessionString);
+        setCurrentUserRole(userSession.role.toLowerCase());
+      }
+    } catch (error) {
+      console.error("Failed to parse user session from localStorage", error);
+    }
+  }, []);
 
   // Carga los datos iniciales (roles y usuarios) al montar el componente.
   useEffect(() => {
@@ -303,6 +323,8 @@ export default function UsersPage() {
   const getRoleName = (roleId: string | number) => {
     return roles.find(role => String(role.id_rol) === String(roleId))?.rol_desc || "N/A"
   }
+  
+  const canManageUsers = currentUserRole !== 'usuariofacturacion';
 
   // --- RENDERIZADO DEL COMPONENTE ---
   return (
@@ -313,114 +335,116 @@ export default function UsersPage() {
             <CardTitle>Usuarios</CardTitle>
             <CardDescription>Gestione los usuarios de la aplicación.</CardDescription>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={handleOpenDialog}>
-            <DialogTrigger asChild>
-              <Button onClick={() => { setEditingUser(null); form.reset(); setIsDialogOpen(true); }}>
-                <PlusCircle className="mr-2 h-4 w-4" /> Añadir Usuario
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>{editingUser ? 'Editar Usuario' : 'Añadir Nuevo Usuario'}</DialogTitle>
-                <DialogDescription>
-                  {editingUser ? 'Modifique los detalles del usuario.' : 'Complete los detalles para crear un nuevo usuario.'}
-                </DialogDescription>
-              </DialogHeader>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                  {editingUser && (
+          {canManageUsers && (
+            <Dialog open={isDialogOpen} onOpenChange={handleOpenDialog}>
+              <DialogTrigger asChild>
+                <Button onClick={() => { setEditingUser(null); form.reset(); setIsDialogOpen(true); }}>
+                  <PlusCircle className="mr-2 h-4 w-4" /> Añadir Usuario
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{editingUser ? 'Editar Usuario' : 'Añadir Nuevo Usuario'}</DialogTitle>
+                  <DialogDescription>
+                    {editingUser ? 'Modifique los detalles del usuario.' : 'Complete los detalles para crear un nuevo usuario.'}
+                  </DialogDescription>
+                </DialogHeader>
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                    {editingUser && (
+                      <FormField
+                        control={form.control}
+                        name="id_user"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>ID Usuario</FormLabel>
+                            <FormControl>
+                              <Input {...field} disabled />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
                     <FormField
                       control={form.control}
-                      name="id_user"
+                      name="name"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>ID Usuario</FormLabel>
+                          <FormLabel>Nombre</FormLabel>
                           <FormControl>
-                            <Input {...field} disabled />
+                            <Input placeholder="Ej: Juan Pérez" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                  )}
-                  <FormField
-                    control={form.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Nombre</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Ej: Juan Pérez" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="correo"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Correo Electrónico</FormLabel>
-                        <FormControl>
-                          <Input type="email" placeholder="Ej: juan.perez@example.com" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="contraseña"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Contraseña</FormLabel>
-                        <FormControl>
-                          <Input type="password" placeholder={editingUser ? "Dejar en blanco para no cambiar" : "********"} {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="id_rol"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Rol de Usuario</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value} defaultValue={String(field.value)}>
+                    <FormField
+                      control={form.control}
+                      name="correo"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Correo Electrónico</FormLabel>
                           <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Seleccione un rol" />
-                            </SelectTrigger>
+                            <Input type="email" placeholder="Ej: juan.perez@example.com" {...field} />
                           </FormControl>
-                          <SelectContent>
-                            {roles.map((role) => (
-                              <SelectItem key={String(role.id_rol)} value={String(role.id_rol)}>
-                                {role.rol_desc}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <DialogFooter>
-                    <DialogClose asChild>
-                        <Button type="button" variant="secondary" onClick={handleCloseDialog}>Cancelar</Button>
-                    </DialogClose>
-                    <Button 
-                        type="button" 
-                        onClick={form.handleSubmit(onSubmit)}
-                    >
-                        {editingUser ? 'Guardar Cambios' : 'Guardar Usuario'}
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </Form>
-            </DialogContent>
-          </Dialog>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="contraseña"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Contraseña</FormLabel>
+                          <FormControl>
+                            <Input type="password" placeholder={editingUser ? "Dejar en blanco para no cambiar" : "********"} {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="id_rol"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Rol de Usuario</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value} defaultValue={String(field.value)}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Seleccione un rol" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {roles.map((role) => (
+                                <SelectItem key={String(role.id_rol)} value={String(role.id_rol)}>
+                                  {role.rol_desc}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <DialogFooter>
+                      <DialogClose asChild>
+                          <Button type="button" variant="secondary" onClick={handleCloseDialog}>Cancelar</Button>
+                      </DialogClose>
+                      <Button 
+                          type="button" 
+                          onClick={form.handleSubmit(onSubmit)}
+                      >
+                          {editingUser ? 'Guardar Cambios' : 'Guardar Usuario'}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </Form>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       </CardHeader>
       <CardContent className="flex-1 overflow-auto">
@@ -432,7 +456,7 @@ export default function UsersPage() {
                 <TableHead>Nombre</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Rol</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
+                {canManageUsers && <TableHead className="text-right">Acciones</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -444,34 +468,36 @@ export default function UsersPage() {
                   </TableCell>
                   <TableCell>{user.correo}</TableCell>
                   <TableCell>{getRoleName(user.id_rol)}</TableCell>
-                  <TableCell>
-                    <div className="flex justify-end items-center gap-2">
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(user)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Esta acción no se puede deshacer. Esto eliminará permanentemente el usuario.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDelete(user.id_user)}>
-                              Eliminar
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </TableCell>
+                  {canManageUsers && (
+                    <TableCell>
+                      <div className="flex justify-end items-center gap-2">
+                        <Button variant="ghost" size="icon" onClick={() => handleEdit(user)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Esta acción no se puede deshacer. Esto eliminará permanentemente el usuario.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDelete(user.id_user)}>
+                                Eliminar
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
