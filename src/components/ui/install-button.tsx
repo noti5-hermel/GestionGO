@@ -22,32 +22,36 @@ export function InstallButton() {
   const [isInstalled, setIsInstalled] = useState(false);
 
   useEffect(() => {
-    // Comprueba si la app ya se está ejecutando en modo standalone (instalada).
+    // 1. Registrar el Service Worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker
+        .register('/sw.js')
+        .then((registration) => console.log('Service Worker registrado con éxito:', registration))
+        .catch((error) => console.error('Error al registrar el Service Worker:', error));
+    }
+  
+    // 2. Comprobar si la app ya se está ejecutando en modo standalone (instalada).
     if (window.matchMedia('(display-mode: standalone)').matches) {
       setIsInstalled(true);
     }
 
-    // Esta función se ejecuta cuando el navegador determina que la PWA es instalable.
+    // 3. Escuchar el evento 'beforeinstallprompt'.
     const handleBeforeInstallPrompt = (event: Event) => {
-      // Prevenimos el comportamiento por defecto del mini-infobar en algunos navegadores.
       event.preventDefault();
-      // Guardamos el evento para poder usarlo más tarde al hacer clic en el botón.
       setInstallPrompt(event as BeforeInstallPromptEvent);
     };
 
-    // Añadimos el listener para el evento.
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
-    // Listener para cuando la app ya se ha instalado.
+    // 4. Escuchar cuando la app ya se ha instalado.
     const handleAppInstalled = () => {
-      // Ocultamos nuestro botón de instalación, ya que la app está instalada.
       setInstallPrompt(null);
       setIsInstalled(true);
     };
 
     window.addEventListener('appinstalled', handleAppInstalled);
 
-    // Función de limpieza para eliminar los listeners cuando el componente se desmonte.
+    // 5. Limpieza de los listeners.
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
@@ -56,24 +60,16 @@ export function InstallButton() {
 
   // Función que se llama al hacer clic en el botón de instalar.
   const handleInstallClick = async () => {
-    // Si no tenemos un evento de instalación, no hacemos nada.
     if (!installPrompt) {
       return;
     }
-
-    // Mostramos el diálogo de instalación nativo del navegador.
     await installPrompt.prompt();
-
-    // Esperamos la elección del usuario.
     const { outcome } = await installPrompt.userChoice;
-
     if (outcome === 'accepted') {
       console.log('El usuario aceptó la instalación.');
     } else {
       console.log('El usuario canceló la instalación.');
     }
-
-    // El evento de instalación solo se puede usar una vez, así que lo limpiamos.
     setInstallPrompt(null);
   };
 
@@ -91,7 +87,6 @@ export function InstallButton() {
     )
   }
 
-  // Renderizamos el botón, deshabilitado si la instalación no es posible todavía.
   return (
     <Button
       onClick={handleInstallClick}
