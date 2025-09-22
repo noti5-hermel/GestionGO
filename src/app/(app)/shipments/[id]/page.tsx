@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
-import { ArrowLeft, Pencil, Upload, Camera, X, FileText, Loader2 } from "lucide-react"
+import { ArrowLeft, Pencil, Upload, Camera, X, FileText, Loader2, MapPin } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
@@ -90,6 +90,8 @@ const statusOptions: { label: string; value: boolean }[] = [
   { label: "Pagado", value: true },
   { label: "Pendiente", value: false },
 ]
+const BODEGA_LOCATION = { lat: 13.725410116705362, lon: -89.21911777270175 };
+
 
 /** Componente reutilizable para mostrar un badge de estado del proceso. */
 const StatusBadge = ({ checked, text }: { checked: boolean, text: string }) => {
@@ -157,9 +159,7 @@ const InvoicesTable = ({
                 <TableCell className="font-medium">{String(invoice.reference_number || invoice.id_factura)}</TableCell>
                 <TableCell>{invoice.customer_name || 'N/A'}</TableCell>
                 <TableCell>
-                    <Badge variant={invoice.geocerca ? 'default' : 'outline'}>
-                      {invoice.geocerca ? 'Sí' : 'No'}
-                    </Badge>
+                  <Badge variant={invoice.geocerca ? 'default' : 'outline'}>{invoice.geocerca ? 'Sí' : 'No'}</Badge>
                 </TableCell>
                 <TableCell>
                     {invoice.comprobante ? (
@@ -629,6 +629,72 @@ export default function ShipmentDetailPage() {
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   };
+  
+    /**
+   * Parsea una geocerca para obtener su centroide.
+   */
+  const parseGeofenceCentroid = (geofenceData: any): { lat: string; lon: string } | null => {
+    if (!geofenceData) return null;
+    let allPoints: { lon: number; lat: number }[] = [];
+    const getPointsFromPolygonString = (polygonString: string): { lon: number; lat: number }[] => {
+        const coordsMatch = polygonString.match(/\(\((.*)\)\)/);
+        if (!coordsMatch || !coordsMatch[1]) return [];
+        return coordsMatch[1].split(',').map(pair => {
+            const [lon, lat] = pair.trim().split(' ').map(Number);
+            return { lon, lat };
+        }).filter(p => !isNaN(p.lon) && !isNaN(p.lat));
+    };
+    if (typeof geofenceData === 'object' && geofenceData.type) {
+        if (geofenceData.type === 'Polygon' && Array.isArray(geofenceData.coordinates)) {
+            const coordinateRing = geofenceData.coordinates[0];
+            if (Array.isArray(coordinateRing)) {
+                allPoints = coordinateRing.map((p: number[]) => ({ lon: p[0], lat: p[1] }))
+                    .filter(p => !isNaN(p.lon) && !isNaN(p.lat));
+            }
+        }
+    } else if (typeof geofenceData === 'string') {
+        const wktString = geofenceData.toUpperCase();
+        if (wktString.startsWith('GEOMETRYCOLLECTION')) {
+            const polygonStrings = geofenceData.match(/POLYGON\s*\(\(.*?\)\)/gi) || [];
+            polygonStrings.forEach(polyStr => {
+                allPoints.push(...getPointsFromPolygonString(polyStr));
+            });
+        } else if (wktString.startsWith('POLYGON')) {
+            allPoints = getPointsFromPolygonString(geofenceData);
+        }
+    }
+    if (allPoints.length === 0) return null;
+    const centroid = allPoints.reduce((acc, point) => ({ lon: acc.lon + point.lon, lat: acc.lat + point.lat }), { lon: 0, lat: 0 });
+    const numPoints = allPoints.length;
+    return { lon: String(centroid.lon / numPoints), lat: String(centroid.lat / numPoints) };
+  };
+
+  const handleExportRouteToMaps = () => {
+    const waypointsData = invoices
+      .map(invoice => {
+        const coords = parseGeofenceCentroid(invoice.geocerca);
+        return coords ? `${coords.lat},${coords.lon}` : null;
+      })
+      .filter((c): c is string => c !== null);
+
+    if (waypointsData.length === 0) {
+      toast({
+        title: "Sin Puntos Válidos",
+        description: "Ninguna de las facturas en este despacho tiene una geocerca válida para generar una ruta.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const origin = `${BODEGA_LOCATION.lat},${BODEGA_LOCATION.lon}`;
+    const waypointsString = waypointsData.join('|');
+    const destination = waypointsData[waypointsData.length -1]; // El último punto como destino
+    
+    // Google Maps optimizará los waypoints intermedios, pero el origen y el destino son fijos.
+    const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypointsString}`;
+
+    window.open(googleMapsUrl, '_blank');
+  };
 
 
   // --- FUNCIONES AUXILIARES DE LA UI ---
@@ -733,6 +799,9 @@ export default function ShipmentDetailPage() {
               </CardDescription>
             </div>
             <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 w-full md:w-auto">
+              <Button variant="outline" onClick={handleExportRouteToMaps} className="w-full md:w-auto">
+                <MapPin className="mr-2 h-4 w-4" /> Exportar Ruta a Maps
+              </Button>
               <Button variant="outline" onClick={handleGeneratePdf} className="w-full md:w-auto">
                 <FileText className="mr-2 h-4 w-4" /> Ver Informe
               </Button>
