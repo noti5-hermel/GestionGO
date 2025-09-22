@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Download } from 'lucide-react';
+import { Download, Check } from 'lucide-react';
 
 // Define el tipo del evento beforeinstallprompt para mayor seguridad de tipos.
 interface BeforeInstallPromptEvent extends Event {
@@ -22,20 +22,12 @@ export function InstallButton() {
   const [isInstalled, setIsInstalled] = useState(false);
 
   useEffect(() => {
-    // 1. Registrar el Service Worker
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker
-        .register('/sw.js')
-        .then((registration) => console.log('Service Worker registrado con éxito:', registration))
-        .catch((error) => console.error('Error al registrar el Service Worker:', error));
-    }
-  
-    // 2. Comprobar si la app ya se está ejecutando en modo standalone (instalada).
+    // 1. Comprobar si la app ya se está ejecutando en modo standalone (instalada).
     if (window.matchMedia('(display-mode: standalone)').matches) {
       setIsInstalled(true);
     }
 
-    // 3. Escuchar el evento 'beforeinstallprompt'.
+    // 2. Escuchar el evento 'beforeinstallprompt'.
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
       setInstallPrompt(event as BeforeInstallPromptEvent);
@@ -43,7 +35,7 @@ export function InstallButton() {
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
-    // 4. Escuchar cuando la app ya se ha instalado.
+    // 3. Escuchar cuando la app ya se ha instalado.
     const handleAppInstalled = () => {
       setInstallPrompt(null);
       setIsInstalled(true);
@@ -51,7 +43,7 @@ export function InstallButton() {
 
     window.addEventListener('appinstalled', handleAppInstalled);
 
-    // 5. Limpieza de los listeners.
+    // 4. Limpieza de los listeners.
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
@@ -62,18 +54,10 @@ export function InstallButton() {
   const handleInstallClick = async () => {
     if (!installPrompt) {
       // Si el navegador aún no ha emitido el evento, no hacemos nada.
-      // Podríamos mostrar un toast informativo si quisiéramos.
       console.log("El aviso de instalación no está disponible todavía.");
       return;
     }
     await installPrompt.prompt();
-    const { outcome } = await installPrompt.userChoice;
-    if (outcome === 'accepted') {
-      console.log('El usuario aceptó la instalación.');
-    } else {
-      console.log('El usuario canceló la instalación.');
-    }
-    setInstallPrompt(null);
   };
 
   // Si la app ya está instalada, no mostramos nada.

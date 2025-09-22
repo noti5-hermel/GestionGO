@@ -1,22 +1,28 @@
 
-import type {Metadata} from 'next';
+'use client'
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster"
-
-export const metadata: Metadata = {
-  title: 'GestiónGo',
-  description: 'Aplicación de gestión',
-  manifest: '/manifest.json',
-};
+import { useEffect } from 'react';
 
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker
+        .register('/sw.js')
+        .then((registration) => console.log('Service Worker registrado con éxito:', registration))
+        .catch((error) => console.error('Error al registrar el Service Worker:', error));
+    }
+  }, []);
+
   return (
     <html lang="es">
       <head>
+        <title>GestiónGo</title>
+        <meta name="description" content="Aplicación de gestión integral" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet" />
