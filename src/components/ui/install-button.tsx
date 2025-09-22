@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Download, Check } from 'lucide-react';
+import { Download } from 'lucide-react';
 
 // Define el tipo del evento beforeinstallprompt para mayor seguridad de tipos.
 interface BeforeInstallPromptEvent extends Event {
@@ -61,6 +61,9 @@ export function InstallButton() {
   // Función que se llama al hacer clic en el botón de instalar.
   const handleInstallClick = async () => {
     if (!installPrompt) {
+      // Si el navegador aún no ha emitido el evento, no hacemos nada.
+      // Podríamos mostrar un toast informativo si quisiéramos.
+      console.log("El aviso de instalación no está disponible todavía.");
       return;
     }
     await installPrompt.prompt();
@@ -73,27 +76,18 @@ export function InstallButton() {
     setInstallPrompt(null);
   };
 
+  // Si la app ya está instalada, no mostramos nada.
   if (isInstalled) {
-    return (
-       <Button
-          variant="outline"
-          size="sm"
-          className="flex items-center gap-2 cursor-not-allowed"
-          disabled
-       >
-          <Check className="h-4 w-4" />
-          <span>Instalada</span>
-       </Button>
-    )
+    return null;
   }
 
+  // Si no está instalada, mostramos el botón siempre habilitado.
   return (
     <Button
       onClick={handleInstallClick}
       variant="outline"
       size="sm"
       className="flex items-center gap-2"
-      disabled={!installPrompt}
     >
       <Download className="h-4 w-4" />
       <span>Instalar App</span>
