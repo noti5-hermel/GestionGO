@@ -2,6 +2,7 @@
 'use client'
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   SidebarProvider,
   Sidebar,
@@ -122,19 +123,25 @@ export default function AppLayout({
   children: React.ReactNode;
 }>) {
   const [session, setSession] = useState<UserSession | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
     try {
-      const userSession = localStorage.getItem('user-session');
-      if (userSession) {
-        setSession(JSON.parse(userSession));
+      const userSessionString = localStorage.getItem('user-session');
+      if (userSessionString) {
+        const userSession = JSON.parse(userSessionString);
+        setSession(userSession);
+      } else {
+        // Si no hay sesión, redirigir al login
+        router.push('/login');
       }
     } catch (error) {
       console.error("Failed to parse user session from localStorage", error);
+      router.push('/login');
     }
-    setLoading(false);
-  }, []);
+    setIsLoading(false);
+  }, [router]);
 
 
   /**
@@ -152,10 +159,10 @@ export default function AppLayout({
     window.location.href = '/login';
   };
   
-  if (loading) {
+  if (isLoading || !session) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <p>Cargando...</p>
+        <p>Verificando sesión...</p>
       </div>
     );
   }
