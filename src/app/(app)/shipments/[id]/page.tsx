@@ -644,7 +644,7 @@ export default function ShipmentDetailPage() {
                 <TableCell className="font-medium">{String(invoice.reference_number || invoice.id_factura)}</TableCell>
                 <TableCell>{invoice.customer_name || 'N/A'}</TableCell>
                 <TableCell>
-                  <Badge variant={invoice.geocerca ? 'default' : 'secondary'}>
+                  <Badge variant={invoice.geocerca ? 'default' : 'outline'}>
                     {invoice.geocerca ? 'Sí' : 'No'}
                   </Badge>
                 </TableCell>
@@ -870,7 +870,7 @@ export default function ShipmentDetailPage() {
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Seleccione un estado" />
-                        </SelectTrigger>
+                        </Trigger>
                       </FormControl>
                       <SelectContent>
                         {statusOptions.map((option) => (
