@@ -118,8 +118,10 @@ export default function LoginPage() {
 
         if (restrictedRoles.some(role => userRole.includes(role))) {
           window.location.href = "/shipments";
+        } else if (userRole.includes('admin')) {
+          window.location.href = "/"; // Redirige al admin al dashboard
         } else {
-          window.location.href = "/users";
+          window.location.href = "/users"; // Redirección por defecto para otros roles
         }
 
       } else {
