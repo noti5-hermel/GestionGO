@@ -28,10 +28,17 @@ interface UserSession {
   role: string;
 }
 
+/**
+ * Componente `LocationTracker`
+ * @description Se encarga de rastrear la ubicación del usuario en segundo plano si su rol es 'Motorista'
+ * y si hay un 'despacho activo' guardado en localStorage. Cada coordenada se guarda en la tabla
+ * `location_history` asociada a un `id_despacho` específico.
+ */
 const LocationTracker = () => {
   const { toast } = useToast();
   const [session, setSession] = useState<UserSession | null>(null);
 
+  // Obtiene la sesión del usuario para verificar el rol.
   useEffect(() => {
     try {
       const userSession = localStorage.getItem('user-session');
@@ -44,6 +51,7 @@ const LocationTracker = () => {
   }, []);
 
   useEffect(() => {
+    // Solo se activa si el usuario es motorista.
     if (!session || session.role.toLowerCase() !== 'motorista') {
       return;
     }
@@ -137,6 +145,7 @@ export default function AppLayout({
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
+  // Verifica la sesión del usuario al cargar el layout.
   useEffect(() => {
     try {
       const userSessionString = localStorage.getItem('user-session');
@@ -156,10 +165,8 @@ export default function AppLayout({
 
 
   /**
-   * Cierra la sesión del usuario eliminando la cookie de sesión
+   * Cierra la sesión del usuario eliminando los datos de sesión del almacenamiento
    * y redirigiendo a la página de inicio de sesión.
-   * La función está diseñada para funcionar en iframes (como en Firebase Studio)
-   * estableciendo SameSite=None y Secure.
    */
   const handleLogout = () => {
     // Limpia la sesión del localStorage
@@ -172,6 +179,7 @@ export default function AppLayout({
     window.location.href = '/login';
   };
   
+  // Muestra un mensaje de carga mientras se verifica la sesión.
   if (isLoading || !session) {
     return (
       <div className="flex items-center justify-center h-screen">

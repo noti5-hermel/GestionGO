@@ -4,7 +4,15 @@ Este documento detalla las características principales y el propósito de cada 
 
 ---
 
-### 1. Clientes (`/customers`)
+### 1. Dashboard (`/`)
+
+-   **Página de Inicio Principal:** Es la primera vista que ven los administradores al iniciar sesión.
+-   **Accesos Directos:** Proporciona una serie de tarjetas interactivas que funcionan como accesos directos a las secciones más importantes y utilizadas de la aplicación, como Clientes, Despachos, Facturación, etc.
+-   **Navegación Intuitiva:** Facilita la navegación y mejora la experiencia de usuario al centralizar las funciones clave en un solo lugar.
+
+---
+
+### 2. Clientes (`/customers`)
 
 -   **Gestión Integral (CRUD):** Permite crear, leer, actualizar y eliminar clientes.
 -   **Formulario de Edición/Creación:** Un diálogo modal permite añadir nuevos clientes o modificar los existentes. Los campos incluyen código, nombre, ruta, impuesto y término de pago.
@@ -15,7 +23,7 @@ Este documento detalla las características principales y el propósito de cada 
 
 ---
 
-### 2. Despachos (`/shipments`)
+### 3. Despachos (`/shipments`)
 
 -   **Visualización de Despachos:** Muestra una tabla con todos los despachos, incluyendo ID, ruta, motorista, auxiliar, fecha y totales.
 -   **Gestión (CRUD):** Permite crear nuevos despachos, editarlos o eliminarlos.
@@ -30,9 +38,13 @@ Este documento detalla las características principales y el propósito de cada 
 
 ---
 
-### 3. Detalle de Despacho (`/shipments/[id]`)
+### 4. Detalle de Despacho (`/shipments/[id]`)
 
 -   **Página Central de Operaciones:** Esta es la vista más importante para la gestión diaria del reparto.
+-   **Inicio y Fin de Recorrido:**
+    -   Para los motoristas, se muestran los botones **"Iniciar Recorrido"** y **"Finalizar Recorrido"**.
+    -   Al iniciar, el sistema comienza a grabar el historial de ubicaciones asociado **exclusivamente a ese despacho**.
+    -   Al finalizar, el rastreo para ese despacho se detiene. Esto permite un seguimiento preciso por cada viaje.
 -   **Información General:** Muestra un resumen del despacho, incluyendo ruta, personal asignado, fecha y totales de pago.
 -   **Estado del Proceso:** Presenta una serie de insignias que muestran qué etapa del proceso ha sido completada (Bodega, Reparto, Cobros, etc.).
 -   **Listado de Facturas Agrupadas:** Las facturas asociadas al despacho se dividen en tablas según el tipo de cliente ("Crédito Fiscal" y "Consumidor Final") para mayor claridad.
@@ -46,7 +58,7 @@ Este documento detalla las características principales y el propósito de cada 
 
 ---
 
-### 4. Facturación (`/invoicing`)
+### 5. Facturación (`/invoicing`)
 
 -   **Gestión Integral de Facturas (CRUD):** Permite crear, editar y eliminar facturas de forma individual.
 -   **Búsqueda y Filtrado:** Se puede buscar por número de factura, referencia o cliente. También se puede filtrar por fecha de entrega y fecha de importación.
@@ -56,7 +68,7 @@ Este documento detalla las características principales y el propósito de cada 
 
 ---
 
-### 5. Facturación por Despacho (`/shipment-invoicing`)
+### 6. Facturación por Despacho (`/shipment-invoicing`)
 
 -   **Asignación de Facturas a Despachos:** Es la interfaz principal para construir un despacho.
 -   **Asignación Masiva Inteligente:**
@@ -71,7 +83,7 @@ Este documento detalla las características principales y el propósito de cada 
 
 ---
 
-### 6. Geocercas (`/geofences`)
+### 7. Geocercas (`/geofences`)
 
 -   **Gestión de Áreas Geográficas:** Permite asignar o actualizar la geometría poligonal (geocerca) de cada cliente.
 -   **Formulario de Creación/Edición:** Un diálogo permite seleccionar un cliente y pegar los datos de la geocerca en formato WKT (`POLYGON` o `GEOMETRYCOLLECTION`).
@@ -80,7 +92,7 @@ Este documento detalla las características principales y el propósito de cada 
 
 ---
 
-### 7. Generación de Ruta (`/route-generation`)
+### 8. Generación de Ruta (`/route-generation`)
 
 -   **Planificación de Rutas Manuales:** Herramienta para crear rutas personalizadas.
 -   **Selección de Clientes:** Muestra una lista de todos los clientes que tienen una geocerca definida.
@@ -89,19 +101,19 @@ Este documento detalla las características principales y el propósito de cada 
 
 ---
 
-### 8. Mapa en Vivo (`/live-map`)
+### 9. Mapa en Vivo (`/live-map`)
 
 -   **Seguimiento en Tiempo Real:** Muestra un mapa interactivo para el monitoreo de las operaciones.
 -   **Filtro por Despacho:** Permite seleccionar un despacho específico por fecha para visualizar su información geográfica.
 -   **Capas de Información:**
     -   **Ruta Planificada (Azul):** Muestra un trazado optimizado de la ruta que conecta la bodega con todos los clientes del despacho.
-    -   **Recorrido Real (Naranja):** Dibuja la ruta que el motorista ha seguido basándose en el historial de ubicaciones guardado.
+    -   **Recorrido Real del Despacho (Naranja):** Dibuja la ruta que el motorista ha seguido **específicamente para ese despacho**, basándose en el historial de ubicaciones guardado desde que se inició hasta que se finalizó el recorrido.
     -   **Ubicación Actual:** Un ícono de vehículo muestra la posición más reciente del motorista.
     -   **Puntos de Cliente:** Marcadores numerados y coloreados indican la ubicación de cada cliente en la ruta (verde para completado, rojo para pendiente).
 
 ---
 
-### 9. Usuarios (`/users`) y Roles (`/user-roles`)
+### 10. Usuarios (`/users`) y Roles (`/user-roles`)
 
 -   **Gestión de Acceso:** Permite crear, editar y eliminar usuarios del sistema.
 -   **Asignación de Roles:** A cada usuario se le puede asignar un rol (Admin, Motorista, Bodega, etc.), que define sus permisos y las vistas a las que puede acceder.
@@ -110,7 +122,7 @@ Este documento detalla las características principales y el propósito de cada 
 
 ---
 
-### 10. Configuración (`/settings`)
+### 11. Configuración (`/settings`)
 
 -   **Parámetros del Sistema:** Un lugar centralizado para gestionar catálogos básicos.
 -   **Pestañas de Gestión:**
@@ -120,7 +132,7 @@ Este documento detalla las características principales y el propósito de cada 
 
 ---
 
-### 11. Instalar App (`/install`)
+### 12. Instalar App (`/install`)
 
 -   **Página de Instrucciones PWA:** Ofrece una guía clara y visual para que los usuarios puedan instalar la aplicación en la pantalla de inicio de sus dispositivos móviles (Android e iOS).
 -   **Botón de Instalación:** Incluye un botón que intenta disparar la instalación automática si el navegador lo soporta, facilitando el proceso.

@@ -12,8 +12,9 @@ import { Label } from '@/components/ui/label';
 
 /**
  * @file live-map/page.tsx
- * @description Página que muestra un mapa con la ruta planificada (geocercas),
- * el recorrido real del motorista y su posición actual.
+ * @description Página que muestra un mapa interactivo para el seguimiento de un despacho.
+ * Al seleccionar un despacho, visualiza la ruta planificada (clientes), el recorrido real
+ * del motorista (grabado específicamente para ese despacho) y su última ubicación conocida.
  */
 
 // --- TIPOS DE DATOS ---
@@ -73,6 +74,7 @@ export default function LiveMapPage() {
 
   // --- OBTENCIÓN DE DATOS ---
 
+  // Obtiene datos estáticos como despachos, usuarios y rutas al cargar.
   const fetchStaticData = useCallback(async () => {
     setLoading(true);
     const [despachosRes, usersRes, routesRes] = await Promise.all([
@@ -96,8 +98,10 @@ export default function LiveMapPage() {
     fetchStaticData();
   }, [fetchStaticData]);
 
+  // Se activa al seleccionar un despacho y carga todos los datos geográficos asociados.
   useEffect(() => {
     const fetchShipmentData = async () => {
+      // Limpia el mapa si no hay un despacho seleccionado.
       if (!selectedDespachoId) {
         setCustomerGeofences([]);
         setMotoristaPath([]);
@@ -148,6 +152,7 @@ export default function LiveMapPage() {
       }
 
       // --- 2. Obtener el historial de ubicación del despacho (recorrido real) ---
+      // Esta es la consulta clave: filtra el historial por el `id_despacho` seleccionado.
       const { data: historyData, error: historyError } = await supabase
         .from('location_history')
         .select('location')
@@ -160,7 +165,7 @@ export default function LiveMapPage() {
       } else if (historyData) {
           const path = historyData
             .map(p => {
-              // Puede venir como POINT(-89.21 13.72) o como GeoJSON
+              // Parsea la ubicación, que puede venir en formato WKT o GeoJSON.
               if (typeof p.location === 'string') {
                 const match = p.location.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
                 if (match) return { lat: parseFloat(match[2]), lng: parseFloat(match[1]) };
@@ -178,7 +183,7 @@ export default function LiveMapPage() {
       }
 
 
-      // --- 3. Obtener la última ubicación conocida del motorista ---
+      // --- 3. Obtener la última ubicación conocida del motorista asociado a este despacho ---
       const motoristaIdAsInt = parseInt(despacho.id_motorista, 10);
       if(!isNaN(motoristaIdAsInt)) {
         const { data: lastLocationData, error: lastLocationError } = await supabase
@@ -188,7 +193,7 @@ export default function LiveMapPage() {
           .single();
         
         if (lastLocationData && lastLocationData.location) {
-            // PostGIS puede devolver GeoJSON, que es un objeto, no un string.
+            // Parsea la ubicación.
             if (typeof lastLocationData.location === 'object' && lastLocationData.location.coordinates) {
                 const [lng, lat] = lastLocationData.location.coordinates;
                 setMotoristaLocation({ lat, lng });
@@ -209,8 +214,9 @@ export default function LiveMapPage() {
     fetchShipmentData();
   }, [selectedDespachoId, toast, allDespachos]);
   
-  // --- FUNCIONES AUXILIARES ---
+  // --- FUNCIONES AUXILIARES DE LA UI ---
 
+  // Maneja el cambio de fecha y limpia la selección de despacho.
   const handleDateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedDate(event.target.value);
     setSelectedDespachoId('');
@@ -223,11 +229,13 @@ export default function LiveMapPage() {
     setSelectedDespachoId(despachoId);
   };
   
+  // Filtra los despachos disponibles para la fecha seleccionada.
   const despachosDelDia = useMemo(() => {
     if (!selectedDate) return [];
     return allDespachos.filter(d => d.fecha_despacho === selectedDate);
   }, [allDespachos, selectedDate]);
 
+  // Funciones para obtener descripciones legibles a partir de IDs.
   const getRouteDescription = useCallback((routeId: string) => {
     return allRoutes.find(r => r.id_ruta === routeId)?.ruta_desc || routeId;
   }, [allRoutes]);

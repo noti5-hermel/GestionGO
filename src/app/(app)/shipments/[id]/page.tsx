@@ -24,10 +24,9 @@ import { PdfPreviewModal } from "@/components/pdf-preview-modal"
 
 /**
  * @file shipments/[id]/page.tsx
- * @description Página de detalle para un despacho específico. Muestra la información del despacho,
- * el estado del proceso, y una lista de todas las facturas asociadas. Permite editar
- * los detalles de pago de cada factura y subir/capturar comprobantes.
- * Para motoristas, la edición está restringida por geocerca o captura la ubicación si no existe.
+ * @description Página de detalle para un despacho. Permite ver toda la información, gestionar el estado
+ * del recorrido (iniciar/finalizar) para el seguimiento GPS, editar facturas, subir comprobantes,
+ * y restringir acciones por geocerca para los motoristas.
  */
 
 const BUCKET_NAME = 'comprobante';
@@ -572,7 +571,14 @@ export default function ShipmentDetailPage() {
     }
   };
   
+  /**
+   * Verifica si el motorista está dentro de la geocerca de un cliente antes de ejecutar una acción.
+   * Si el cliente no tiene geocerca, guarda la ubicación actual del motorista.
+   * @param invoice - La factura del cliente a verificar.
+   * @param onSuccess - La función a ejecutar si la verificación es exitosa.
+   */
   const handleGeofenceProtectedAction = (invoice: ShipmentInvoice, onSuccess: (invoice: ShipmentInvoice) => void) => {
+    // Si el usuario no es motorista, permite la acción sin verificar.
     if (currentUser?.role?.toLowerCase() !== 'motorista') {
       onSuccess(invoice);
       return;
@@ -670,7 +676,12 @@ export default function ShipmentDetailPage() {
     return { lng: String(centroid.lng / numPoints), lat: String(centroid.lat / numPoints) };
   };
 
+  /**
+   * Exporta la ruta del despacho a Google Maps.
+   * Utiliza la API de Rutas de Google para optimizar el orden de los puntos de entrega.
+   */
   const handleExportRouteToMaps = async () => {
+    // Extrae y filtra los puntos (centroides de geocercas) de las facturas.
     const waypoints = invoices
       .map(invoice => {
         const centroid = parseGeofenceCentroid(invoice.geocerca);
@@ -701,13 +712,14 @@ export default function ShipmentDetailPage() {
         location: { latLng: { latitude: Number(latLng.lat), longitude: Number(latLng.lng) } }
     });
 
+    // Construye el cuerpo de la petición para la API de Google Routes.
     const requestBody: any = {
       travelMode: "DRIVE",
       routingPreference: "TRAFFIC_AWARE",
       origin: toApiLatLng({lat: BODEGA_LOCATION.lat, lng: BODEGA_LOCATION.lng }),
       destination: toApiLatLng({lat: BODEGA_LOCATION.lat, lng: BODEGA_LOCATION.lng }),
       intermediates: waypoints.map(w => toApiLatLng({ lat: w.centroid.lat, lng: w.centroid.lng })),
-      optimizeWaypointOrder: true,
+      optimizeWaypointOrder: true, // Pide a la API que optimice el orden de las paradas.
     };
 
     const headers = {
@@ -717,6 +729,7 @@ export default function ShipmentDetailPage() {
     };
 
     try {
+      // Llama a la API para calcular la ruta optimizada.
       const response = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
         method: "POST",
         headers,
@@ -730,12 +743,12 @@ export default function ShipmentDetailPage() {
       const waypointOrder: number[] = data.routes[0].optimizedIntermediateWaypointIndex || [];
       const orderedWaypoints = waypointOrder.map(index => waypoints[index].centroid);
 
+      // Construye la URL de Google Maps con la ruta optimizada.
       const origin = `${BODEGA_LOCATION.lat},${BODEGA_LOCATION.lng}`;
       let waypointsString = "";
       let destination = origin;
 
       if (orderedWaypoints.length > 0) {
-        // La ruta termina en el último punto optimizado, no vuelve a la bodega.
         destination = `${orderedWaypoints[orderedWaypoints.length - 1].lat},${orderedWaypoints[orderedWaypoints.length - 1].lng}`;
         waypointsString = orderedWaypoints.slice(0, -1).map(wp => `${wp.lat},${wp.lng}`).join('|');
       }
@@ -747,7 +760,7 @@ export default function ShipmentDetailPage() {
     } catch (error) {
       console.error("Error al optimizar la ruta:", error);
       toast({ title: "Error de Red", description: "No se pudo obtener la ruta optimizada. Se exportará sin optimizar.", variant: "destructive" });
-      // Fallback a la exportación sin optimizar
+      // Fallback a la exportación sin optimizar si la API falla.
       const waypointsString = waypoints.map(wp => `${wp.centroid.lat},${wp.centroid.lng}`).join('|');
       const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${BODEGA_LOCATION.lat},${BODEGA_LOCATION.lng}&waypoints=${waypointsString}`;
       window.open(googleMapsUrl, '_blank');
@@ -758,7 +771,7 @@ export default function ShipmentDetailPage() {
   
   /**
    * Cambia el estado del recorrido (iniciar/finalizar) en la base de datos
-   * y gestiona el almacenamiento local del despacho activo.
+   * y gestiona el almacenamiento local del despacho activo para el rastreo GPS.
    */
   const toggleShipmentState = async (newState: 'en_curso' | 'finalizado') => {
       if (!shipment) return;

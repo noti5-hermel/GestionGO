@@ -3,6 +3,14 @@ import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Users, Truck, FileText, ClipboardList, ScanEye, Settings } from 'lucide-react';
 
+/**
+ * @file page.tsx
+ * @description Página principal del dashboard. Muestra accesos directos a las
+ * funcionalidades más importantes de la aplicación a través de tarjetas interactivas.
+ * Es la vista de inicio para los roles de administrador.
+ */
+
+// Define los elementos que se mostrarán en el dashboard.
 const dashboardItems = [
   {
     href: '/customers',

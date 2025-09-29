@@ -91,6 +91,7 @@ export default function LoginPage() {
 
     if (data) {
       const hashedPassword = hashPassword(password);
+      // Compara la contraseña hasheada con la almacenada en la base de datos.
       if (hashedPassword === data.contraseña) {
         const role = Array.isArray(data.rol) ? data.rol[0]?.rol_desc : data.rol?.rol_desc;
         const sessionData = {
@@ -99,10 +100,10 @@ export default function LoginPage() {
           role: role || 'Sin rol',
         };
 
-        // Guardar sesión en localStorage
+        // Guarda los datos de la sesión en el almacenamiento local del navegador.
         localStorage.setItem('user-session', JSON.stringify(sessionData));
 
-        // Crear cookie de sesión para la verificación del lado del servidor/middleware si es necesario
+        // Crea una cookie simple para posibles verificaciones del lado del servidor/middleware.
         document.cookie = `auth-session=true; path=/; SameSite=None; Secure`;
         
         toast({
@@ -110,18 +111,22 @@ export default function LoginPage() {
           description: "¡Bienvenido!",
         })
         
+        // Lógica de redirección basada en el rol del usuario.
         const userRole = sessionData.role.toLowerCase();
         const restrictedRoles = [
           'motorista', 'auxiliar', 'bodega', 'reparto', 
           'asist.admon', 'gerente.admon', 'cobros'
         ];
 
+        // Los roles restringidos van a la vista de despachos.
         if (restrictedRoles.some(role => userRole.includes(role))) {
           window.location.href = "/shipments";
+        // El rol de admin va al dashboard principal.
         } else if (userRole.includes('admin')) {
-          window.location.href = "/"; // Redirige al admin al dashboard
+          window.location.href = "/";
         } else {
-          window.location.href = "/users"; // Redirección por defecto para otros roles
+          // El resto de roles van a la vista de usuarios por defecto.
+          window.location.href = "/users";
         }
 
       } else {
