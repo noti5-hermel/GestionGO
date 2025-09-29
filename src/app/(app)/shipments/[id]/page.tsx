@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
-import { ArrowLeft, Pencil, Upload, Camera, X, FileText, Loader2, MapPin } from "lucide-react"
+import { ArrowLeft, Pencil, Upload, Camera, X, FileText, Loader2, MapPin, Play, Square } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
@@ -62,6 +62,7 @@ type Shipment = {
   asist_admon: boolean
   cobros: boolean
   gerente_admon: boolean
+  estado_recorrido: 'pendiente' | 'en_curso' | 'finalizado';
 }
 
 export type ShipmentInvoice = {
@@ -754,6 +755,38 @@ export default function ShipmentDetailPage() {
         setLoading(false);
     }
   };
+  
+  /**
+   * Cambia el estado del recorrido (iniciar/finalizar) en la base de datos
+   * y gestiona el almacenamiento local del despacho activo.
+   */
+  const toggleShipmentState = async (newState: 'en_curso' | 'finalizado') => {
+      if (!shipment) return;
+      setLoading(true);
+
+      const { error } = await supabase
+          .from('despacho')
+          .update({ estado_recorrido: newState })
+          .eq('id_despacho', shipment.id_despacho);
+      
+      setLoading(false);
+      
+      if (error) {
+          toast({ title: "Error", description: "No se pudo actualizar el estado del recorrido.", variant: "destructive" });
+      } else {
+          if (newState === 'en_curso') {
+              // Guarda el ID del despacho en localStorage para que el rastreador lo use.
+              localStorage.setItem('active_shipment_id', shipment.id_despacho);
+              toast({ title: "Recorrido Iniciado", description: "El seguimiento de ubicación está activo para este despacho." });
+          } else {
+              // Limpia el ID al finalizar.
+              localStorage.removeItem('active_shipment_id');
+              toast({ title: "Recorrido Finalizado", description: "El seguimiento de ubicación ha terminado." });
+          }
+          // Recarga los datos para que la UI se actualice.
+          fetchData(); 
+      }
+  };
 
 
   // --- FUNCIONES AUXILIARES DE LA UI ---
@@ -837,6 +870,9 @@ export default function ShipmentDetailPage() {
       const totalGeneralCalculado = totalContadoCalculado + totalCreditoCalculado;
       return { totalContadoCalculado, totalCreditoCalculado, totalGeneralCalculado };
   }, [invoices]);
+  
+  const isMotorista = currentUser?.role?.toLowerCase() === 'motorista';
+
 
   if (loading && !shipment) {
     return <p>Cargando detalles del despacho...</p>
@@ -858,6 +894,23 @@ export default function ShipmentDetailPage() {
               </CardDescription>
             </div>
             <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 w-full md:w-auto">
+              {isMotorista && (
+                <>
+                  {shipment.estado_recorrido === 'pendiente' && (
+                    <Button onClick={() => toggleShipmentState('en_curso')} disabled={loading} className="w-full md:w-auto bg-green-600 hover:bg-green-700">
+                      <Play className="mr-2 h-4 w-4" /> Iniciar Recorrido
+                    </Button>
+                  )}
+                  {shipment.estado_recorrido === 'en_curso' && (
+                     <Button onClick={() => toggleShipmentState('finalizado')} disabled={loading} className="w-full md:w-auto bg-red-600 hover:bg-red-700">
+                      <Square className="mr-2 h-4 w-4" /> Finalizar Recorrido
+                    </Button>
+                  )}
+                  {shipment.estado_recorrido === 'finalizado' && (
+                     <Button disabled className="w-full md:w-auto">Recorrido Finalizado</Button>
+                  )}
+                </>
+              )}
               <Button variant="outline" onClick={handleExportRouteToMaps} className="w-full md:w-auto" disabled={loading}>
                  {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MapPin className="mr-2 h-4 w-4" />}
                  {loading ? "Optimizando..." : "Exportar Ruta a Maps"}

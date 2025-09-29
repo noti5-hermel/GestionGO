@@ -52,6 +52,15 @@ const LocationTracker = () => {
 
     const handleSuccess = async (position: GeolocationPosition) => {
       const { latitude, longitude } = position.coords;
+      
+      // Obtiene el ID del despacho activo desde localStorage.
+      const activeShipmentId = localStorage.getItem('active_shipment_id');
+      
+      // Si no hay un recorrido activo, no hace nada.
+      if (!activeShipmentId) {
+        return;
+      }
+      
       const locationPoint = `POINT(${longitude} ${latitude})`;
       const timestamp = new Date().toISOString();
       const motoristaIdAsInt = parseInt(session.id, 10);
@@ -61,13 +70,14 @@ const LocationTracker = () => {
         return;
       }
 
-      // 1. Insertar en el historial de ubicaciones.
+      // 1. Insertar en el historial de ubicaciones, ahora con el id_despacho.
       const { error: historyError } = await supabase
         .from('location_history')
         .insert({
           id_motorista: motoristaIdAsInt,
           location: locationPoint,
           timestamp: timestamp,
+          id_despacho: parseInt(activeShipmentId, 10) // Asocia la ubicación al despacho.
         });
 
       if (historyError) {
@@ -154,6 +164,8 @@ export default function AppLayout({
   const handleLogout = () => {
     // Limpia la sesión del localStorage
     localStorage.removeItem('user-session');
+    // Limpia cualquier recorrido activo que pudiera haber quedado.
+    localStorage.removeItem('active_shipment_id');
     // Establece la fecha de expiración de la cookie a una fecha pasada para que el navegador la elimine.
     document.cookie = 'auth-session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=None; Secure';
     // Redirige al usuario a la página de login.
