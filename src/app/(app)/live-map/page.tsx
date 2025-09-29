@@ -147,49 +147,60 @@ export default function LiveMapPage() {
         }
       }
 
-      // --- 2. Obtener el historial de ubicación del motorista (recorrido real) ---
-      const motoristaIdAsInt = parseInt(despacho.id_motorista, 10);
-      if (isNaN(motoristaIdAsInt)) {
-        console.warn("ID de motorista inválido:", despacho.id_motorista);
-        setMotoristaPath([]);
-      } else {
-        const { data: historyData, error: historyError } = await supabase.rpc('get_location_history_by_day', {
-            p_id_motorista: motoristaIdAsInt,
-            p_date: despacho.fecha_despacho
-        });
-
-        if (historyError) {
-          console.warn("No se pudo obtener el historial de ruta del motorista (puede que no haya iniciado):", historyError.message);
+      // --- 2. Obtener el historial de ubicación del despacho (recorrido real) ---
+      const { data: historyData, error: historyError } = await supabase
+        .from('location_history')
+        .select('location')
+        .eq('id_despacho', selectedDespachoId)
+        .order('timestamp', { ascending: true });
+        
+      if (historyError) {
+          console.warn("No se pudo obtener el historial de ruta del despacho:", historyError.message);
           setMotoristaPath([]);
-        } else if (historyData) {
-          const path = (historyData as any[]).map((p: any) => ({ lat: p.lat, lng: p.lng }));
+      } else if (historyData) {
+          const path = historyData
+            .map(p => {
+              // Puede venir como POINT(-89.21 13.72) o como GeoJSON
+              if (typeof p.location === 'string') {
+                const match = p.location.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
+                if (match) return { lat: parseFloat(match[2]), lng: parseFloat(match[1]) };
+              }
+              if (typeof p.location === 'object' && p.location.coordinates) {
+                const [lng, lat] = p.location.coordinates;
+                return { lat, lng };
+              }
+              return null;
+            })
+            .filter((p): p is LocationPoint => p !== null);
           setMotoristaPath(path);
-        } else {
+      } else {
           setMotoristaPath([]);
-        }
       }
 
 
       // --- 3. Obtener la última ubicación conocida del motorista ---
-      const { data: lastLocationData, error: lastLocationError } = await supabase
-        .from('locations_motoristas')
-        .select('location')
-        .eq('id_motorista', motoristaIdAsInt)
-        .single();
-      
-      if (lastLocationData && lastLocationData.location) {
-          // PostGIS puede devolver GeoJSON, que es un objeto, no un string.
-          if (typeof lastLocationData.location === 'object' && lastLocationData.location.coordinates) {
-              const [lng, lat] = lastLocationData.location.coordinates;
-              setMotoristaLocation({ lat, lng });
-          } else if (typeof lastLocationData.location === 'string') {
-              const match = lastLocationData.location.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
-              if(match) {
-                setMotoristaLocation({ lat: parseFloat(match[2]), lng: parseFloat(match[1]) });
-              }
-          }
-      } else {
-        setMotoristaLocation(null);
+      const motoristaIdAsInt = parseInt(despacho.id_motorista, 10);
+      if(!isNaN(motoristaIdAsInt)) {
+        const { data: lastLocationData, error: lastLocationError } = await supabase
+          .from('locations_motoristas')
+          .select('location')
+          .eq('id_motorista', motoristaIdAsInt)
+          .single();
+        
+        if (lastLocationData && lastLocationData.location) {
+            // PostGIS puede devolver GeoJSON, que es un objeto, no un string.
+            if (typeof lastLocationData.location === 'object' && lastLocationData.location.coordinates) {
+                const [lng, lat] = lastLocationData.location.coordinates;
+                setMotoristaLocation({ lat, lng });
+            } else if (typeof lastLocationData.location === 'string') {
+                const match = lastLocationData.location.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
+                if(match) {
+                  setMotoristaLocation({ lat: parseFloat(match[2]), lng: parseFloat(match[1]) });
+                }
+            }
+        } else {
+          setMotoristaLocation(null);
+        }
       }
       
       setLoading(false);
