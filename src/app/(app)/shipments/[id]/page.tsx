@@ -777,6 +777,34 @@ export default function ShipmentDetailPage() {
       if (!shipment) return;
       setLoading(true);
 
+      // Si se intenta iniciar un nuevo recorrido, primero se verifica si ya hay uno activo.
+      if (newState === 'en_curso') {
+        const { data: activeShipments, error: checkError } = await supabase
+          .from('despacho')
+          .select('id_despacho')
+          .eq('id_motorista', shipment.id_motorista)
+          .eq('estado_recorrido', 'en_curso')
+          .neq('id_despacho', shipment.id_despacho); // Excluye el despacho actual
+        
+        if (checkError) {
+          setLoading(false);
+          toast({ title: "Error de verificación", description: "No se pudo comprobar si existen otros recorridos activos.", variant: "destructive" });
+          return;
+        }
+
+        if (activeShipments && activeShipments.length > 0) {
+          setLoading(false);
+          toast({
+            title: "Acción no permitida",
+            description: `Ya tiene un recorrido en curso (Despacho #${activeShipments[0].id_despacho}). Por favor, finalícelo antes de iniciar uno nuevo.`,
+            variant: "destructive",
+            duration: 9000,
+          });
+          return;
+        }
+      }
+
+      // Si pasa la validación o se está finalizando un recorrido, se procede a actualizar.
       const { error } = await supabase
           .from('despacho')
           .update({ estado_recorrido: newState })
