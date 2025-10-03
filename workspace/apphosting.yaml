@@ -1,7 +1,7 @@
 # Settings to manage and configure a Firebase App Hosting backend.
 # https://firebase.google.com/docs/app-hosting/configure
 runConfig:
-  cpu: 0.5
+  cpu: 1
   memoryMiB: 512
   maxInstances: 2
   timeoutSeconds: 60
