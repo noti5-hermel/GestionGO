@@ -78,29 +78,51 @@ export function MainNav({ session }: MainNavProps) {
   const isRestrictedRole = restrictedRoles.some(role => userRole.includes(role));
   const isAdmin = userRole.includes('admin');
 
+  // Si el rol es restringido (motorista, etc.), el único item es "Despachos".
+  // Si no, se muestran todos los items excepto el Dashboard que se maneja aparte si no es admin.
   const menuItemsToRender = isRestrictedRole
     ? allMenuItems.filter(item => item.href === '/shipments')
-    : allMenuItems;
+    : allMenuItems.filter(item => isAdmin || item.href !== '/'); // Oculta Dashboard si no es admin
   
   const adminItemsToRender = isRestrictedRole ? [] : (isAdmin ? adminMenuItems : adminMenuItems.filter(item => item.href !== '/image-test'));
 
 
   return (
     <SidebarMenu className="p-2">
-      {menuItemsToRender.map((item) => (
-        <SidebarMenuItem key={item.href}>
+      {/* El dashboard solo lo ven los admins */}
+      {isAdmin && (
+         <SidebarMenuItem>
           <SidebarMenuButton
             asChild
-            isActive={pathname === item.href}
-            tooltip={{children: item.label, side: "right", align: "center" }}
+            isActive={pathname === '/'}
+            tooltip={{children: 'Dashboard', side: "right", align: "center" }}
           >
-            <Link href={item.href}>
-              <item.icon className="size-4 shrink-0" />
-              <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
+            <Link href='/'>
+              <LayoutDashboard className="size-4 shrink-0" />
+              <span className="group-data-[collapsible=icon]:hidden">Dashboard</span>
             </Link>
           </SidebarMenuButton>
         </SidebarMenuItem>
-      ))}
+      )}
+
+      {menuItemsToRender.map((item) => {
+        // Evita renderizar el dashboard dos veces si ya fue incluido para el admin
+        if(item.href === '/' && isAdmin) return null;
+        return (
+          <SidebarMenuItem key={item.href}>
+            <SidebarMenuButton
+              asChild
+              isActive={pathname.startsWith(item.href) && item.href !== '/'}
+              tooltip={{children: item.label, side: "right", align: "center" }}
+            >
+              <Link href={item.href}>
+                <item.icon className="size-4 shrink-0" />
+                <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        )
+      })}
       
       {(adminItemsToRender.length > 0 || utilityMenuItems.length > 0) && (
         <SidebarMenuItem>

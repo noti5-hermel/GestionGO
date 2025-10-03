@@ -117,16 +117,16 @@ export default function LoginPage() {
           'motorista', 'auxiliar', 'bodega', 'reparto', 
           'asist.admon', 'gerente.admon', 'cobros'
         ];
+        
+        const isRestricted = restrictedRoles.some(role => userRole.includes(role));
 
-        // Los roles restringidos van a la vista de despachos.
-        if (restrictedRoles.some(role => userRole.includes(role))) {
+        if (isRestricted) {
           window.location.href = "/shipments";
-        // El rol de admin va al dashboard principal.
         } else if (userRole.includes('admin')) {
           window.location.href = "/";
         } else {
-          // El resto de roles van a la vista de usuarios por defecto.
-          window.location.href = "/users";
+          // El rol "Facturacion" u otros no restringidos, van al dashboard por defecto
+          window.location.href = "/";
         }
 
       } else {
