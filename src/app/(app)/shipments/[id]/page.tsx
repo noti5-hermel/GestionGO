@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
-import { ArrowLeft, Pencil, Upload, Camera, X, FileText, Loader2, MapPin, Play, Square } from "lucide-react"
+import { ArrowLeft, Pencil, Upload, Camera, X, FileText, Loader2, MapPin, Play, Square, ListOrdered } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
@@ -254,6 +254,11 @@ export default function ShipmentDetailPage() {
   
   const [currentUser, setCurrentUser] = useState<any | null>(null);
   const [verifyingLocationInvoiceId, setVerifyingLocationInvoiceId] = useState<number | null>(null);
+
+  // Estados para la nueva funcionalidad de orden de visita
+  const [orderedRoute, setOrderedRoute] = useState<ShipmentInvoice[]>([]);
+  const [isOrderDialogOpen, setIsOrderDialogOpen] = useState(false);
+  const [isOptimizingRoute, setIsOptimizingRoute] = useState(false);
 
 
   // --- FORMULARIO ---
@@ -677,49 +682,47 @@ export default function ShipmentDetailPage() {
   };
 
   /**
-   * Exporta la ruta del despacho a Google Maps.
-   * Utiliza la API de Rutas de Google para optimizar el orden de los puntos de entrega.
+   * Obtiene la ruta optimizada de Google y la devuelve.
+   * @returns Un array de facturas en el orden optimizado, o un array vacío si falla.
    */
-  const handleExportRouteToMaps = async () => {
-    // Extrae y filtra los puntos (centroides de geocercas) de las facturas.
-    const waypoints = invoices
+  const getOptimizedRouteOrder = async (): Promise<ShipmentInvoice[]> => {
+    const waypointsWithCentroids = invoices
       .map(invoice => {
         const centroid = parseGeofenceCentroid(invoice.geocerca);
         if (!centroid) return null;
-        return { customer: invoice, centroid };
+        return { invoice, centroid };
       })
-      .filter((c): c is { customer: any; centroid: { lat: string; lng: string } } => c !== null);
+      .filter((c): c is { invoice: ShipmentInvoice; centroid: { lat: string; lng: string } } => c !== null);
 
-    if (waypoints.length === 0) {
-        toast({
-            title: "Sin Puntos Válidos",
-            description: "Ninguna de las facturas en este despacho tiene una geocerca válida para generar una ruta.",
-            variant: "destructive"
-        });
-        return;
+    if (waypointsWithCentroids.length === 0) {
+      toast({
+        title: "Sin Puntos Válidos",
+        description: "Ninguna de las facturas en este despacho tiene una geocerca válida para generar una ruta.",
+        variant: "destructive"
+      });
+      return [];
     }
-    
-    setLoading(true);
+
+    setIsOptimizingRoute(true);
 
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
     if (!apiKey) {
       toast({ title: "Error de Configuración", description: "La API Key de Google Maps no está configurada.", variant: "destructive" });
-      setLoading(false);
-      return;
+      setIsOptimizingRoute(false);
+      return [];
     }
 
     const toApiLatLng = (latLng: { lat: number | string; lng: number | string }) => ({
         location: { latLng: { latitude: Number(latLng.lat), longitude: Number(latLng.lng) } }
     });
 
-    // Construye el cuerpo de la petición para la API de Google Routes.
     const requestBody: any = {
       travelMode: "DRIVE",
       routingPreference: "TRAFFIC_AWARE",
       origin: toApiLatLng({lat: BODEGA_LOCATION.lat, lng: BODEGA_LOCATION.lng }),
       destination: toApiLatLng({lat: BODEGA_LOCATION.lat, lng: BODEGA_LOCATION.lng }),
-      intermediates: waypoints.map(w => toApiLatLng({ lat: w.centroid.lat, lng: w.centroid.lng })),
-      optimizeWaypointOrder: true, // Pide a la API que optimice el orden de las paradas.
+      intermediates: waypointsWithCentroids.map(w => toApiLatLng({ lat: w.centroid.lat, lng: w.centroid.lng })),
+      optimizeWaypointOrder: true,
     };
 
     const headers = {
@@ -729,7 +732,6 @@ export default function ShipmentDetailPage() {
     };
 
     try {
-      // Llama a la API para calcular la ruta optimizada.
       const response = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
         method: "POST",
         headers,
@@ -739,35 +741,62 @@ export default function ShipmentDetailPage() {
       if (!response.ok) throw new Error(`Error en la API de Rutas: ${response.statusText}`);
       
       const data = await response.json();
-      
       const waypointOrder: number[] = data.routes[0].optimizedIntermediateWaypointIndex || [];
-      const orderedWaypoints = waypointOrder.map(index => waypoints[index].centroid);
-
-      // Construye la URL de Google Maps con la ruta optimizada.
-      const origin = `${BODEGA_LOCATION.lat},${BODEGA_LOCATION.lng}`;
-      let waypointsString = "";
-      let destination = origin;
-
-      if (orderedWaypoints.length > 0) {
-        destination = `${orderedWaypoints[orderedWaypoints.length - 1].lat},${orderedWaypoints[orderedWaypoints.length - 1].lng}`;
-        waypointsString = orderedWaypoints.slice(0, -1).map(wp => `${wp.lat},${wp.lng}`).join('|');
-      }
-
-      const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}${waypointsString ? `&waypoints=${waypointsString}` : ''}`;
-
-      window.open(googleMapsUrl, '_blank');
+      
+      const orderedInvoices = waypointOrder.map(index => waypointsWithCentroids[index].invoice);
+      // Añade al inicio el "punto de partida" que es la bodega.
+      const finalOrderedList = [
+          { customer_name: 'Bodega (Punto de Partida)', id_fac_desp: -1 } as ShipmentInvoice,
+          ...orderedInvoices,
+      ];
+      return finalOrderedList;
 
     } catch (error) {
       console.error("Error al optimizar la ruta:", error);
-      toast({ title: "Error de Red", description: "No se pudo obtener la ruta optimizada. Se exportará sin optimizar.", variant: "destructive" });
-      // Fallback a la exportación sin optimizar si la API falla.
-      const waypointsString = waypoints.map(wp => `${wp.centroid.lat},${wp.centroid.lng}`).join('|');
-      const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${BODEGA_LOCATION.lat},${BODEGA_LOCATION.lng}&waypoints=${waypointsString}`;
-      window.open(googleMapsUrl, '_blank');
+      toast({ title: "Error de Red", description: "No se pudo obtener la ruta optimizada.", variant: "destructive" });
+      return [];
     } finally {
-        setLoading(false);
+        setIsOptimizingRoute(false);
     }
   };
+
+  /**
+   * Exporta la ruta del despacho a Google Maps.
+   */
+  const handleExportRouteToMaps = async () => {
+    const orderedInvoices = await getOptimizedRouteOrder();
+    if (orderedInvoices.length <= 1) return; // Si solo está la bodega, no hacer nada
+
+    const waypoints = orderedInvoices
+        .slice(1) // Omitir la bodega
+        .map(invoice => {
+            const centroid = parseGeofenceCentroid(invoice.geocerca);
+            return centroid ? `${centroid.lat},${centroid.lng}` : null;
+        })
+        .filter(Boolean) as string[];
+
+    if (waypoints.length === 0) return;
+    
+    const origin = `${BODEGA_LOCATION.lat},${BODEGA_LOCATION.lng}`;
+    const destination = waypoints[waypoints.length - 1];
+    const intermediateWaypoints = waypoints.slice(0, -1).join('|');
+
+    const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}${intermediateWaypoints ? `&waypoints=${intermediateWaypoints}` : ''}`;
+    
+    window.open(googleMapsUrl, '_blank');
+  };
+
+  /**
+   * Muestra el diálogo con la lista ordenada de clientes a visitar.
+   */
+  const handleShowVisitOrder = async () => {
+      const orderedInvoices = await getOptimizedRouteOrder();
+      if (orderedInvoices.length > 0) {
+          setOrderedRoute(orderedInvoices);
+          setIsOrderDialogOpen(true);
+      }
+  };
+
   
   /**
    * Cambia el estado del recorrido (iniciar/finalizar) en la base de datos
@@ -947,14 +976,18 @@ export default function ShipmentDetailPage() {
                       <Square className="mr-2 h-4 w-4" /> Finalizar Recorrido
                     </Button>
                   )}
+                   <Button onClick={handleShowVisitOrder} variant="outline" disabled={isOptimizingRoute} className="w-full md:w-auto">
+                    {isOptimizingRoute ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ListOrdered className="mr-2 h-4 w-4" />}
+                    Ver Orden de Visita
+                   </Button>
                   {shipment.estado_recorrido === 'finalizado' && (
                      <Button disabled className="w-full md:w-auto">Recorrido Finalizado</Button>
                   )}
                 </>
               )}
-              <Button variant="outline" onClick={handleExportRouteToMaps} className="w-full md:w-auto" disabled={loading}>
-                 {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MapPin className="mr-2 h-4 w-4" />}
-                 {loading ? "Optimizando..." : "Exportar Ruta a Maps"}
+              <Button variant="outline" onClick={handleExportRouteToMaps} className="w-full md:w-auto" disabled={isOptimizingRoute}>
+                 {isOptimizingRoute ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MapPin className="mr-2 h-4 w-4" />}
+                 {isOptimizingRoute ? "Optimizando..." : "Exportar Ruta a Maps"}
               </Button>
               <Button variant="outline" onClick={handleGeneratePdf} className="w-full md:w-auto">
                 <FileText className="mr-2 h-4 w-4" /> Ver Informe
@@ -1042,6 +1075,37 @@ export default function ShipmentDetailPage() {
           />
         }
       </div>
+
+       {/* Diálogo para ver el orden de visita */}
+      <Dialog open={isOrderDialogOpen} onOpenChange={setIsOrderDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ListOrdered /> Orden de Visita Sugerido
+            </DialogTitle>
+            <DialogDescription>
+              Esta es la secuencia de entrega recomendada por Google Maps para optimizar su ruta.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto pr-2">
+            <ol className="list-decimal list-inside space-y-3">
+              {orderedRoute.map((invoice, index) => (
+                <li key={invoice.id_fac_desp} className="font-medium">
+                  {invoice.customer_name}
+                  {invoice.id_fac_desp > -1 && (
+                     <p className="text-sm font-normal text-muted-foreground">
+                        Factura: {String(invoice.reference_number)}
+                     </p>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setIsOrderDialogOpen(false)}>Cerrar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Diálogo para editar una factura del despacho */}
       <Dialog open={isInvoiceDialogOpen} onOpenChange={setIsInvoiceDialogOpen}>
