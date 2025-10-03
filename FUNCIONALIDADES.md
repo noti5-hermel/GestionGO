@@ -43,7 +43,7 @@ Este documento detalla las características principales y el propósito de cada 
 -   **Página Central de Operaciones:** Esta es la vista más importante para la gestión diaria del reparto.
 -   **Inicio y Fin de Recorrido:**
     -   Para los motoristas, se muestran los botones **"Iniciar Recorrido"** y **"Finalizar Recorrido"**.
-    -   Al iniciar, el sistema comienza a grabar el historial de ubicaciones asociado **exclusivamente a ese despacho**.
+    -   Al iniciar, el sistema comienza a grabar el historial de ubicaciones asociado **exclusivamente a ese despacho**. No se puede iniciar un nuevo recorrido si ya hay otro activo.
     -   Al finalizar, el rastreo para ese despacho se detiene. Esto permite un seguimiento preciso por cada viaje.
 -   **Información General:** Muestra un resumen del despacho, incluyendo ruta, personal asignado, fecha y totales de pago.
 -   **Estado del Proceso:** Presenta una serie de insignias que muestran qué etapa del proceso ha sido completada (Bodega, Reparto, Cobros, etc.).
@@ -54,7 +54,9 @@ Este documento detalla las características principales y el propósito de cada 
     -   Subir una **imagen del comprobante** desde los archivos del dispositivo o **capturar una foto directamente con la cámara**.
 -   **Restricción por Geocerca:** Para los motoristas, las acciones de editar o tomar foto solo se habilitan si se encuentran físicamente dentro de la geocerca del cliente. Si el cliente no tiene geocerca, se guarda la ubicación actual del motorista.
 -   **Generación de Informe PDF:** Un botón permite generar y previsualizar un informe completo del despacho en formato PDF, listo para descargar.
--   **Exportación de Ruta a Google Maps:** Permite exportar la ruta optimizada de los puntos de entrega a Google Maps para la navegación.
+-   **Orden de Visita y Exportación:**
+    -   **Ver Orden de Visita:** Un botón permite al motorista ver una lista ordenada de los clientes que debe visitar, según la ruta optimizada por Google Maps.
+    -   **Exportar Ruta a Google Maps:** Permite exportar la ruta optimizada de los puntos de entrega a Google Maps para la navegación.
 
 ---
 

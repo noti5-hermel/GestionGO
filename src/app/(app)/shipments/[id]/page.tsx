@@ -26,7 +26,7 @@ import { PdfPreviewModal } from "@/components/pdf-preview-modal"
  * @file shipments/[id]/page.tsx
  * @description Página de detalle para un despacho. Permite ver toda la información, gestionar el estado
  * del recorrido (iniciar/finalizar) para el seguimiento GPS, editar facturas, subir comprobantes,
- * y restringir acciones por geocerca para los motoristas.
+ * y restringir acciones por geocerca para los motoristas. También ofrece una lista ordenada de visitas.
  */
 
 const BUCKET_NAME = 'comprobante';
@@ -255,7 +255,7 @@ export default function ShipmentDetailPage() {
   const [currentUser, setCurrentUser] = useState<any | null>(null);
   const [verifyingLocationInvoiceId, setVerifyingLocationInvoiceId] = useState<number | null>(null);
 
-  // Estados para la nueva funcionalidad de orden de visita
+  // Estados para la nueva funcionalidad de orden de visita.
   const [orderedRoute, setOrderedRoute] = useState<ShipmentInvoice[]>([]);
   const [isOrderDialogOpen, setIsOrderDialogOpen] = useState(false);
   const [isOptimizingRoute, setIsOptimizingRoute] = useState(false);
@@ -644,6 +644,8 @@ export default function ShipmentDetailPage() {
   
     /**
    * Parsea una geocerca para obtener su centroide.
+   * Esta función es crucial para convertir las formas geométricas de las geocercas en puntos GPS únicos
+   * que la API de Google Maps puede usar como destinos.
    */
   const parseGeofenceCentroid = (geofenceData: any): { lat: string; lng: string } | null => {
     if (!geofenceData) return null;
@@ -682,10 +684,12 @@ export default function ShipmentDetailPage() {
   };
 
   /**
-   * Obtiene la ruta optimizada de Google y la devuelve.
+   * Obtiene la ruta optimizada de Google y la devuelve en el orden correcto.
+   * Llama a la API de Google Routes para calcular la secuencia de visita más eficiente.
    * @returns Un array de facturas en el orden optimizado, o un array vacío si falla.
    */
   const getOptimizedRouteOrder = async (): Promise<ShipmentInvoice[]> => {
+    // Filtra las facturas para obtener solo aquellas con una geocerca válida y calcula sus centroides.
     const waypointsWithCentroids = invoices
       .map(invoice => {
         const centroid = parseGeofenceCentroid(invoice.geocerca);
@@ -711,7 +715,8 @@ export default function ShipmentDetailPage() {
       setIsOptimizingRoute(false);
       return [];
     }
-
+    
+    // Formatea los datos para la API de Google.
     const toApiLatLng = (latLng: { lat: number | string; lng: number | string }) => ({
         location: { latLng: { latitude: Number(latLng.lat), longitude: Number(latLng.lng) } }
     });
@@ -722,13 +727,13 @@ export default function ShipmentDetailPage() {
       origin: toApiLatLng({lat: BODEGA_LOCATION.lat, lng: BODEGA_LOCATION.lng }),
       destination: toApiLatLng({lat: BODEGA_LOCATION.lat, lng: BODEGA_LOCATION.lng }),
       intermediates: waypointsWithCentroids.map(w => toApiLatLng({ lat: w.centroid.lat, lng: w.centroid.lng })),
-      optimizeWaypointOrder: true,
+      optimizeWaypointOrder: true, // Pide a Google que optimice el orden de los puntos intermedios.
     };
 
     const headers = {
       "Content-Type": "application/json",
       "X-Goog-Api-Key": apiKey,
-      "X-Goog-FieldMask": "routes.optimizedIntermediateWaypointIndex",
+      "X-Goog-FieldMask": "routes.optimizedIntermediateWaypointIndex", // Solo pedimos el orden optimizado.
     };
 
     try {
@@ -743,6 +748,7 @@ export default function ShipmentDetailPage() {
       const data = await response.json();
       const waypointOrder: number[] = data.routes[0].optimizedIntermediateWaypointIndex || [];
       
+      // Reordena el array de facturas según la respuesta de Google.
       const orderedInvoices = waypointOrder.map(index => waypointsWithCentroids[index].invoice);
       // Añade al inicio el "punto de partida" que es la bodega.
       const finalOrderedList = [
@@ -761,7 +767,8 @@ export default function ShipmentDetailPage() {
   };
 
   /**
-   * Exporta la ruta del despacho a Google Maps.
+   * Exporta la ruta del despacho a Google Maps en una nueva pestaña.
+   * Usa el orden optimizado para construir la URL.
    */
   const handleExportRouteToMaps = async () => {
     const orderedInvoices = await getOptimizedRouteOrder();
@@ -801,6 +808,7 @@ export default function ShipmentDetailPage() {
   /**
    * Cambia el estado del recorrido (iniciar/finalizar) en la base de datos
    * y gestiona el almacenamiento local del despacho activo para el rastreo GPS.
+   * Ahora incluye una validación para no iniciar un nuevo recorrido si ya hay uno activo.
    */
   const toggleShipmentState = async (newState: 'en_curso' | 'finalizado') => {
       if (!shipment) return;
