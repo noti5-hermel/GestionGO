@@ -106,135 +106,6 @@ const StatusBadge = ({ checked, text }: { checked: boolean, text: string }) => {
 }
 
 /**
- * Componente para renderizar una tabla de facturas para una categoría específica.
- * Ahora incluye botones de ordenamiento visibles solo para el rol "Facturacion".
- */
-const InvoicesTable = ({ 
-  invoiceList, 
-  title, 
-  description, 
-  handleOpenImageModal, 
-  handleEditInvoice,
-  openCameraDialog,
-  verifyingLocationInvoiceId,
-  canReorder,
-  onReorder
-}: { 
-  invoiceList: ShipmentInvoice[], 
-  title: string, 
-  description: string,
-  handleOpenImageModal: (imageUrl: string) => void,
-  handleEditInvoice: (invoice: ShipmentInvoice) => void,
-  openCameraDialog: (invoice: ShipmentInvoice) => void,
-  verifyingLocationInvoiceId: number | null,
-  canReorder: boolean,
-  onReorder: (invoiceId: number, direction: 'up' | 'down') => void
-}) => {
-  const getStatusLabel = (status: boolean) => status ? "Pagado" : "Pendiente";
-  const getBadgeVariant = (status: boolean) => status ? "default" : "secondary";
-  const formatDateTime = (dateString: string | null) => {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
-  };
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              {canReorder && <TableHead className="w-20">Orden</TableHead>}
-              <TableHead>No. Factura</TableHead>
-              <TableHead>Nombre del Cliente</TableHead>
-              <TableHead>Geocerca</TableHead>
-              <TableHead>Comprobante</TableHead>
-              <TableHead>Fecha Entrega</TableHead>
-              <TableHead>Total Factura</TableHead>
-              <TableHead>Forma de Pago</TableHead>
-              <TableHead>Monto Pagado</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {invoiceList.length > 0 ? invoiceList.map((invoice, index) => (
-              <TableRow key={invoice.id_fac_desp}>
-                {canReorder && (
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" className="h-6 w-6" disabled={index === 0} onClick={() => onReorder(invoice.id_fac_desp, 'up')}>
-                        <ArrowUp className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-6 w-6" disabled={index === invoiceList.length - 1} onClick={() => onReorder(invoice.id_fac_desp, 'down')}>
-                        <ArrowDown className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                )}
-                <TableCell className="font-medium">{String(invoice.reference_number || invoice.id_factura)}</TableCell>
-                <TableCell>{invoice.customer_name || 'N/A'}</TableCell>
-                <TableCell>
-                  <Badge variant={invoice.geocerca ? 'default' : 'outline'}>{invoice.geocerca ? 'Sí' : 'No'}</Badge>
-                </TableCell>
-                <TableCell>
-                    {invoice.comprobante ? (
-                      <button onClick={() => handleOpenImageModal(invoice.comprobante)}>
-                        <Image
-                            src={invoice.comprobante}
-                            alt={`Comprobante de ${invoice.id_factura}`}
-                            width={60}
-                            height={60}
-                            className="h-16 w-16 rounded-md object-cover"
-                        />
-                      </button>
-                    ) : (
-                      <span className="text-muted-foreground">N/A</span>
-                    )}
-                </TableCell>
-                <TableCell>{formatDateTime(invoice.fecha_entrega)}</TableCell>
-                <TableCell>${(invoice.grand_total ?? 0).toFixed(2)}</TableCell>
-                <TableCell>{invoice.forma_pago}</TableCell>
-                <TableCell>${invoice.monto.toFixed(2)}</TableCell>
-                <TableCell>
-                  <Badge variant={getBadgeVariant(invoice.state)}>
-                    {getStatusLabel(invoice.state)}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end items-center gap-2">
-                    <Button variant="ghost" size="icon" onClick={() => handleEditInvoice(invoice)} disabled={verifyingLocationInvoiceId === invoice.id_fac_desp}>
-                      {verifyingLocationInvoiceId === invoice.id_fac_desp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => openCameraDialog(invoice)} disabled={verifyingLocationInvoiceId === invoice.id_fac_desp}>
-                       {verifyingLocationInvoiceId === invoice.id_fac_desp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            )) : (
-              <TableRow>
-                  <TableCell colSpan={canReorder ? 11 : 10} className="text-center">No hay facturas en esta categoría.</TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </CardContent>
-      <CardFooter>
-          <div className="text-xs text-muted-foreground">
-              Mostrando <strong>{invoiceList.length}</strong> de <strong>{invoiceList.length}</strong> facturas.
-          </div>
-      </CardFooter>
-    </Card>
-  );
-}
-
-
-/**
  * Componente principal de la página de detalle de despacho.
  */
 export default function ShipmentDetailPage() {
@@ -716,7 +587,7 @@ export default function ShipmentDetailPage() {
     if (hasManualOrder) {
       // Si hay orden manual, simplemente ordena las facturas según ese campo.
       toast({ title: "Usando Orden Manual", description: "La ruta se ha generado según el orden manual establecido." });
-      const manuallyOrderedInvoices = [...invoices].sort((a, b) => (a.orden_visita || 0) - (b.orden_visita || 0));
+      const manuallyOrderedInvoices = [...invoices].sort((a, b) => (a.orden_visita || Infinity) - (b.orden_visita || Infinity));
       return [
           { customer_name: 'Bodega (Punto de Partida)', id_fac_desp: -1 } as ShipmentInvoice,
           ...manuallyOrderedInvoices,
@@ -901,6 +772,54 @@ export default function ShipmentDetailPage() {
   };
 
 
+  /**
+   * Gestiona el reordenamiento de una factura (arriba/abajo).
+   * @param invoiceId - El ID de la factura (`id_fac_desp`) a mover.
+   * @param direction - 'up' o 'down'.
+   */
+  const handleReorder = async (invoiceId: number, direction: 'up' | 'down') => {
+      // 1. Encuentra el índice actual de la factura en la lista ordenada.
+      const currentIndex = sortedInvoices.findIndex(inv => inv.id_fac_desp === invoiceId);
+      if (currentIndex === -1) return;
+
+      // 2. Determina el índice de la factura con la que se intercambiará.
+      const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+
+      // 3. Valida que el nuevo índice esté dentro de los límites de la lista.
+      if (targetIndex < 0 || targetIndex >= sortedInvoices.length) return;
+
+      // 4. Obtiene las dos facturas que se intercambiarán.
+      const invoiceA = sortedInvoices[currentIndex];
+      const invoiceB = sortedInvoices[targetIndex];
+
+      // 5. Intercambia sus valores de `orden_visita`.
+      // Si los valores son null, se asignan sus índices actuales como base para la primera vez.
+      const orderA = invoiceA.orden_visita ?? currentIndex;
+      const orderB = invoiceB.orden_visita ?? targetIndex;
+      
+      setLoading(true);
+
+      // 6. Realiza las dos actualizaciones en la base de datos.
+      const { error: errorA } = await supabase
+          .from('facturacion_x_despacho')
+          .update({ orden_visita: orderB })
+          .eq('id_fac_desp', invoiceA.id_fac_desp);
+
+      const { error: errorB } = await supabase
+          .from('facturacion_x_despacho')
+          .update({ orden_visita: orderA })
+          .eq('id_fac_desp', invoiceB.id_fac_desp);
+      
+      setLoading(false);
+
+      if (errorA || errorB) {
+          toast({ title: "Error al reordenar", description: errorA?.message || errorB?.message, variant: "destructive" });
+      } else {
+          toast({ title: "Éxito", description: "El orden de visita ha sido actualizado." });
+          fetchData(); // Recarga todos los datos para reflejar el cambio.
+      }
+  };
+
   // --- FUNCIONES AUXILIARES DE LA UI ---
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -967,78 +886,36 @@ export default function ShipmentDetailPage() {
       );
     }
   };
-
-  /**
- * Gestiona el reordenamiento de una factura (arriba/abajo).
- * @param invoiceId - El ID de la factura (`id_fac_desp`) a mover.
- * @param direction - 'up' o 'down'.
- */
-const handleReorder = async (invoiceId: number, direction: 'up' | 'down') => {
-  // 1. Encuentra la categoría a la que pertenece la factura.
-  const allInvoices = [...fiscalCreditInvoices, ...finalConsumerInvoices, ...otherInvoices];
-  const targetInvoice = allInvoices.find(inv => inv.id_fac_desp === invoiceId);
-  if (!targetInvoice) return;
-
-  const listToReorder = targetInvoice.tax_type === 'Crédito Fiscal' ? fiscalCreditInvoices : 
-                        targetInvoice.tax_type === 'Consumidor Final' ? finalConsumerInvoices : otherInvoices;
-
-  const currentIndex = listToReorder.findIndex(inv => inv.id_fac_desp === invoiceId);
-  const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-
-  if (targetIndex < 0 || targetIndex >= listToReorder.length) return;
-
-  // 2. Obtiene las dos facturas que se intercambiarán.
-  const invoiceA = listToReorder[currentIndex];
-  const invoiceB = listToReorder[targetIndex];
-
-  // 3. Intercambia sus valores de `orden_visita`.
-  // Si los valores son null, se asignan sus índices actuales como base.
-  const orderA = invoiceA.orden_visita ?? currentIndex;
-  const orderB = invoiceB.orden_visita ?? targetIndex;
+  const getStatusLabel = (status: boolean) => status ? "Pagado" : "Pendiente";
+  const getBadgeVariant = (status: boolean) => status ? "default" : "secondary";
+  const formatDateTime = (dateString: string | null) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
+  };
   
-  setLoading(true);
-  const { error } = await supabase.rpc('swap_invoice_order', {
-    invoice_id_1: invoiceA.id_fac_desp,
-    new_order_1: orderB,
-    invoice_id_2: invoiceB.id_fac_desp,
-    new_order_2: orderA,
-  });
-  setLoading(false);
-
-  if (error) {
-    toast({ title: "Error al reordenar", description: error.message, variant: "destructive" });
-  } else {
-    toast({ title: "Éxito", description: "El orden de visita ha sido actualizado." });
-    fetchData(); // Recarga todos los datos para reflejar el cambio.
-  }
-};
-  
-  // Separa las facturas por tipo de cliente para renderizarlas en tablas distintas.
-  // Ahora también se ordenan por `orden_visita`.
+  // Ordena las facturas por `orden_visita`. Las que no tienen orden (null) van al final.
   const sortedInvoices = useMemo(() => {
     return [...invoices].sort((a, b) => {
-        // Las facturas con un orden definido van primero.
-        if (a.orden_visita !== null && b.orden_visita !== null) {
-            return a.orden_visita - b.orden_visita;
-        }
-        if (a.orden_visita !== null) return -1;
-        if (b.orden_visita !== null) return 1;
-        // Si no hay orden, se mantiene el orden por defecto.
-        return 0;
+        const orderA = a.orden_visita === null ? Infinity : a.orden_visita;
+        const orderB = b.orden_visita === null ? Infinity : b.orden_visita;
+        return orderA - orderB;
     });
   }, [invoices]);
 
-  const fiscalCreditInvoices = sortedInvoices.filter(inv => inv.tax_type === 'Crédito Fiscal');
-  const finalConsumerInvoices = sortedInvoices.filter(inv => inv.tax_type === 'Consumidor Final');
-  const otherInvoices = sortedInvoices.filter(inv => inv.tax_type !== 'Crédito Fiscal' && inv.tax_type !== 'Consumidor Final');
-
   // Calcula los totales dinámicamente basados en el `monto` de las facturas cargadas.
   const { totalContadoCalculado, totalCreditoCalculado, totalGeneralCalculado } = useMemo(() => {
-      const totalContadoCalculado = finalConsumerInvoices.reduce((acc, inv) => acc + inv.monto, 0);
-      const totalCreditoCalculado = fiscalCreditInvoices.reduce((acc, inv) => acc + inv.monto, 0);
+      const totalContadoCalculado = invoices
+        .filter(inv => inv.tax_type === 'Consumidor Final')
+        .reduce((acc, inv) => acc + inv.monto, 0);
+
+      const totalCreditoCalculado = invoices
+        .filter(inv => inv.tax_type === 'Crédito Fiscal')
+        .reduce((acc, inv) => acc + inv.monto, 0);
+
       const totalGeneralCalculado = totalContadoCalculado + totalCreditoCalculado;
       return { totalContadoCalculado, totalCreditoCalculado, totalGeneralCalculado };
-  }, [finalConsumerInvoices, fiscalCreditInvoices]);
+  }, [invoices]);
   
   const isMotorista = currentUser?.role?.toLowerCase() === 'motorista';
   const isFacturacion = currentUser?.role?.toLowerCase() === 'facturacion';
@@ -1143,44 +1020,90 @@ const handleReorder = async (invoiceId: number, direction: 'up' | 'down') => {
             <StatusBadge checked={shipment.cobros} text="Cobros"/>
          </CardContent>
       </Card>
-
-      <div className="space-y-6">
-        <InvoicesTable 
-          invoiceList={fiscalCreditInvoices} 
-          title="Facturación - Crédito Fiscal" 
-          description="Facturas asociadas a clientes de tipo Crédito Fiscal."
-          handleOpenImageModal={handleOpenImageModal}
-          handleEditInvoice={handleEditInvoice}
-          openCameraDialog={openCameraDialog}
-          verifyingLocationInvoiceId={verifyingLocationInvoiceId}
-          canReorder={isFacturacion}
-          onReorder={handleReorder}
-        />
-        <InvoicesTable 
-          invoiceList={finalConsumerInvoices} 
-          title="Facturación - Consumidor Final" 
-          description="Facturas asociadas a clientes de tipo Consumidor Final."
-          handleOpenImageModal={handleOpenImageModal}
-          handleEditInvoice={handleEditInvoice}
-          openCameraDialog={openCameraDialog}
-          verifyingLocationInvoiceId={verifyingLocationInvoiceId}
-          canReorder={isFacturacion}
-          onReorder={handleReorder}
-        />
-        {otherInvoices.length > 0 && 
-          <InvoicesTable 
-            invoiceList={otherInvoices} 
-            title="Facturación - Otros" 
-            description="Facturas sin un tipo de cliente especificado."
-            handleOpenImageModal={handleOpenImageModal}
-            handleEditInvoice={handleEditInvoice}
-            openCameraDialog={openCameraDialog}
-            verifyingLocationInvoiceId={verifyingLocationInvoiceId}
-            canReorder={isFacturacion}
-            onReorder={handleReorder}
-          />
-        }
-      </div>
+      
+      <Card>
+        <CardHeader>
+            <CardTitle>Facturas del Despacho</CardTitle>
+            <CardDescription>
+                Lista completa de facturas asignadas. Use las flechas para establecer un orden de visita manual.
+            </CardDescription>
+        </CardHeader>
+        <CardContent>
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        {isFacturacion && <TableHead className="w-20">Orden</TableHead>}
+                        <TableHead>No. Factura</TableHead>
+                        <TableHead>Nombre del Cliente</TableHead>
+                        <TableHead>Tipo Cliente</TableHead>
+                        <TableHead>Geocerca</TableHead>
+                        <TableHead>Comprobante</TableHead>
+                        <TableHead>Fecha Entrega</TableHead>
+                        <TableHead>Total Factura</TableHead>
+                        <TableHead>Forma de Pago</TableHead>
+                        <TableHead>Monto Pagado</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead className="text-right">Acciones</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {sortedInvoices.length > 0 ? sortedInvoices.map((invoice, index) => (
+                        <TableRow key={invoice.id_fac_desp}>
+                            {isFacturacion && (
+                                <TableCell>
+                                    <div className="flex items-center gap-1">
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" disabled={index === 0 || loading} onClick={() => handleReorder(invoice.id_fac_desp, 'up')}>
+                                            <ArrowUp className="h-4 w-4" />
+                                        </Button>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" disabled={index === sortedInvoices.length - 1 || loading} onClick={() => handleReorder(invoice.id_fac_desp, 'down')}>
+                                            <ArrowDown className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                </TableCell>
+                            )}
+                            <TableCell className="font-medium">{String(invoice.reference_number || invoice.id_factura)}</TableCell>
+                            <TableCell>{invoice.customer_name || 'N/A'}</TableCell>
+                            <TableCell><Badge variant="secondary">{invoice.tax_type || 'N/A'}</Badge></TableCell>
+                            <TableCell>
+                                <Badge variant={invoice.geocerca ? 'default' : 'outline'}>{invoice.geocerca ? 'Sí' : 'No'}</Badge>
+                            </TableCell>
+                            <TableCell>
+                                {invoice.comprobante ? (
+                                    <button onClick={() => handleOpenImageModal(invoice.comprobante)}>
+                                        <Image src={invoice.comprobante} alt={`Comprobante de ${invoice.id_factura}`} width={60} height={60} className="h-16 w-16 rounded-md object-cover" />
+                                    </button>
+                                ) : (<span className="text-muted-foreground">N/A</span>)}
+                            </TableCell>
+                            <TableCell>{formatDateTime(invoice.fecha_entrega)}</TableCell>
+                            <TableCell>${(invoice.grand_total ?? 0).toFixed(2)}</TableCell>
+                            <TableCell>{invoice.forma_pago}</TableCell>
+                            <TableCell>${invoice.monto.toFixed(2)}</TableCell>
+                            <TableCell><Badge variant={getBadgeVariant(invoice.state)}>{getStatusLabel(invoice.state)}</Badge></TableCell>
+                            <TableCell className="text-right">
+                                <div className="flex justify-end items-center gap-2">
+                                    <Button variant="ghost" size="icon" onClick={() => handleEditInvoice(invoice)} disabled={verifyingLocationInvoiceId === invoice.id_fac_desp}>
+                                        {verifyingLocationInvoiceId === invoice.id_fac_desp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
+                                    </Button>
+                                    <Button variant="ghost" size="icon" onClick={() => openCameraDialog(invoice)} disabled={verifyingLocationInvoiceId === invoice.id_fac_desp}>
+                                        {verifyingLocationInvoiceId === invoice.id_fac_desp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+                                    </Button>
+                                </div>
+                            </TableCell>
+                        </TableRow>
+                    )) : (
+                        <TableRow>
+                            <TableCell colSpan={isFacturacion ? 12 : 11} className="text-center">No hay facturas en este despacho.</TableCell>
+                        </TableRow>
+                    )}
+                </TableBody>
+            </Table>
+        </CardContent>
+        <CardFooter>
+            <div className="text-xs text-muted-foreground">
+                Mostrando <strong>{sortedInvoices.length}</strong> de <strong>{sortedInvoices.length}</strong> facturas.
+            </div>
+        </CardFooter>
+    </Card>
 
        {/* Diálogo para ver el orden de visita */}
       <Dialog open={isOrderDialogOpen} onOpenChange={setIsOrderDialogOpen}>
