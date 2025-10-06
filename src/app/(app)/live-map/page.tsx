@@ -119,7 +119,7 @@ export default function LiveMapPage() {
       // --- 1. Obtener datos de las facturas y clientes (ruta planificada) ---
       const { data: facDespacho, error: facDespachoError } = await supabase
         .from('facturacion_x_despacho')
-        .select('id_factura, state, comprobante')
+        .select('id_factura, state, comprobante, orden_visita') // Incluimos orden_visita
         .eq('id_despacho', selectedDespachoId);
 
       if (facDespachoError) {
@@ -127,22 +127,29 @@ export default function LiveMapPage() {
       } else {
         const invoiceIds = facDespacho.map(item => item.id_factura);
         if (invoiceIds.length > 0) {
-          const invoiceStatusMap = new Map(facDespacho.map(item => [item.id_factura, { state: item.state, comprobante: item.comprobante }]));
+          const invoiceDetailsMap = new Map(facDespacho.map(item => [item.id_factura, { state: item.state, comprobante: item.comprobante, orden_visita: item.orden_visita }]));
 
           const { data: facturacionData, error: facturacionError } = await supabase.from('facturacion').select('id_factura, code_customer').in('id_factura', invoiceIds);
           
           if (facturacionData) {
-            const invoiceCustomerMap = new Map(facturacionData.map(item => [item.id_factura, item.code_customer]));
             const customerCodes = [...new Set(facturacionData.map(item => item.code_customer))];
 
             const { data: customersData, error: customersError } = await supabase.from('customer').select('code_customer, customer_name, geocerca').in('code_customer', customerCodes).not('geocerca', 'is', null);
             
             if (customersData) {
               const enrichedCustomers = customersData.map(customer => {
-                  const invoiceId = [...invoiceCustomerMap.entries()].find(([_, cCode]) => cCode === customer.code_customer)?.[0];
-                  const status = invoiceId ? invoiceStatusMap.get(invoiceId) : { state: false, comprobante: null };
-                  return { ...customer, state: status?.state || false, comprobante: status?.comprobante || null };
+                  const invoiceId = facturacionData.find(f => f.code_customer === customer.code_customer)?.id_factura;
+                  const details = invoiceId ? invoiceDetailsMap.get(invoiceId) : { state: false, comprobante: null, orden_visita: null };
+                  return { ...customer, ...details };
               });
+              
+              // Ordenar clientes por `orden_visita` si existe, sino, mantener el orden de la BD.
+              enrichedCustomers.sort((a,b) => {
+                const orderA = a.orden_visita === null ? Infinity : a.orden_visita;
+                const orderB = b.orden_visita === null ? Infinity : b.orden_visita;
+                return orderA - orderB;
+              });
+
               setCustomerGeofences(enrichedCustomers as Customer[]);
             }
           }
