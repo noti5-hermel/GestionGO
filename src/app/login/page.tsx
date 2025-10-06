@@ -122,10 +122,12 @@ export default function LoginPage() {
 
         if (isRestricted) {
           window.location.href = "/shipments";
+        } else if (userRole.includes('facturacion')) {
+          window.location.href = "/invoicing";
         } else if (userRole.includes('admin')) {
           window.location.href = "/";
         } else {
-          // El rol "Facturacion" u otros no restringidos, van al dashboard por defecto
+          // Otros roles no restringidos, van al dashboard por defecto
           window.location.href = "/";
         }
 

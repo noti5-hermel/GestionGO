@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
-import { ArrowLeft, Pencil, Upload, Camera, X, FileText, Loader2, MapPin, Play, Square, ListOrdered } from "lucide-react"
+import { ArrowLeft, Pencil, Upload, Camera, X, FileText, Loader2, MapPin, Play, Square, ListOrdered, ArrowUp, ArrowDown } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
@@ -26,7 +26,8 @@ import { PdfPreviewModal } from "@/components/pdf-preview-modal"
  * @file shipments/[id]/page.tsx
  * @description Página de detalle para un despacho. Permite ver toda la información, gestionar el estado
  * del recorrido (iniciar/finalizar) para el seguimiento GPS, editar facturas, subir comprobantes,
- * y restringir acciones por geocerca para los motoristas. También ofrece una lista ordenada de visitas.
+ * y restringir acciones por geocerca para los motoristas. También ofrece una lista ordenada de visitas
+ * que puede ser definida manualmente por el rol de facturación.
  */
 
 const BUCKET_NAME = 'comprobante';
@@ -73,6 +74,7 @@ export type ShipmentInvoice = {
   monto: number
   state: boolean
   fecha_entrega: string | null;
+  orden_visita: number | null; // Nuevo campo para el orden manual
   reference_number?: string | number // Opcional, se añade después desde la tabla `facturacion`
   customer_name?: string
   tax_type?: string // Opcional, se añade después a través de joins
@@ -105,6 +107,7 @@ const StatusBadge = ({ checked, text }: { checked: boolean, text: string }) => {
 
 /**
  * Componente para renderizar una tabla de facturas para una categoría específica.
+ * Ahora incluye botones de ordenamiento visibles solo para el rol "Facturacion".
  */
 const InvoicesTable = ({ 
   invoiceList, 
@@ -113,7 +116,9 @@ const InvoicesTable = ({
   handleOpenImageModal, 
   handleEditInvoice,
   openCameraDialog,
-  verifyingLocationInvoiceId
+  verifyingLocationInvoiceId,
+  canReorder,
+  onReorder
 }: { 
   invoiceList: ShipmentInvoice[], 
   title: string, 
@@ -121,7 +126,9 @@ const InvoicesTable = ({
   handleOpenImageModal: (imageUrl: string) => void,
   handleEditInvoice: (invoice: ShipmentInvoice) => void,
   openCameraDialog: (invoice: ShipmentInvoice) => void,
-  verifyingLocationInvoiceId: number | null
+  verifyingLocationInvoiceId: number | null,
+  canReorder: boolean,
+  onReorder: (invoiceId: number, direction: 'up' | 'down') => void
 }) => {
   const getStatusLabel = (status: boolean) => status ? "Pagado" : "Pendiente";
   const getBadgeVariant = (status: boolean) => status ? "default" : "secondary";
@@ -141,6 +148,7 @@ const InvoicesTable = ({
         <Table>
           <TableHeader>
             <TableRow>
+              {canReorder && <TableHead className="w-20">Orden</TableHead>}
               <TableHead>No. Factura</TableHead>
               <TableHead>Nombre del Cliente</TableHead>
               <TableHead>Geocerca</TableHead>
@@ -154,8 +162,20 @@ const InvoicesTable = ({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {invoiceList.length > 0 ? invoiceList.map((invoice) => (
+            {invoiceList.length > 0 ? invoiceList.map((invoice, index) => (
               <TableRow key={invoice.id_fac_desp}>
+                {canReorder && (
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="icon" className="h-6 w-6" disabled={index === 0} onClick={() => onReorder(invoice.id_fac_desp, 'up')}>
+                        <ArrowUp className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-6 w-6" disabled={index === invoiceList.length - 1} onClick={() => onReorder(invoice.id_fac_desp, 'down')}>
+                        <ArrowDown className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                )}
                 <TableCell className="font-medium">{String(invoice.reference_number || invoice.id_factura)}</TableCell>
                 <TableCell>{invoice.customer_name || 'N/A'}</TableCell>
                 <TableCell>
@@ -198,7 +218,7 @@ const InvoicesTable = ({
               </TableRow>
             )) : (
               <TableRow>
-                  <TableCell colSpan={10} className="text-center">No hay facturas en esta categoría.</TableCell>
+                  <TableCell colSpan={canReorder ? 11 : 10} className="text-center">No hay facturas en esta categoría.</TableCell>
               </TableRow>
             )}
           </TableBody>
@@ -684,11 +704,26 @@ export default function ShipmentDetailPage() {
   };
 
   /**
-   * Obtiene la ruta optimizada de Google y la devuelve en el orden correcto.
-   * Llama a la API de Google Routes para calcular la secuencia de visita más eficiente.
-   * @returns Un array de facturas en el orden optimizado, o un array vacío si falla.
+   * Obtiene la ruta de visita. Prioriza el orden manual si existe; de lo contrario,
+   * llama a la API de Google Routes para calcular la secuencia de visita más eficiente.
+   * @returns Un array de facturas en el orden de visita, o un array vacío si falla.
    */
-  const getOptimizedRouteOrder = async (): Promise<ShipmentInvoice[]> => {
+  const getVisitOrder = async (): Promise<ShipmentInvoice[]> => {
+    // 1. Comprobar si existe un orden manual.
+    // Se considera que hay orden manual si al menos una factura tiene un valor en `orden_visita`.
+    const hasManualOrder = invoices.some(inv => inv.orden_visita !== null);
+
+    if (hasManualOrder) {
+      // Si hay orden manual, simplemente ordena las facturas según ese campo.
+      toast({ title: "Usando Orden Manual", description: "La ruta se ha generado según el orden manual establecido." });
+      const manuallyOrderedInvoices = [...invoices].sort((a, b) => (a.orden_visita || 0) - (b.orden_visita || 0));
+      return [
+          { customer_name: 'Bodega (Punto de Partida)', id_fac_desp: -1 } as ShipmentInvoice,
+          ...manuallyOrderedInvoices,
+      ];
+    }
+
+    // 2. Si no hay orden manual, proceder con la optimización de Google.
     // Filtra las facturas para obtener solo aquellas con una geocerca válida y calcula sus centroides.
     const waypointsWithCentroids = invoices
       .map(invoice => {
@@ -716,7 +751,6 @@ export default function ShipmentDetailPage() {
       return [];
     }
     
-    // Formatea los datos para la API de Google.
     const toApiLatLng = (latLng: { lat: number | string; lng: number | string }) => ({
         location: { latLng: { latitude: Number(latLng.lat), longitude: Number(latLng.lng) } }
     });
@@ -727,13 +761,13 @@ export default function ShipmentDetailPage() {
       origin: toApiLatLng({lat: BODEGA_LOCATION.lat, lng: BODEGA_LOCATION.lng }),
       destination: toApiLatLng({lat: BODEGA_LOCATION.lat, lng: BODEGA_LOCATION.lng }),
       intermediates: waypointsWithCentroids.map(w => toApiLatLng({ lat: w.centroid.lat, lng: w.centroid.lng })),
-      optimizeWaypointOrder: true, // Pide a Google que optimice el orden de los puntos intermedios.
+      optimizeWaypointOrder: true, // Pide a Google que optimice el orden.
     };
 
     const headers = {
       "Content-Type": "application/json",
       "X-Goog-Api-Key": apiKey,
-      "X-Goog-FieldMask": "routes.optimizedIntermediateWaypointIndex", // Solo pedimos el orden optimizado.
+      "X-Goog-FieldMask": "routes.optimizedIntermediateWaypointIndex", // Solo pedimos el orden.
     };
 
     try {
@@ -748,9 +782,7 @@ export default function ShipmentDetailPage() {
       const data = await response.json();
       const waypointOrder: number[] = data.routes[0].optimizedIntermediateWaypointIndex || [];
       
-      // Reordena el array de facturas según la respuesta de Google.
       const orderedInvoices = waypointOrder.map(index => waypointsWithCentroids[index].invoice);
-      // Añade al inicio el "punto de partida" que es la bodega.
       const finalOrderedList = [
           { customer_name: 'Bodega (Punto de Partida)', id_fac_desp: -1 } as ShipmentInvoice,
           ...orderedInvoices,
@@ -768,11 +800,11 @@ export default function ShipmentDetailPage() {
 
   /**
    * Exporta la ruta del despacho a Google Maps en una nueva pestaña.
-   * Usa el orden optimizado para construir la URL.
+   * Usa el orden de visita (manual o automático).
    */
   const handleExportRouteToMaps = async () => {
-    const orderedInvoices = await getOptimizedRouteOrder();
-    if (orderedInvoices.length <= 1) return; // Si solo está la bodega, no hacer nada
+    const orderedInvoices = await getVisitOrder();
+    if (orderedInvoices.length <= 1) return;
 
     const waypoints = orderedInvoices
         .slice(1) // Omitir la bodega
@@ -785,7 +817,9 @@ export default function ShipmentDetailPage() {
     if (waypoints.length === 0) return;
     
     const origin = `${BODEGA_LOCATION.lat},${BODEGA_LOCATION.lng}`;
+    // El destino es el último punto en la secuencia ordenada
     const destination = waypoints[waypoints.length - 1];
+    // Los puntos intermedios son todos los demás, excepto el último.
     const intermediateWaypoints = waypoints.slice(0, -1).join('|');
 
     const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}${intermediateWaypoints ? `&waypoints=${intermediateWaypoints}` : ''}`;
@@ -797,7 +831,7 @@ export default function ShipmentDetailPage() {
    * Muestra el diálogo con la lista ordenada de clientes a visitar.
    */
   const handleShowVisitOrder = async () => {
-      const orderedInvoices = await getOptimizedRouteOrder();
+      const orderedInvoices = await getVisitOrder();
       if (orderedInvoices.length > 0) {
           setOrderedRoute(orderedInvoices);
           setIsOrderDialogOpen(true);
@@ -924,22 +958,79 @@ export default function ShipmentDetailPage() {
   };
   const handleGeneratePdf = () => {
     if (shipment) {
-      const pdfOutput = generateShipmentPDF(
+      generateShipmentPDF(
         shipment,
         invoices,
         routes.find(r => r.id_ruta === shipment.id_ruta) || { ruta_desc: 'N/A' },
         users.find(u => u.id_user === shipment.id_motorista) || { name: 'N/A', id_rol: 0 },
         users.find(u => u.id_user === shipment.id_auxiliar) || { name: 'N/A', id_rol: 0 }
       );
-      setPdfData(pdfOutput);
-      setIsPreviewOpen(true);
     }
   };
+
+  /**
+ * Gestiona el reordenamiento de una factura (arriba/abajo).
+ * @param invoiceId - El ID de la factura (`id_fac_desp`) a mover.
+ * @param direction - 'up' o 'down'.
+ */
+const handleReorder = async (invoiceId: number, direction: 'up' | 'down') => {
+  // 1. Encuentra la categoría a la que pertenece la factura.
+  const allInvoices = [...fiscalCreditInvoices, ...finalConsumerInvoices, ...otherInvoices];
+  const targetInvoice = allInvoices.find(inv => inv.id_fac_desp === invoiceId);
+  if (!targetInvoice) return;
+
+  const listToReorder = targetInvoice.tax_type === 'Crédito Fiscal' ? fiscalCreditInvoices : 
+                        targetInvoice.tax_type === 'Consumidor Final' ? finalConsumerInvoices : otherInvoices;
+
+  const currentIndex = listToReorder.findIndex(inv => inv.id_fac_desp === invoiceId);
+  const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+
+  if (targetIndex < 0 || targetIndex >= listToReorder.length) return;
+
+  // 2. Obtiene las dos facturas que se intercambiarán.
+  const invoiceA = listToReorder[currentIndex];
+  const invoiceB = listToReorder[targetIndex];
+
+  // 3. Intercambia sus valores de `orden_visita`.
+  // Si los valores son null, se asignan sus índices actuales como base.
+  const orderA = invoiceA.orden_visita ?? currentIndex;
+  const orderB = invoiceB.orden_visita ?? targetIndex;
+  
+  setLoading(true);
+  const { error } = await supabase.rpc('swap_invoice_order', {
+    invoice_id_1: invoiceA.id_fac_desp,
+    new_order_1: orderB,
+    invoice_id_2: invoiceB.id_fac_desp,
+    new_order_2: orderA,
+  });
+  setLoading(false);
+
+  if (error) {
+    toast({ title: "Error al reordenar", description: error.message, variant: "destructive" });
+  } else {
+    toast({ title: "Éxito", description: "El orden de visita ha sido actualizado." });
+    fetchData(); // Recarga todos los datos para reflejar el cambio.
+  }
+};
   
   // Separa las facturas por tipo de cliente para renderizarlas en tablas distintas.
-  const fiscalCreditInvoices = invoices.filter(inv => inv.tax_type === 'Crédito Fiscal');
-  const finalConsumerInvoices = invoices.filter(inv => inv.tax_type === 'Consumidor Final');
-  const otherInvoices = invoices.filter(inv => inv.tax_type !== 'Crédito Fiscal' && inv.tax_type !== 'Consumidor Final');
+  // Ahora también se ordenan por `orden_visita`.
+  const sortedInvoices = useMemo(() => {
+    return [...invoices].sort((a, b) => {
+        // Las facturas con un orden definido van primero.
+        if (a.orden_visita !== null && b.orden_visita !== null) {
+            return a.orden_visita - b.orden_visita;
+        }
+        if (a.orden_visita !== null) return -1;
+        if (b.orden_visita !== null) return 1;
+        // Si no hay orden, se mantiene el orden por defecto.
+        return 0;
+    });
+  }, [invoices]);
+
+  const fiscalCreditInvoices = sortedInvoices.filter(inv => inv.tax_type === 'Crédito Fiscal');
+  const finalConsumerInvoices = sortedInvoices.filter(inv => inv.tax_type === 'Consumidor Final');
+  const otherInvoices = sortedInvoices.filter(inv => inv.tax_type !== 'Crédito Fiscal' && inv.tax_type !== 'Consumidor Final');
 
   // Calcula los totales dinámicamente basados en el `monto` de las facturas cargadas.
   const { totalContadoCalculado, totalCreditoCalculado, totalGeneralCalculado } = useMemo(() => {
@@ -947,9 +1038,10 @@ export default function ShipmentDetailPage() {
       const totalCreditoCalculado = fiscalCreditInvoices.reduce((acc, inv) => acc + inv.monto, 0);
       const totalGeneralCalculado = totalContadoCalculado + totalCreditoCalculado;
       return { totalContadoCalculado, totalCreditoCalculado, totalGeneralCalculado };
-  }, [invoices]);
+  }, [finalConsumerInvoices, fiscalCreditInvoices]);
   
   const isMotorista = currentUser?.role?.toLowerCase() === 'motorista';
+  const isFacturacion = currentUser?.role?.toLowerCase() === 'facturacion';
 
 
   if (loading && !shipment) {
@@ -1061,6 +1153,8 @@ export default function ShipmentDetailPage() {
           handleEditInvoice={handleEditInvoice}
           openCameraDialog={openCameraDialog}
           verifyingLocationInvoiceId={verifyingLocationInvoiceId}
+          canReorder={isFacturacion}
+          onReorder={handleReorder}
         />
         <InvoicesTable 
           invoiceList={finalConsumerInvoices} 
@@ -1070,6 +1164,8 @@ export default function ShipmentDetailPage() {
           handleEditInvoice={handleEditInvoice}
           openCameraDialog={openCameraDialog}
           verifyingLocationInvoiceId={verifyingLocationInvoiceId}
+          canReorder={isFacturacion}
+          onReorder={handleReorder}
         />
         {otherInvoices.length > 0 && 
           <InvoicesTable 
@@ -1080,6 +1176,8 @@ export default function ShipmentDetailPage() {
             handleEditInvoice={handleEditInvoice}
             openCameraDialog={openCameraDialog}
             verifyingLocationInvoiceId={verifyingLocationInvoiceId}
+            canReorder={isFacturacion}
+            onReorder={handleReorder}
           />
         }
       </div>
@@ -1092,7 +1190,7 @@ export default function ShipmentDetailPage() {
               <ListOrdered /> Orden de Visita Sugerido
             </DialogTitle>
             <DialogDescription>
-              Esta es la secuencia de entrega recomendada por Google Maps para optimizar su ruta.
+              Esta es la secuencia de entrega recomendada para optimizar su ruta.
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[60vh] overflow-y-auto pr-2">

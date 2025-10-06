@@ -76,15 +76,27 @@ export function MainNav({ session }: MainNavProps) {
   ];
 
   const isRestrictedRole = restrictedRoles.some(role => userRole.includes(role));
+  const isFacturacionRole = userRole.includes('facturacion');
   const isAdmin = userRole.includes('admin');
 
-  // Si el rol es restringido (motorista, etc.), el único item es "Despachos".
-  // Si no, se muestran todos los items excepto el Dashboard que se maneja aparte si no es admin.
-  const menuItemsToRender = isRestrictedRole
-    ? allMenuItems.filter(item => item.href === '/shipments')
-    : allMenuItems.filter(item => isAdmin || item.href !== '/'); // Oculta Dashboard si no es admin
+  // Lógica de menú mejorada.
+  let menuItemsToRender = allMenuItems;
+
+  if (isRestrictedRole) {
+    // Roles operativos solo ven despachos.
+    menuItemsToRender = allMenuItems.filter(item => item.href === '/shipments');
+  } else if (isFacturacionRole) {
+    // Rol de facturación no ve el dashboard.
+    menuItemsToRender = allMenuItems.filter(item => item.href !== '/');
+  } else if (!isAdmin) {
+    // Otros roles no-admin tampoco ven el dashboard.
+     menuItemsToRender = allMenuItems.filter(item => item.href !== '/');
+  }
   
-  const adminItemsToRender = isRestrictedRole ? [] : (isAdmin ? adminMenuItems : adminMenuItems.filter(item => item.href !== '/image-test'));
+  // Solo los admins ven ciertos items de administración.
+  const adminItemsToRender = isAdmin 
+    ? adminMenuItems 
+    : [];
 
 
   return (
@@ -112,7 +124,7 @@ export function MainNav({ session }: MainNavProps) {
           <SidebarMenuItem key={item.href}>
             <SidebarMenuButton
               asChild
-              isActive={pathname.startsWith(item.href) && item.href !== '/'}
+              isActive={pathname.startsWith(item.href) && (item.href !== '/' || pathname === '/')}
               tooltip={{children: item.label, side: "right", align: "center" }}
             >
               <Link href={item.href}>
