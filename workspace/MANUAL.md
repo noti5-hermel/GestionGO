@@ -128,6 +128,29 @@ El módulo de **Facturación** es la interfaz dedicada a la gestión integral de
 ![Vista de Gestión de Facturas](https://placehold.co/600x400?text=Invoicing+Screen)
 ---
 
+### Módulo de Despachos
+
+El módulo de **Despachos** es el centro neurálgico para la planificación, asignación y seguimiento de las rutas de entrega. Esta interfaz se adapta dinámicamente según el rol del usuario, mostrando la información más relevante para cada perfil, desde la vista global del administrador hasta la lista de tareas diaria del motorista.
+
+**Funcionalidades Principales:**
+
+*   **Visualización de Despachos:** Presenta una tabla con todos los despachos pertinentes, incluyendo información clave como ID, ruta, personal asignado (motorista y auxiliar), fecha y totales monetarios.
+
+*   **Gestión de Despachos (CRUD):** Los usuarios con los permisos adecuados pueden crear nuevos despachos, editar los existentes para ajustar detalles, o eliminarlos.
+
+*   **Filtrado Inteligente por Rol:** La funcionalidad de filtro se ajusta automáticamente según el rol del usuario:
+    *   **Administradores:** Pueden visualizar todos los despachos, o filtrar la lista para ver los de "hoy" o los de una fecha específica, permitiendo una supervisión completa.
+    *   **Roles de Revisión (Bodega, Cobros, etc.):** El filtro cambia para mostrar los despachos "Pendientes" de su revisión o los que ya han sido "Revisados", agilizando su flujo de trabajo específico.
+
+*   **Lógica de Acceso por Rol:** La vista y las acciones disponibles están estrictamente controladas por el rol del usuario:
+    *   **Motoristas y Auxiliares:** Solo pueden ver los despachos a los que han sido asignados, proporcionando una vista clara de sus responsabilidades diarias.
+    *   **Administradores:** Tienen acceso total para gestionar y supervisar todos los despachos del sistema.
+
+*   **Acceso a la Vista Detallada:** Cada despacho en la tabla incluye un acceso directo (<span style="font-family: 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;">👁️</span>) que lleva a la página de **Detalle de Despacho**, donde se realiza la gestión operativa de la ruta (iniciar recorrido, registrar entregas, etc.).
+
+![Vista del Módulo de Despachos](https://placehold.co/600x400?text=Shipments+List+Screen)
+
+---
 ### 9. Mapa en Vivo
 
 El módulo de **Mapa en Vivo** es el centro de monitoreo en tiempo real de la aplicación. Ofrece una vista geográfica interactiva que permite a los administradores y supervisores hacer un seguimiento preciso de las operaciones de reparto a medida que ocurren.
