@@ -174,6 +174,38 @@ El módulo de **Despachos** es el centro neurálgico para la planificación, asi
 ![Vista del Módulo de Despachos](https://placehold.co/600x400?text=Shipments+List+Screen)
 
 ---
+### **Detalle de Despacho**
+
+Esta es la pantalla más dinámica y operativa del sistema, donde se gestiona el progreso de un despacho en tiempo real. Es la principal herramienta de trabajo para los motoristas y un punto de consulta clave para los supervisores.
+
+**Funcionalidades Principales:**
+
+*   **Inicio y Fin de Recorrido:**
+    *   Para los motoristas, esta pantalla presenta los botones críticos **"Iniciar Recorrido"** y **"Finalizar Recorrido"**.
+    *   Al **iniciar**, el sistema comienza a grabar el historial de ubicaciones GPS asociado **exclusivamente a este despacho**. Una validación de seguridad impide iniciar un nuevo recorrido si ya existe otro activo, garantizando un seguimiento por viaje único.
+    *   Al **finalizar**, el rastreo para este despacho se detiene.
+
+*   **Información General:** Muestra un resumen del despacho, incluyendo la ruta, el personal asignado, la fecha y los totales de pago actualizados.
+
+*   **Estado del Proceso:** Presenta una serie de insignias visuales que indican qué etapas del proceso de revisión han sido completadas (Bodega, Reparto, Cobros, etc.), ofreciendo una vista rápida del estado administrativo del despacho.
+
+*   **Listado de Facturas Agrupadas:** Para una mayor claridad, las facturas asociadas al despacho se organizan en tablas separadas según el tipo de cliente ("Crédito Fiscal" y "Consumidor Final").
+
+*   **Registro de Pagos y Entregas:** Permite editar cada factura individualmente para:
+    *   Registrar el **monto pagado** y la **forma de pago** (Efectivo, Tarjeta, etc.).
+    *   Marcar el **estado** de la entrega como "Pagado".
+    *   Subir una **imagen del comprobante** de pago desde los archivos del dispositivo o **capturar una foto directamente con la cámara**.
+
+*   **Restricción por Geocerca:** Para los motoristas, las acciones de editar o tomar una foto solo se habilitan si su ubicación GPS se encuentra dentro de la geocerca del cliente. Si el cliente no tiene una geocerca definida, el sistema guarda la ubicación actual del motorista al momento de la acción.
+
+*   **Generación de Informe PDF:** Un botón permite generar y previsualizar un informe completo del despacho en formato PDF, listo para ser descargado o impreso.
+
+*   **Orden de Visita y Exportación:**
+    *   **Ver Orden de Visita:** Un botón permite al motorista consultar una lista ordenada de los clientes que debe visitar, basada en la secuencia de entrega óptima (sea manual o calculada por el sistema).
+    *   **Exportar Ruta a Google Maps:** Permite exportar la ruta optimizada con todos los puntos de entrega a la aplicación de Google Maps para facilitar la navegación GPS.
+
+![Vista de Detalle de Despacho](https://placehold.co/600x400?text=Shipment+Detail+Screen)
+---
 ### 9. Mapa en Vivo
 
 El módulo de **Mapa en Vivo** es el centro de monitoreo en tiempo real de la aplicación. Ofrece una vista geográfica interactiva que permite a los administradores y supervisores hacer un seguimiento preciso de las operaciones de reparto a medida que ocurren.
@@ -196,3 +228,4 @@ Al seleccionar un despacho específico por fecha, el mapa se puebla con varias c
 Esta herramienta proporciona una supervisión visual y en tiempo real, permitiendo tomar decisiones informadas, verificar el cumplimiento de las rutas, y tener una visibilidad completa del estado de las operaciones de campo.
 
 ![Vista del Mapa en Vivo](https://placehold.co/600x400?text=Live+Tracking+Map)
+```
