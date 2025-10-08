@@ -37,3 +37,71 @@ Este formulario está diseñado para crear el **primer usuario**, al cual se le 
 4.  Haz clic en **"Crear Usuario Administrador"**.
 
 Una vez creado, serás redirigido a la pantalla de inicio de sesión normal para que puedas acceder con tus nuevas credenciales.
+---
+
+### 2. Vista General: Dashboard (Rol: Administrador)
+
+Al iniciar sesión como Administrador, la primera pantalla que verás es el **Dashboard**. Esta es tu central de operaciones y el punto de partida para navegar por todas las funcionalidades clave de **GestiónGo**.
+
+**¿Qué encontrarás aquí?**
+
+El Dashboard está diseñado para ser intuitivo y eficiente, presentando una serie de **tarjetas de acceso directo**. Cada tarjeta representa una sección principal de la aplicación y te permite saltar directamente a ella con un solo clic.
+
+Las secciones principales incluyen:
+*   **Clientes:** Para administrar tu base de clientes.
+*   **Despachos:** Para organizar y seguir las rutas de entrega.
+*   **Facturación:** Para gestionar todas las facturas del sistema.
+*   **Asignar Facturas:** Para asociar facturas a despachos específicos.
+*   **Mapa en Vivo:** Para monitorear la ubicación de los motoristas en tiempo real.
+*   **Configuración:** Para administrar parámetros del sistema como términos de pago o impuestos.
+
+**Propósito Principal:**
+El objetivo del Dashboard es **simplificar la navegación y agilizar tu flujo de trabajo**, permitiéndote acceder a las herramientas más importantes de forma rápida y visual.
+
+![Vista del Dashboard de Administrador](https://placehold.co/600x400?text=Admin+Dashboard)
+---
+
+### 3. Vista General: Módulo de Facturación (Rol: Facturacion)
+
+Si tu rol es **Facturacion**, tu pantalla de inicio es directamente el módulo de **Facturación**. Esta es tu área de trabajo principal, diseñada para que gestiones todos los documentos de cobro de manera centralizada antes de que salgan a reparto.
+
+**¿Qué encontrarás aquí?**
+
+Tu vista principal es una tabla completa que muestra todas las facturas del sistema. Desde aquí, puedes realizar todas las tareas relacionadas con la creación y administración de estos documentos.
+
+Tus funciones clave en esta pantalla son:
+
+*   **Creación y Edición:** Puedes generar **nuevas facturas** una por una, llenando todos los detalles necesarios, o **editar** la información de facturas ya existentes.
+*   **Importación Masiva:** Una de las herramientas más potentes a tu disposición. Te permite cargar cientos o miles de facturas de una sola vez desde un archivo **Excel (.xlsx)**, agilizando enormemente el proceso de ingreso de datos.
+*   **Búsqueda y Filtrado:** Localiza rápidamente cualquier factura usando la barra de búsqueda (por número de factura, referencia o cliente) o aplica filtros por fecha para acotar los resultados.
+*   **Paginación Eficiente:** La tabla está optimizada para manejar grandes volúmenes de información, cargando las facturas por páginas para mantener la aplicación rápida y fluida.
+
+**Propósito Principal:**
+Esta vista es tu centro de operaciones para preparar todos los documentos que, en un paso posterior, serán organizados y asignados a los motoristas en el módulo de **"Facturación por Despacho"**.
+
+![Vista del Módulo de Facturación](https://placehold.co/600x400?text=Invoicing+Module+Screen)
+---
+
+### 4. Vista General: Mis Despachos (Rol: Motorista)
+
+Al iniciar sesión como **Motorista** o **Auxiliar**, serás dirigido directamente a tu hoja de ruta: la pantalla de **Despachos**. Esta vista está personalizada para mostrar únicamente los viajes que te han sido asignados.
+
+**¿Qué encontrarás aquí?**
+
+Verás una lista clara y concisa de tus despachos pendientes o del día. Cada fila en la tabla representa un viaje completo, con la información esencial que necesitas de un vistazo:
+
+*   **ID del Despacho:** Un identificador único para tu viaje.
+*   **Ruta:** El nombre de la zona que cubrirás.
+*   **Fecha:** El día programado para la entrega.
+*   **Totales:** Un resumen de los montos a gestionar.
+
+**Tu Flujo de Trabajo:**
+
+1.  **Identifica tu Despacho:** Ubica el despacho que vas a realizar (generalmente el del día de hoy).
+2.  **Accede al Detalle:** Haz clic en el ícono del ojo (<span style="font-family: 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;">👁️</span>) para navegar a la pantalla de **"Detalle de Despacho"**.
+3.  **Inicia tu Recorrido:** En la pantalla de detalle es donde comienza la acción. Aquí podrás **iniciar el recorrido** (activando el seguimiento GPS), ver la lista de clientes, registrar entregas y pagos, y mucho más.
+
+**Propósito Principal:**
+Esta vista es tu punto de partida para cada jornada. Te permite organizarte y acceder rápidamente a los detalles de cada ruta de entrega que tienes asignada, sin distracciones de otros despachos.
+
+![Vista de Despachos para Motorista](https://placehold.co/600x400?text=Driver+Shipments+View)
