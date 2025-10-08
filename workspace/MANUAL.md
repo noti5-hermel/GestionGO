@@ -105,3 +105,26 @@ Verás una lista clara y concisa de tus despachos pendientes o del día. Cada fi
 Esta vista es tu punto de partida para cada jornada. Te permite organizarte y acceder rápidamente a los detalles de cada ruta de entrega que tienes asignada, sin distracciones de otros despachos.
 
 ![Vista de Despachos para Motorista](https://placehold.co/600x400?text=Driver+Shipments+View)
+---
+### 9. Mapa en Vivo
+
+El módulo de **Mapa en Vivo** es el centro de monitoreo en tiempo real de la aplicación. Ofrece una vista geográfica interactiva que permite a los administradores y supervisores hacer un seguimiento preciso de las operaciones de reparto a medida que ocurren.
+
+**¿Qué encontrarás aquí?**
+
+Al seleccionar un despacho específico por fecha, el mapa se puebla con varias capas de información visual que, en conjunto, ofrecen una imagen completa del progreso de la ruta.
+
+*   **Filtro por Despacho:** La funcionalidad principal de esta vista es la capacidad de seleccionar un despacho activo o pasado. Al hacerlo, todos los datos geográficos que se muestran en el mapa corresponderán exclusivamente a ese viaje.
+
+*   **Capas de Información Geográfica:**
+    *   **Ruta Planificada (Línea Azul):** Muestra un trazado optimizado que conecta la bodega con las ubicaciones de todos los clientes asignados a ese despacho. Representa la ruta ideal que el motorista debería seguir.
+    *   **Recorrido Real del Despacho (Línea Naranja):** Dibuja el camino exacto que el motorista ha seguido. Este trazado se basa en el historial de ubicaciones GPS que el sistema ha grabado **específicamente para este despacho**, desde que el motorista presionó "Iniciar Recorrido" hasta que lo finalizó.
+    *   **Ubicación Actual del Motorista:** Un ícono distintivo (un vehículo) muestra la posición más reciente del motorista en el mapa, actualizándose periódicamente.
+    *   **Puntos de Entrega (Marcadores):** La ubicación de cada cliente en la ruta se indica con un marcador numerado, permitiendo una fácil identificación del orden de visita. Los marcadores cambian de color para reflejar su estado:
+        *   **Verde:** Entrega completada (factura pagada o con comprobante).
+        *   **Rojo:** Entrega pendiente.
+
+**Propósito Principal:**
+Esta herramienta proporciona una supervisión visual y en tiempo real, permitiendo tomar decisiones informadas, verificar el cumplimiento de las rutas, y tener una visibilidad completa del estado de las operaciones de campo.
+
+![Vista del Mapa en Vivo](https://placehold.co/600x400?text=Live+Tracking+Map)
