@@ -106,6 +106,28 @@ Esta vista es tu punto de partida para cada jornada. Te permite organizarte y ac
 
 ![Vista de Despachos para Motorista](https://placehold.co/600x400?text=Driver+Shipments+View)
 ---
+
+### 5. Facturación
+
+El módulo de **Facturación** es la interfaz dedicada a la gestión integral de todos los documentos fiscales individuales. Aquí se pueden crear, consultar, modificar y eliminar facturas antes de que sean asignadas a un despacho para su entrega. Es una herramienta clave para el personal administrativo y de facturación.
+
+**Funcionalidades Principales:**
+
+*   **Gestión Integral de Facturas (CRUD):** Permite realizar el ciclo completo de operaciones sobre las facturas, incluyendo su creación, edición y eliminación de forma individual.
+
+*   **Búsqueda y Filtrado:** Para una localización eficiente de documentos, el módulo ofrece:
+    *   **Búsqueda por Texto:** Se puede buscar una factura por su número, número de referencia o por el cliente asociado.
+    *   **Filtros por Fecha:** Es posible acotar la lista de facturas por su **fecha de entrega** o por la **fecha en que fueron importadas** al sistema.
+
+*   **Paginación del Lado del Servidor:** La interfaz está optimizada para manejar un gran volumen de facturas de manera eficiente. La paginación del lado del servidor asegura que la aplicación se mantenga rápida y responsiva, sin importar la cantidad de registros.
+
+*   **Importación Masiva desde Excel:** Esta potente funcionalidad facilita la carga de grandes volúmenes de facturas directamente desde un archivo `.xlsx`. El sistema es capaz de procesar el archivo y cruzar la información para asignar automáticamente datos clave como el nombre del cliente, su ruta y su término de pago, basándose en el código de cliente proporcionado en el archivo.
+
+*   **Selector de Cliente Asíncrono:** Al crear o editar una factura manualmente, el campo de cliente es un buscador inteligente. Permite buscar en tiempo real en toda la base de datos de clientes sin necesidad de cargar la lista completa, haciendo que la selección sea rápida y eficiente.
+
+![Vista de Gestión de Facturas](https://placehold.co/600x400?text=Invoicing+Screen)
+---
+
 ### 9. Mapa en Vivo
 
 El módulo de **Mapa en Vivo** es el centro de monitoreo en tiempo real de la aplicación. Ofrece una vista geográfica interactiva que permite a los administradores y supervisores hacer un seguimiento preciso de las operaciones de reparto a medida que ocurren.
