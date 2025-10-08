@@ -128,6 +128,29 @@ El módulo de **Facturación** es la interfaz dedicada a la gestión integral de
 ![Vista de Gestión de Facturas](https://placehold.co/600x400?text=Invoicing+Screen)
 ---
 
+### **Facturación por Despacho**
+
+Este módulo es el puente operativo entre la facturación y la logística de reparto. Su propósito principal es **construir el manifiesto de cada despacho**, asignando de manera eficiente las facturas que deben ser entregadas en una ruta específica.
+
+**Funcionalidades Principales:**
+
+*   **Asignación Masiva Inteligente:** Esta es la herramienta central para la construcción rápida de un despacho.
+    *   Al seleccionar un despacho de la lista, el sistema filtra y presenta automáticamente todas las facturas que están disponibles para ser asignadas a esa ruta y fecha.
+    *   **Criterios de Filtro Automático:**
+        1.  La fecha de la factura debe coincidir con la fecha del despacho.
+        2.  La factura no debe estar ya asignada a otro despacho.
+        3.  El cliente de la factura debe estar geográficamente dentro de la geocerca de la ruta del despacho (o bien, el cliente no debe tener una geocerca asignada, permitiendo su inclusión manual).
+    *   Esta lógica asegura que solo se muestren las facturas pertinentes, permitiendo al usuario seleccionar múltiples documentos y asignarlos al despacho con un solo clic.
+
+*   **Gestión de Asignaciones Individuales:**
+    *   Una vez que las facturas están asignadas, se muestran en una tabla detallada. Desde aquí, los usuarios pueden gestionar cada factura de manera individual, ya sea para **editar** detalles como el registro de un pago o la subida de un comprobante, o para **eliminar** la factura del despacho si fue asignada por error.
+
+*   **Sincronización Automática de Totales:**
+    *   El sistema mantiene la integridad de los datos en todo momento. Cada vez que se añade, modifica o elimina una factura de un despacho, el sistema **recalcula y actualiza automáticamente los totales** (contado, crédito y general) en el registro del despacho correspondiente. Esto asegura que los montos que ve el motorista y los que se reflejan en los informes sean siempre precisos.
+
+![Vista de Asignación de Facturas a Despacho](https://placehold.co/600x400?text=Shipment+Invoicing+Screen)
+---
+
 ### Módulo de Despachos
 
 El módulo de **Despachos** es el centro neurálgico para la planificación, asignación y seguimiento de las rutas de entrega. Esta interfaz se adapta dinámicamente según el rol del usuario, mostrando la información más relevante para cada perfil, desde la vista global del administrador hasta la lista de tareas diaria del motorista.
