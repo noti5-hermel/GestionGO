@@ -204,8 +204,8 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
   useEffect(() => {
     if (editingShipment) {
       // Corrige el problema de la fecha "un día antes" asegurando que se interprete como UTC.
-      const utcDate = new Date(editingShipment.fecha_despacho + 'T00:00:00Z');
-      const localDateString = utcDate.toISOString().split('T')[0];
+      const utcDate = new Date(editingShipment.fecha_despacho);
+      const localDateString = new Date(utcDate.getTime() + utcDate.getTimezoneOffset() * 60000).toISOString().split('T')[0];
 
       form.reset({
         ...editingShipment,
