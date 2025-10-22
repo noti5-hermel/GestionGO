@@ -559,7 +559,10 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
   const getShipmentDate = (shipmentId: string | number) => {
       const id = typeof shipmentId === 'string' ? parseInt(shipmentId, 10) : shipmentId;
       const shipment = allShipments.find(ship => ship.id_despacho === id);
-      return shipment ? new Date(shipment.fecha_despacho + 'T00:00:00Z').toLocaleDateString() : shipmentId;
+      if (!shipment) return shipmentId;
+      // Trata la fecha como UTC para evitar problemas de zona horaria al mostrar.
+      const date = new Date(shipment.fecha_despacho + 'T00:00:00Z');
+      return date.toLocaleDateString('es-ES', { timeZone: 'UTC' });
   }
   
   const getRouteDescription = (routeId: string) => {
@@ -603,7 +606,7 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
                   <SelectContent>
                     {allShipments.map((shipment) => (
                       <SelectItem key={shipment.id_despacho} value={String(shipment.id_despacho)}>
-                        ID: {shipment.id_despacho} - Ruta: {getRouteDescription(shipment.id_ruta)} - Fecha: {new Date(shipment.fecha_despacho + 'T00:00:00Z').toLocaleDateString()}
+                        ID: {shipment.id_despacho} - Ruta: {getRouteDescription(shipment.id_ruta)} - Fecha: {new Date(shipment.fecha_despacho + 'T00:00:00Z').toLocaleDateString('es-ES', { timeZone: 'UTC' })}
                       </SelectItem>
                     ))}
                   </SelectContent>
