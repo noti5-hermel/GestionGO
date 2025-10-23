@@ -24,7 +24,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { PlusCircle, Pencil, Trash2, FilterX } from "lucide-react"
+import { PlusCircle, Pencil, Trash2, FilterX, Search } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 import Image from "next/image"
@@ -92,6 +92,7 @@ export default function ShipmentInvoicingPage() {
   const [isMassAssignDialogOpen, setIsMassAssignDialogOpen] = useState(false);
   const [selectedShipmentForMassAssign, setSelectedShipmentForMassAssign] = useState<string>('');
   const [selectedInvoicesForMassAssign, setSelectedInvoicesForMassAssign] = useState<Record<string, boolean>>({});
+  const [massAssignSearchQuery, setMassAssignSearchQuery] = useState('');
   
   const [availableInvoices, setAvailableInvoices] = useState<Invoice[]>([]);
   
@@ -155,7 +156,7 @@ export default function ShipmentInvoicingPage() {
    * Filtra por facturas no asignadas y geocerca (cliente dentro de la geocerca de la ruta),
    * y ordena por fecha de importación descendente.
    */
-  const getAvailableInvoices = useCallback(async (shipmentId: string) => {
+    const getAvailableInvoices = useCallback(async (shipmentId: string) => {
     if (!shipmentId) {
       setAvailableInvoices([]);
       return;
@@ -179,25 +180,29 @@ export default function ShipmentInvoicingPage() {
 
     // 2. Obtener los clientes que están dentro de la geocerca de la ruta del despacho
     const routeIdAsInt = parseInt(selectedShipment.id_ruta, 10);
-    if (isNaN(routeIdAsInt)) {
-        toast({ title: "Error de Datos", description: "El ID de la ruta no es un número válido.", variant: "destructive" });
-        setLoading(false);
-        return;
+    let customerCodesInRoute: Set<string> | null = null;
+
+    if (!isNaN(routeIdAsInt)) {
+        const { data: customersInRoute, error: rpcError } = await supabase.rpc('get_customers_in_route_geofence', {
+          route_id_param: routeIdAsInt
+        });
+        if (rpcError) {
+          console.error(rpcError)
+          toast({ title: "Error de Geocerca", description: "No se pudo consultar qué clientes están en la ruta.", variant: "destructive" });
+        } else {
+          customerCodesInRoute = new Set(customersInRoute.map((c: any) => c.code_customer));
+        }
     }
-    const { data: customersInRoute, error: rpcError } = await supabase.rpc('get_customers_in_route_geofence', {
-      route_id_param: routeIdAsInt
-    });
-    if (rpcError) {
-      console.error(rpcError)
-      toast({ title: "Error de Geocerca", description: "No se pudo consultar qué clientes están en la ruta.", variant: "destructive" });
-      setLoading(false);
-      return;
-    }
-    const customerCodesInRoute = new Set(customersInRoute.map((c: any) => c.code_customer));
 
     // 3. Filtrar todas las facturas basándose en las condiciones
     const filteredInvoices = allInvoices.filter(inv => {
         const isNotUsed = !usedInvoiceIds.has(inv.id_factura);
+        
+        // Si la geocerca de la ruta no pudo cargarse, no se aplica el filtro geográfico
+        if (customerCodesInRoute === null) {
+            return isNotUsed;
+        }
+
         const hasNoGeofence = inv.geocerca === null;
         const isInRoute = customerCodesInRoute.has(inv.code_customer);
 
@@ -215,7 +220,7 @@ export default function ShipmentInvoicingPage() {
     setAvailableInvoices(filteredInvoices);
     setLoading(false);
 
-  }, [allInvoices, toast]);
+  }, [allInvoices, allShipments, toast]);
 
 
   // Efecto que se dispara cuando el usuario selecciona un despacho en el diálogo de asignación masiva.
@@ -542,6 +547,7 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
     setSelectedShipmentForMassAssign('');
     setSelectedInvoicesForMassAssign({});
     setAvailableInvoices([]); // Limpia las facturas disponibles
+    setMassAssignSearchQuery(''); // Limpia la búsqueda
   };
   
   const clearFilters = () => {
@@ -574,6 +580,19 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
     const date = new Date(dateString);
     return date.toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
   };
+  
+  // Filtra las facturas disponibles basadas en la consulta de búsqueda.
+  const searchedAvailableInvoices = useMemo(() => {
+    if (!massAssignSearchQuery) {
+        return availableInvoices;
+    }
+    const query = massAssignSearchQuery.toLowerCase();
+    return availableInvoices.filter(inv =>
+        String(inv.id_factura).toLowerCase().includes(query) ||
+        String(inv.reference_number).toLowerCase().includes(query) ||
+        inv.customer_name.toLowerCase().includes(query)
+    );
+  }, [availableInvoices, massAssignSearchQuery]);
 
 
   // --- RENDERIZADO DEL COMPONENTE ---
@@ -612,6 +631,17 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
                   </SelectContent>
                 </Select>
                 
+                <div className="relative mb-2">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        type="search"
+                        placeholder="Buscar por factura, ref. o cliente..."
+                        value={massAssignSearchQuery}
+                        onChange={(e) => setMassAssignSearchQuery(e.target.value)}
+                        className="pl-8 w-full"
+                    />
+                </div>
+
                 <div className="border rounded-md flex-1 overflow-y-auto">
                   <Table>
                     <TableHeader className="sticky top-0 bg-background z-10">
@@ -619,13 +649,15 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
                         <TableHead className="w-[50px]">
                            <Checkbox
                                 checked={
-                                    availableInvoices.length > 0 &&
-                                    availableInvoices.every(inv => selectedInvoicesForMassAssign[inv.id_factura])
+                                    searchedAvailableInvoices.length > 0 &&
+                                    searchedAvailableInvoices.every(inv => selectedInvoicesForMassAssign[inv.id_factura])
                                 }
                                 onCheckedChange={(checked) => {
-                                    const newSelection: Record<string, boolean> = {};
+                                    const newSelection = { ...selectedInvoicesForMassAssign };
                                     if (checked) {
-                                        availableInvoices.forEach(inv => newSelection[inv.id_factura] = true);
+                                        searchedAvailableInvoices.forEach(inv => newSelection[inv.id_factura] = true);
+                                    } else {
+                                        searchedAvailableInvoices.forEach(inv => delete newSelection[inv.id_factura]);
                                     }
                                     setSelectedInvoicesForMassAssign(newSelection);
                                 }}
@@ -642,8 +674,8 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
                       {loading ? (
                         <TableRow><TableCell colSpan={5} className="text-center h-24">Buscando facturas disponibles...</TableCell></TableRow>
                       ) : selectedShipmentForMassAssign ? (
-                         availableInvoices.length > 0 ? (
-                           availableInvoices.map(invoice => (
+                         searchedAvailableInvoices.length > 0 ? (
+                           searchedAvailableInvoices.map(invoice => (
                               <TableRow key={invoice.id_factura}
                                 onClick={() => {
                                     setSelectedInvoicesForMassAssign(prev => ({
