@@ -51,7 +51,8 @@ export const generateShipmentPDF = (
 
   // 3. Información General del Despacho
   doc.setFontSize(12);
-  doc.text(`Fecha: ${new Date(shipment.fecha_despacho).toLocaleDateString()}`, 14, yPos);
+  const shipmentDate = new Date(`${shipment.fecha_despacho}T00:00:00Z`);
+  doc.text(`Fecha: ${shipmentDate.toLocaleDateString('es-ES', { timeZone: 'UTC' })}`, 14, yPos);
   yPos += 7;
   doc.text(`Ruta: ${route.ruta_desc}`, 14, yPos);
   yPos += 7;
