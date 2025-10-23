@@ -54,7 +54,7 @@ const shipmentInvoiceSchema = z.object({
 
 // Tipos de datos para la gestión de facturación por despacho.
 type ShipmentInvoice = z.infer<typeof shipmentInvoiceSchema> & { id_fac_desp: number, comprobante: string, fecha_entrega: string | null }
-type Invoice = { id_factura: string, reference_number: string | number, fecha: string, grand_total: number, customer_name: string, code_customer: string, geocerca: any | null }
+type Invoice = { id_factura: string, reference_number: string | number, fecha: string, grand_total: number, customer_name: string, code_customer: string, geocerca: any | null, fecha_import: string | null }
 type Shipment = { id_despacho: number, fecha_despacho: string, id_ruta: string }
 type Route = { id_ruta: string; ruta_desc: string };
 
@@ -152,7 +152,8 @@ export default function ShipmentInvoicingPage() {
   
   /**
    * Obtiene las facturas disponibles para un despacho específico.
-   * Filtra por fecha y geocerca (cliente dentro de la geocerca de la ruta).
+   * Filtra por facturas no asignadas y geocerca (cliente dentro de la geocerca de la ruta),
+   * y ordena por fecha de importación descendente.
    */
   const getAvailableInvoices = useCallback(async (shipmentId: string) => {
     if (!shipmentId) {
@@ -166,8 +167,8 @@ export default function ShipmentInvoicingPage() {
       setLoading(false);
       return;
     }
-    
-    // Lista de IDs de facturas que ya están asignadas a CUALQUIER despacho
+
+    // 1. Obtener la lista de IDs de facturas que ya están asignadas a CUALQUIER despacho
     const { data: usedInvoices, error: usedInvoicesError } = await supabase.from('facturacion_x_despacho').select('id_factura');
     if (usedInvoicesError) {
       toast({ title: "Error", description: "No se pudo obtener la lista de facturas ya asignadas.", variant: "destructive" });
@@ -175,48 +176,46 @@ export default function ShipmentInvoicingPage() {
       return;
     }
     const usedInvoiceIds = new Set(usedInvoices.map(si => si.id_factura));
-    
-    // Convertir el ID de la ruta a número para la función RPC
+
+    // 2. Obtener los clientes que están dentro de la geocerca de la ruta del despacho
     const routeIdAsInt = parseInt(selectedShipment.id_ruta, 10);
     if (isNaN(routeIdAsInt)) {
         toast({ title: "Error de Datos", description: "El ID de la ruta no es un número válido.", variant: "destructive" });
         setLoading(false);
         return;
     }
-
-    // Llamada a la función RPC para encontrar clientes dentro de la geocerca de la ruta
     const { data: customersInRoute, error: rpcError } = await supabase.rpc('get_customers_in_route_geofence', {
       route_id_param: routeIdAsInt
     });
-
     if (rpcError) {
       console.error(rpcError)
       toast({ title: "Error de Geocerca", description: "No se pudo consultar qué clientes están en la ruta.", variant: "destructive" });
       setLoading(false);
       return;
     }
-
     const customerCodesInRoute = new Set(customersInRoute.map((c: any) => c.code_customer));
-    const selectedDate = new Date(selectedShipment.fecha_despacho + 'T00:00:00Z').toISOString().split('T')[0];
 
+    // 3. Filtrar todas las facturas basándose en las condiciones
     const filteredInvoices = allInvoices.filter(inv => {
-        const invoiceDate = new Date(inv.fecha + 'T00:00:00Z').toISOString().split('T')[0];
-        const isDateMatch = invoiceDate === selectedDate;
         const isNotUsed = !usedInvoiceIds.has(inv.id_factura);
-        
-        // El cliente asociado a la factura no tiene geocerca
         const hasNoGeofence = inv.geocerca === null;
-        // El cliente asociado a la factura está en la geocerca de la ruta
         const isInRoute = customerCodesInRoute.has(inv.code_customer);
 
-        // Incluir la factura si la fecha coincide, no está usada Y (está en la ruta O no tiene geocerca)
-        return isDateMatch && isNotUsed && (isInRoute || hasNoGeofence);
+        // La factura se incluye si no está usada Y (está en la ruta O no tiene geocerca)
+        return isNotUsed && (isInRoute || hasNoGeofence);
+    });
+    
+    // 4. Ordenar las facturas filtradas por fecha de importación descendente
+    filteredInvoices.sort((a, b) => {
+        const dateA = a.fecha_import ? new Date(a.fecha_import).getTime() : 0;
+        const dateB = b.fecha_import ? new Date(b.fecha_import).getTime() : 0;
+        return dateB - dateA;
     });
 
     setAvailableInvoices(filteredInvoices);
     setLoading(false);
 
-  }, [allShipments, allInvoices, toast]);
+  }, [allInvoices, toast]);
 
 
   // Efecto que se dispara cuando el usuario selecciona un despacho en el diálogo de asignación masiva.
@@ -271,6 +270,7 @@ export default function ShipmentInvoicingPage() {
             id_factura, 
             reference_number, 
             fecha, 
+            fecha_import,
             grand_total, 
             customer_name, 
             code_customer,
@@ -595,7 +595,7 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
               <DialogHeader>
                 <DialogTitle>Asignación Masiva de Facturas</DialogTitle>
                 <DialogDescription>
-                  Seleccione un despacho para ver las facturas disponibles (filtradas por fecha y geocerca) y asígnelas.
+                  Seleccione un despacho para ver las facturas disponibles y asígnelas.
                 </DialogDescription>
               </DialogHeader>
               <div className="flex flex-col gap-4 py-4 flex-1 overflow-y-hidden">
@@ -606,7 +606,7 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
                   <SelectContent>
                     {allShipments.map((shipment) => (
                       <SelectItem key={shipment.id_despacho} value={String(shipment.id_despacho)}>
-                        ID: {shipment.id_despacho} - Ruta: {getRouteDescription(shipment.id_ruta)} - Fecha: {new Date(shipment.fecha_despacho + 'T00:00:00Z').toLocaleDateString('es-ES', { timeZone: 'UTC' })}
+                        ID: {shipment.id_despacho} - Ruta: {getRouteDescription(shipment.id_ruta)} - Fecha: {getShipmentDate(shipment.id_despacho)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -675,7 +675,7 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
                             ))
                           ) : (
                             <TableRow>
-                              <TableCell colSpan={5} className="text-center h-24">No hay facturas disponibles para la fecha y ruta de este despacho.</TableCell>
+                              <TableCell colSpan={5} className="text-center h-24">No hay facturas disponibles que cumplan los criterios.</TableCell>
                             </TableRow>
                           )
                       ) : (
