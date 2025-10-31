@@ -93,6 +93,7 @@ export default function ShipmentInvoicingPage() {
   const [selectedShipmentForMassAssign, setSelectedShipmentForMassAssign] = useState<string>('');
   const [selectedInvoicesForMassAssign, setSelectedInvoicesForMassAssign] = useState<Record<string, boolean>>({});
   const [massAssignSearchQuery, setMassAssignSearchQuery] = useState('');
+  const [massAssignImportDate, setMassAssignImportDate] = useState('');
   
   const [availableInvoices, setAvailableInvoices] = useState<Invoice[]>([]);
   
@@ -179,20 +180,18 @@ export default function ShipmentInvoicingPage() {
     const usedInvoiceIds = new Set(usedInvoices.map(si => si.id_factura));
 
     // 2. Obtener los clientes que están dentro de la geocerca de la ruta del despacho
-    const routeIdAsInt = parseInt(selectedShipment.id_ruta, 10);
-    let customerCodesInRoute: Set<string> | null = null;
+    const { data: customersInRoute, error: rpcError } = await supabase.rpc('get_customers_in_route_geofence_v2', {
+        p_id_ruta: selectedShipment.id_ruta
+    });
 
-    if (!isNaN(routeIdAsInt)) {
-        const { data: customersInRoute, error: rpcError } = await supabase.rpc('get_customers_in_route_geofence', {
-          route_id_param: routeIdAsInt
-        });
-        if (rpcError) {
-          console.error(rpcError)
-          toast({ title: "Error de Geocerca", description: "No se pudo consultar qué clientes están en la ruta.", variant: "destructive" });
-        } else {
-          customerCodesInRoute = new Set(customersInRoute.map((c: any) => c.code_customer));
-        }
+    let customerCodesInRoute: Set<string> | null = null;
+    if (rpcError) {
+      console.error(rpcError)
+      toast({ title: "Error de Geocerca", description: "No se pudo consultar qué clientes están en la ruta.", variant: "destructive" });
+    } else {
+      customerCodesInRoute = new Set(customersInRoute.map((c: any) => c.code_customer));
     }
+
 
     // 3. Filtrar todas las facturas basándose en las condiciones
     const filteredInvoices = allInvoices.filter(inv => {
@@ -548,6 +547,7 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
     setSelectedInvoicesForMassAssign({});
     setAvailableInvoices([]); // Limpia las facturas disponibles
     setMassAssignSearchQuery(''); // Limpia la búsqueda
+    setMassAssignImportDate(''); // Limpia el filtro de fecha
   };
   
   const clearFilters = () => {
@@ -581,18 +581,22 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
     return date.toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
   };
   
-  // Filtra las facturas disponibles basadas en la consulta de búsqueda.
+  // Filtra las facturas disponibles basadas en la consulta de búsqueda y fecha.
   const searchedAvailableInvoices = useMemo(() => {
-    if (!massAssignSearchQuery) {
-        return availableInvoices;
-    }
-    const query = massAssignSearchQuery.toLowerCase();
-    return availableInvoices.filter(inv =>
-        String(inv.id_factura).toLowerCase().includes(query) ||
-        String(inv.reference_number).toLowerCase().includes(query) ||
-        inv.customer_name.toLowerCase().includes(query)
-    );
-  }, [availableInvoices, massAssignSearchQuery]);
+    return availableInvoices.filter(inv => {
+        const searchMatch = massAssignSearchQuery 
+            ? String(inv.id_factura).toLowerCase().includes(massAssignSearchQuery.toLowerCase()) ||
+              String(inv.reference_number).toLowerCase().includes(massAssignSearchQuery.toLowerCase()) ||
+              inv.customer_name.toLowerCase().includes(massAssignSearchQuery.toLowerCase())
+            : true;
+        
+        const dateMatch = massAssignImportDate
+            ? inv.fecha_import?.startsWith(massAssignImportDate)
+            : true;
+
+        return searchMatch && dateMatch;
+    });
+  }, [availableInvoices, massAssignSearchQuery, massAssignImportDate]);
 
 
   // --- RENDERIZADO DEL COMPONENTE ---
@@ -631,15 +635,27 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
                   </SelectContent>
                 </Select>
                 
-                <div className="relative mb-2">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                        type="search"
-                        placeholder="Buscar por factura, ref. o cliente..."
-                        value={massAssignSearchQuery}
-                        onChange={(e) => setMassAssignSearchQuery(e.target.value)}
-                        className="pl-8 w-full"
-                    />
+                <div className="flex flex-col sm:flex-row gap-2">
+                    <div className="relative flex-grow">
+                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            type="search"
+                            placeholder="Buscar por factura, ref. o cliente..."
+                            value={massAssignSearchQuery}
+                            onChange={(e) => setMassAssignSearchQuery(e.target.value)}
+                            className="pl-8 w-full"
+                        />
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Label htmlFor="mass-import-date" className="shrink-0">Fecha Importación</Label>
+                        <Input
+                            id="mass-import-date"
+                            type="date"
+                            value={massAssignImportDate}
+                            onChange={(e) => setMassAssignImportDate(e.target.value)}
+                            className="w-full sm:w-auto"
+                        />
+                    </div>
                 </div>
 
                 <div className="border rounded-md flex-1 overflow-y-auto">
