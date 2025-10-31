@@ -55,7 +55,7 @@ const shipmentInvoiceSchema = z.object({
 // Tipos de datos para la gestión de facturación por despacho.
 type ShipmentInvoice = z.infer<typeof shipmentInvoiceSchema> & { id_fac_desp: number, comprobante: string, fecha_entrega: string | null }
 type Invoice = { id_factura: string, reference_number: string | number, fecha: string, grand_total: number, customer_name: string, code_customer: string, geocerca: any | null, fecha_import: string | null }
-type Shipment = { id_despacho: number, fecha_despacho: string, id_ruta: string }
+type Shipment = { id_despacho: number, fecha_despacho: string, id_ruta: string, estado_recorrido: 'pendiente' | 'en_curso' | 'finalizado' }
 type Route = { id_ruta: string; ruta_desc: string };
 
 
@@ -295,7 +295,7 @@ export default function ShipmentInvoicingPage() {
   
   /** Obtiene todos los despachos para el selector. */
   const fetchShipments = async () => {
-    const { data, error } = await supabase.from('despacho').select('id_despacho, fecha_despacho, id_ruta')
+    const { data, error } = await supabase.from('despacho').select('id_despacho, fecha_despacho, id_ruta, estado_recorrido')
     if (error) {
       toast({ title: "Error", description: "No se pudieron cargar los despachos.", variant: "destructive" })
     } else {
@@ -598,6 +598,11 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
     });
   }, [availableInvoices, massAssignSearchQuery, massAssignImportDate]);
 
+    // Filtra los despachos para mostrar solo los que están 'pendientes'.
+  const availableShipments = useMemo(() => {
+    return allShipments.filter(s => s.estado_recorrido === 'pendiente');
+  }, [allShipments]);
+
 
   // --- RENDERIZADO DEL COMPONENTE ---
   return (
@@ -627,7 +632,7 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
                     <SelectValue placeholder="1. Seleccione un despacho..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {allShipments.map((shipment) => (
+                    {availableShipments.map((shipment) => (
                       <SelectItem key={shipment.id_despacho} value={String(shipment.id_despacho)}>
                         ID: {shipment.id_despacho} - Ruta: {getRouteDescription(shipment.id_ruta)} - Fecha: {getShipmentDate(shipment.id_despacho)}
                       </SelectItem>
@@ -750,10 +755,10 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
                     <SelectValue placeholder="Filtrar por Despacho" />
                 </SelectTrigger>
                 <SelectContent>
-                    {allShipments.map(shipment => (
-                        <SelectItem key={shipment.id_despacho} value={String(shipment.id_despacho)}>
-                            ID: {shipment.id_despacho} - {getRouteDescription(shipment.id_ruta)} - {getShipmentDate(shipment.id_despacho)}
-                        </SelectItem>
+                    {allShipments.map((shipment) => (
+                      <SelectItem key={shipment.id_despacho} value={String(shipment.id_despacho)}>
+                        ID: {shipment.id_despacho} - Ruta: {getRouteDescription(shipment.id_ruta)} - Fecha: {getShipmentDate(shipment.id_despacho)}
+                      </SelectItem>
                     ))}
                 </SelectContent>
             </Select>
