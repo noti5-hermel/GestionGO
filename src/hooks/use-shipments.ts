@@ -32,12 +32,12 @@ const shipmentSchema = z.object({
   total_credito: z.coerce.number().min(0).optional(),
   total_general: z.coerce.number().min(0).optional(),
   fecha_despacho: z.string().min(1, "La fecha es requerida."),
-  facturacion: z.boolean().optional().default(true),
-  bodega: z.boolean().optional().default(false),
-  reparto: z.boolean().optional().default(false),
-  asist_admon: z.boolean().optional().default(false),
-  gerente_admon: z.boolean().optional().default(false),
-  cobros: z.boolean().optional().default(false),
+  facturacion: z.boolean().default(true),
+  bodega: z.boolean().default(false),
+  reparto: z.boolean().default(false),
+  asist_admon: z.boolean().default(false),
+  gerente_admon: z.boolean().default(false),
+  cobros: z.boolean().default(false),
 })
 
 // Tipos de datos para la gestión de despachos.
@@ -208,11 +208,19 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
       const localDateString = new Date(utcDate.getTime() + utcDate.getTimezoneOffset() * 60000).toISOString().split('T')[0];
 
       form.reset({
-        ...editingShipment,
         id_ruta: String(editingShipment.id_ruta),
         id_motorista: String(editingShipment.id_motorista),
         id_auxiliar: String(editingShipment.id_auxiliar),
         fecha_despacho: localDateString,
+        total_contado: editingShipment.total_contado,
+        total_credito: editingShipment.total_credito,
+        total_general: editingShipment.total_general,
+        facturacion: editingShipment.facturacion ?? false,
+        bodega: editingShipment.bodega ?? false,
+        reparto: editingShipment.reparto ?? false,
+        asist_admon: editingShipment.asist_admon ?? false,
+        gerente_admon: editingShipment.gerente_admon ?? false,
+        cobros: editingShipment.cobros ?? false,
       })
     } else {
       // Resetea el formulario a los valores por defecto para un nuevo despacho.
