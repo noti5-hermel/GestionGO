@@ -389,17 +389,17 @@ export default function InvoicingPage() {
                 const dataRows = json.slice(3);
 
                 const colIndices = {
-                    id_factura: headerRow.indexOf('invoice numbe'),
-                    fecha: headerRow.indexOf('transaction i'),
+                    id_factura: headerRow.indexOf('invoice number'),
+                    fecha: headerRow.indexOf('transaction id'),
                     customer_name_excel: headerRow.indexOf('customer name'),
-                    tax_id_number: headerRow.indexOf('tax id numb'),
+                    tax_id_number: headerRow.indexOf('tax id number'),
                     subtotal: headerRow.indexOf('subtotal'),
-                    total_sale: headerRow.indexOf('total sales t'),
+                    total_sale: headerRow.indexOf('total sales tax'),
                     grand_total: headerRow.indexOf('grand total'),
-                    payment: headerRow.indexOf('payment tot'),
+                    payment: headerRow.indexOf('payment total'),
                     net_to_pay: headerRow.indexOf('net to pay'),
-                    term_description_excel: headerRow.indexOf('terms descri'),
-                    reference_number: headerRow.indexOf('your referer'),
+                    term_description_excel: headerRow.indexOf('terms description'),
+                    reference_number: headerRow.indexOf('your reference'),
                     code_customer: headerRow.indexOf('code')
                 };
 
