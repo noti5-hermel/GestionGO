@@ -32,12 +32,12 @@ const shipmentSchema = z.object({
   total_credito: z.coerce.number().min(0).optional(),
   total_general: z.coerce.number().min(0).optional(),
   fecha_despacho: z.string().min(1, "La fecha es requerida."),
-  facturacion: z.boolean().default(true),
-  bodega: z.boolean().default(false),
-  reparto: z.boolean().default(false),
-  asist_admon: z.boolean().default(false),
-  gerente_admon: z.boolean().default(false),
-  cobros: z.boolean().default(false),
+  facturacion: z.boolean().optional().default(true),
+  bodega: z.boolean().optional().default(false),
+  reparto: z.boolean().optional().default(false),
+  asist_admon: z.boolean().optional().default(false),
+  gerente_admon: z.boolean().optional().default(false),
+  cobros: z.boolean().optional().default(false),
 })
 
 // Tipos de datos para la gestión de despachos.
