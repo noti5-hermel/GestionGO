@@ -33,9 +33,10 @@ import { AsyncCombobox } from "@/components/ui/async-combobox"
 
 /**
  * @file invoicing/page.tsx
- * @description Página para la gestión completa (CRUD) de facturas.
- * Permite crear, editar, eliminar, buscar y filtrar facturas.
- * Incluye importación masiva desde Excel y paginación del lado del servidor para un rendimiento óptimo.
+ * @description Página para la gestión completa de facturas.
+ * Permite la creación manual o la importación masiva desde Excel.
+ * El sistema soporta archivos con múltiples hojas, donde cada hoja representa un despacho,
+ * creando y asignando facturas automáticamente.
  */
 
 // Esquema de validación para la factura usando Zod.
@@ -304,8 +305,7 @@ export default function InvoicingPage() {
   }
 
   /**
-   * Procesa un archivo Excel para importar facturas masivamente.
-   * Realiza una búsqueda individual de cada cliente para ser más eficiente.
+   * Procesa un archivo Excel para importar facturas masivamente, creando despachos y asignaciones.
    * @param event El evento del cambio del input de archivo.
    */
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -315,135 +315,192 @@ export default function InvoicingPage() {
     const reader = new FileReader();
     reader.onload = async (e) => {
         try {
-            // Lee y parsea el archivo Excel.
             const data = new Uint8Array(e.target?.result as ArrayBuffer);
             const workbook = xlsx.read(data, { type: 'array', cellDates: true });
-            const sheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[sheetName];
-            const json: any[] = xlsx.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
 
-            if (json.length < 2) {
-                toast({ title: "Error", description: "El archivo Excel está vacío o no tiene datos.", variant: "destructive" });
-                return;
-            }
-
-            const header = (json[0] as string[]).map(h => h.toLowerCase().trim());
-            const dataRows = json.slice(1);
-            
-            // Mapea los nombres de las columnas del Excel a los campos de la base de datos.
-            const colIndices = {
-              id_factura: header.indexOf('invoice number'),
-              reference_number: header.indexOf('your reference'),
-              transaction_date: header.indexOf('transaction date'),
-              tax_id_number: header.indexOf('tax id number'),
-              subtotal: header.indexOf('subtotal'),
-              total_sale: header.indexOf('total sales tax'),
-              grand_total: header.indexOf('grand total'),
-              payment: header.indexOf('payment total'),
-              net_to_pay: header.indexOf('net to pay'),
-              code_customer: header.indexOf('code')
-            };
-              
-            const paymentTermMap = new Map(paymentTerms.map(pt => [pt.id_term, pt.term_desc]));
-
-            // Procesa cada fila del Excel de forma asíncrona.
-            const mappedDataPromises = dataRows.map(async (row) => {
-                const getDate = (dateValue: any) => {
-                  if (!dateValue) return new Date().toISOString().split('T')[0];
-                  const date = new Date(dateValue);
-                  return isNaN(date.getTime()) ? new Date().toISOString().split('T')[0] : date.toISOString().split('T')[0];
-                };
-
-                const getNumericValue = (value: any): number => {
-                    const strValue = String(value).toUpperCase();
-                    if (strValue === 'N/A' || strValue.trim() === '') return 0;
-                    const num = parseFloat(String(value));
-                    return isNaN(num) ? 0 : num;
-                };
-
-                // Limpia el código de cliente de espacios en blanco.
-                const code_customer = String(row[colIndices.code_customer]).trim();
-                if (!code_customer) return null;
-
-                // Realiza una consulta individual por cada cliente para ser más eficiente.
-                const { data: customer, error: customerError } = await supabase
-                    .from('customer')
-                    .select('customer_name, ruta, id_term')
-                    .eq('code_customer', code_customer)
-                    .single();
-
-                if (customerError || !customer) {
-                    console.warn(`Cliente con código ${code_customer} no encontrado. Se omitirá esta fila.`);
-                    return null;
-                }
-
-                const term_description = paymentTermMap.get(customer.id_term) || "";
-                const taxIdValue = String(row[colIndices.tax_id_number]).trim();
-
-                // Construye el objeto de la factura a insertar/actualizar.
-                return {
-                    id_factura: String(row[colIndices.id_factura]),
-                    reference_number: String(row[colIndices.reference_number]),
-                    fecha: getDate(row[colIndices.transaction_date]),
-                    fecha_import: 'now()', // Se usará la función now() de PostgreSQL.
-                    customer_name: customer.customer_name,
-                    tax_id_number: (taxIdValue.toUpperCase() === 'N/A' || taxIdValue === '') ? '0' : taxIdValue,
-                    subtotal: getNumericValue(row[colIndices.subtotal]),
-                    total_sale: getNumericValue(row[colIndices.total_sale]),
-                    grand_total: getNumericValue(row[colIndices.grand_total]),
-                    payment: getNumericValue(row[colIndices.payment]),
-                    net_to_pay: getNumericValue(row[colIndices.net_to_pay]),
-                    ruta: String(customer.ruta),
-                    term_description: term_description,
-                    code_customer: code_customer,
-                    state: false, 
-                };
-            });
-
-            // Espera a que todas las búsquedas de clientes terminen y filtra los resultados nulos.
-            const mappedData = (await Promise.all(mappedDataPromises)).filter(d => d && d.id_factura);
-            // Asegura que no haya facturas duplicadas en el archivo Excel.
-            const uniqueMappedData = Array.from(new Map(mappedData.map(item => [item.id_factura, item])).values());
-
-            if(uniqueMappedData.length === 0) {
-              toast({ title: "Advertencia", description: "No se encontraron filas válidas o únicas para importar. Verifica los códigos de cliente y los números de factura.", variant: "destructive" });
-              if(event.target) event.target.value = '';
-              return;
-            }
-            
-            // Valida los datos finales con Zod.
-            const validatedInvoices = z.array(invoiceSchema).safeParse(uniqueMappedData);
-            
-            if (!validatedInvoices.success) {
-                console.error("Error de validación Zod:", validatedInvoices.error.flatten());
-                const errorMessage = validatedInvoices.error.issues
-                    .map(issue => `Fila ${Number(issue.path[0]) + 2}: En columna '${issue.path[1]}', ${issue.message}`)
-                    .join(' | ');
-
-                toast({
-                    title: "Error de validación",
-                    description: errorMessage || "Algunos datos del archivo Excel no son correctos o están incompletos.",
-                    variant: "destructive",
-                    duration: 9000,
-                });
+            const { data: routesData, error: routesError } = await supabase.from('rutas').select('id_ruta, ruta_desc');
+            if (routesError) {
+                toast({ title: "Error", description: "No se pudieron cargar las rutas para la validación.", variant: "destructive" });
                 if(event.target) event.target.value = '';
                 return;
             }
-
-            // Sube los datos a Supabase usando 'upsert'.
-            const { error: insertError } = await supabase.from('facturacion').upsert(validatedInvoices.data, {
-              onConflict: 'id_factura'
-            });
-
-            if (insertError) {
-                toast({ title: "Error al importar", description: insertError.message, variant: "destructive" });
-            } else {
-                toast({ title: "Éxito", description: `${validatedInvoices.data.length} facturas importadas/actualizadas correctamente.` });
-                fetchInvoices();
+            const routesMap = new Map(routesData.map(r => [r.ruta_desc.toLowerCase(), r.id_ruta]));
+            
+            const { data: paymentTermsData, error: ptError } = await supabase.from('terminos_pago').select('id_term, term_desc');
+            if(ptError){
+                toast({ title: "Error", description: "No se pudieron cargar los términos de pago.", variant: "destructive" });
+                if(event.target) event.target.value = '';
+                return;
             }
+            const paymentTermMap = new Map(paymentTermsData.map(pt => [pt.id_term, pt.term_desc]));
+
+            let totalInvoicesCreated = 0;
+            let totalDespachosCreated = 0;
+            let hasErrors = false;
+
+            for (const sheetName of workbook.SheetNames) {
+                const worksheet = workbook.Sheets[sheetName];
+                const json: any[][] = xlsx.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+
+                if (json.length < 4) {
+                    console.warn(`Omitiendo hoja "${sheetName}": formato inválido, no contiene suficientes filas.`);
+                    continue;
+                }
+
+                const routeName = String(json[0][1] || '').trim();
+                const dispatchDateValue = json[0][3];
+
+                if (!routeName || !dispatchDateValue) {
+                    toast({ title: "Hoja Omitida", description: `La hoja "${sheetName}" no tiene nombre de ruta o fecha en B1 y D1.`, variant: "destructive", duration: 7000 });
+                    hasErrors = true;
+                    continue;
+                }
+
+                const id_ruta = routesMap.get(routeName.toLowerCase());
+                if (!id_ruta) {
+                    toast({ title: "Hoja Omitida", description: `La ruta "${routeName}" en la hoja "${sheetName}" no existe.`, variant: "destructive", duration: 7000 });
+                    hasErrors = true;
+                    continue;
+                }
+                
+                const dispatchDate = new Date(dispatchDateValue);
+                if (isNaN(dispatchDate.getTime())) {
+                     toast({ title: "Hoja Omitida", description: `La fecha de despacho en la hoja "${sheetName}" es inválida.`, variant: "destructive", duration: 7000 });
+                     hasErrors = true;
+                     continue;
+                }
+                const fecha_despacho = new Date(dispatchDate.getTime() - (dispatchDate.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+
+                const { data: newDespacho, error: despachoError } = await supabase
+                    .from('despacho')
+                    .insert({ id_ruta, fecha_despacho, facturacion: true })
+                    .select('id_despacho')
+                    .single();
+
+                if (despachoError) {
+                    toast({ title: `Error en hoja "${sheetName}"`, description: `No se pudo crear el despacho: ${despachoError.message}`, variant: "destructive", duration: 7000 });
+                    hasErrors = true;
+                    continue;
+                }
+                totalDespachosCreated++;
+                const newDespachoId = newDespacho.id_despacho;
+
+                const headerRow: string[] = (json[2] as string[]).map(h => String(h || '').toLowerCase().trim());
+                const dataRows = json.slice(3);
+
+                const colIndices = {
+                    id_factura: headerRow.indexOf('invoice numbe'),
+                    fecha: headerRow.indexOf('transaction i'),
+                    customer_name_excel: headerRow.indexOf('customer name'),
+                    tax_id_number: headerRow.indexOf('tax id numb'),
+                    subtotal: headerRow.indexOf('subtotal'),
+                    total_sale: headerRow.indexOf('total sales t'),
+                    grand_total: headerRow.indexOf('grand total'),
+                    payment: headerRow.indexOf('payment tot'),
+                    net_to_pay: headerRow.indexOf('net to pay'),
+                    term_description_excel: headerRow.indexOf('terms descri'),
+                    reference_number: headerRow.indexOf('your referer'),
+                    code_customer: headerRow.indexOf('code')
+                };
+
+                const validRows = dataRows.filter(row => row && row[colIndices.id_factura] && String(row[colIndices.id_factura]).trim() !== '' && String(row[colIndices.code_customer] || '').trim() !== '');
+
+                if (validRows.length === 0) continue;
+
+                const customerCodes = [...new Set(validRows.map(row => String(row[colIndices.code_customer]).trim()))];
+                const { data: customersData, error: customersError } = await supabase.from('customer').select('code_customer, customer_name, id_term, ruta').in('code_customer', customerCodes);
+
+                if (customersError) {
+                    toast({ title: `Error en hoja "${sheetName}"`, description: `No se pudo obtener datos de clientes: ${customersError.message}`, variant: "destructive", duration: 7000 });
+                    hasErrors = true;
+                    continue;
+                }
+                const customerMap = new Map(customersData.map(c => [c.code_customer, c]));
+
+                const invoicesToCreate: any[] = [];
+                validRows.forEach(row => {
+                    const code_customer = String(row[colIndices.code_customer]).trim();
+                    const customer = customerMap.get(code_customer);
+                    if (!customer) return;
+                    
+                    const getDate = (dateValue: any) => {
+                      if (!dateValue) return new Date().toISOString().split('T')[0];
+                      const date = new Date(dateValue);
+                       if (isNaN(date.getTime())) return new Date().toISOString().split('T')[0];
+                       return new Date(date.getTime() - (date.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+                    };
+
+                    const getNumericValue = (value: any): number => {
+                        const strValue = String(value).toUpperCase();
+                        if (strValue === 'N/A' || strValue.trim() === '' || strValue === 'DELETED') return 0;
+                        const num = parseFloat(String(value));
+                        return isNaN(num) ? 0 : num;
+                    };
+                    
+                    const taxIdValue = String(row[colIndices.tax_id_number] || '').trim();
+
+                    invoicesToCreate.push({
+                        id_factura: String(row[colIndices.id_factura]),
+                        reference_number: String(row[colIndices.reference_number]),
+                        fecha: getDate(row[colIndices.fecha]),
+                        fecha_import: 'now()',
+                        customer_name: customer.customer_name,
+                        tax_id_number: (taxIdValue.toUpperCase() === 'N/A' || taxIdValue === '') ? '0' : taxIdValue,
+                        subtotal: getNumericValue(row[colIndices.subtotal]),
+                        total_sale: getNumericValue(row[colIndices.total_sale]),
+                        grand_total: getNumericValue(row[colIndices.grand_total]),
+                        payment: getNumericValue(row[colIndices.payment]),
+                        net_to_pay: getNumericValue(row[colIndices.net_to_pay]),
+                        ruta: String(customer.ruta),
+                        term_description: paymentTermMap.get(customer.id_term) || String(row[colIndices.term_description_excel]) || "",
+                        code_customer: code_customer,
+                        state: false,
+                    });
+                });
+
+                if (invoicesToCreate.length === 0) continue;
+                
+                const validatedInvoices = z.array(invoiceSchema).safeParse(invoicesToCreate);
+                if (!validatedInvoices.success) {
+                    const errorMessage = validatedInvoices.error.issues
+                        .map(issue => `Fila ${Number(issue.path[0]) + 4}: Columna '${issue.path[1]}', ${issue.message}`)
+                        .join(' | ');
+                    toast({ title: `Error de validación en hoja "${sheetName}"`, description: errorMessage, variant: "destructive", duration: 9000 });
+                    hasErrors = true;
+                    continue;
+                }
+
+                const { data: createdInvoices, error: insertInvoicesError } = await supabase.from('facturacion').upsert(validatedInvoices.data, { onConflict: 'id_factura' }).select('id_factura, grand_total');
+                if (insertInvoicesError) {
+                    toast({ title: `Error en hoja "${sheetName}"`, description: `No se pudieron guardar las facturas: ${insertInvoicesError.message}`, variant: "destructive", duration: 7000 });
+                    hasErrors = true;
+                    continue;
+                }
+                
+                const createdInvoiceIds = createdInvoices.map(inv => inv.id_factura);
+                totalInvoicesCreated += createdInvoiceIds.length;
+
+                const associationsToInsert = createdInvoiceIds.map(invoiceId => ({ id_despacho: newDespachoId, id_factura: invoiceId, monto: 0, state: false, forma_pago: 'Efectivo' as const, }));
+                const { error: associationError } = await supabase.from('facturacion_x_despacho').insert(associationsToInsert);
+                if (associationError) {
+                    toast({ title: `Error en hoja "${sheetName}"`, description: `No se pudieron asociar facturas: ${associationError.message}`, variant: "destructive", duration: 7000 });
+                    hasErrors = true;
+                    continue;
+                }
+
+                const total_general = createdInvoices.reduce((sum, inv) => sum + (inv.grand_total || 0), 0);
+                await supabase.from('despacho').update({ total_general }).eq('id_despacho', newDespachoId);
+            }
+
+            if (!hasErrors) {
+                toast({ title: "Éxito", description: `${totalDespachosCreated} despachos y ${totalInvoicesCreated} facturas procesadas correctamente.` });
+            } else {
+                toast({ title: "Importación Parcial", description: `Se encontraron errores. ${totalDespachosCreated} despachos y ${totalInvoicesCreated} facturas se procesaron con éxito. Revise las notificaciones de error.`, variant: "destructive", duration: 9000 });
+            }
+            fetchInvoices();
         } catch (error) {
             console.error("Error al procesar el archivo:", error);
-            toast({ title: "Error", description: "No se pudo procesar el archivo Excel.", variant: "destructive" });
+            toast({ title: "Error Crítico", description: "No se pudo procesar el archivo Excel. Verifique el formato.", variant: "destructive" });
         }
         if(event.target) event.target.value = '';
     };
@@ -996,5 +1053,3 @@ export default function InvoicingPage() {
     </Card>
   )
 }
-
-    
