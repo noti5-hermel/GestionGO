@@ -470,7 +470,18 @@ export default function InvoicingPage() {
                     continue;
                 }
 
-                const { data: createdInvoices, error: insertInvoicesError } = await supabase.from('facturacion').upsert(validatedInvoices.data, { onConflict: 'id_factura' }).select('id_factura, grand_total');
+                // De-duplicate invoices to prevent "cannot affect row a second time" error.
+                // If the same invoice ID appears multiple times, the last one in the sheet wins.
+                const uniqueInvoicesMap = new Map<string, any>();
+                for (const invoice of validatedInvoices.data) {
+                    uniqueInvoicesMap.set(String(invoice.id_factura), invoice);
+                }
+                const uniqueInvoicesToUpsert = Array.from(uniqueInvoicesMap.values());
+
+
+                if (uniqueInvoicesToUpsert.length === 0) continue;
+
+                const { data: createdInvoices, error: insertInvoicesError } = await supabase.from('facturacion').upsert(uniqueInvoicesToUpsert, { onConflict: 'id_factura' }).select('id_factura, grand_total');
                 if (insertInvoicesError) {
                     toast({ title: `Error en hoja "${sheetName}"`, description: `No se pudieron guardar las facturas: ${insertInvoicesError.message}`, variant: "destructive", duration: 7000 });
                     hasErrors = true;
