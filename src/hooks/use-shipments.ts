@@ -21,23 +21,23 @@ const shipmentSchema = z.object({
     z.string().min(1, "ID de ruta es requerido.")
   ),
   id_motorista: z.preprocess(
-    (val) => String(val),
-    z.string().min(1, { message: "ID de motorista es requerido." })
+    (val) => val ? Number(val) : undefined,
+    z.number({ required_error: "ID de motorista es requerido.", invalid_type_error: "ID de motorista debe ser un número." })
   ),
   id_auxiliar: z.preprocess(
-    (val) => String(val),
-    z.string().min(1, { message: "ID de auxiliar es requerido." })
+    (val) => val ? Number(val) : undefined,
+    z.number({ required_error: "ID de auxiliar es requerido.", invalid_type_error: "ID de auxiliar debe ser un número." })
   ),
   total_contado: z.coerce.number().min(0).optional(),
   total_credito: z.coerce.number().min(0).optional(),
   total_general: z.coerce.number().min(0).optional(),
   fecha_despacho: z.string().min(1, "La fecha es requerida."),
-  facturacion: z.boolean().default(true),
-  bodega: z.boolean().default(false),
-  reparto: z.boolean().default(false),
-  asist_admon: z.boolean().default(false),
-  gerente_admon: z.boolean().default(false),
-  cobros: z.boolean().default(false),
+  facturacion: z.boolean().default(true).nullable(),
+  bodega: z.boolean().default(false).nullable(),
+  reparto: z.boolean().default(false).nullable(),
+  asist_admon: z.boolean().default(false).nullable(),
+  gerente_admon: z.boolean().default(false).nullable(),
+  cobros: z.boolean().default(false).nullable(),
 })
 
 // Tipos de datos para la gestión de despachos.
@@ -103,8 +103,8 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
     resolver: zodResolver(shipmentSchema),
     defaultValues: {
       id_ruta: "",
-      id_motorista: "",
-      id_auxiliar: "",
+      id_motorista: undefined,
+      id_auxiliar: undefined,
       total_contado: 0,
       total_credito: 0,
       total_general: 0,
@@ -209,8 +209,8 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
 
       form.reset({
         id_ruta: String(editingShipment.id_ruta),
-        id_motorista: String(editingShipment.id_motorista),
-        id_auxiliar: String(editingShipment.id_auxiliar),
+        id_motorista: Number(editingShipment.id_motorista),
+        id_auxiliar: Number(editingShipment.id_auxiliar),
         fecha_despacho: localDateString,
         total_contado: editingShipment.total_contado,
         total_credito: editingShipment.total_credito,
@@ -226,8 +226,8 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
       // Resetea el formulario a los valores por defecto para un nuevo despacho.
       form.reset({
         id_ruta: "",
-        id_motorista: "",
-        id_auxiliar: "",
+        id_motorista: undefined,
+        id_auxiliar: undefined,
         total_contado: 0,
         total_credito: 0,
         total_general: 0,
@@ -431,8 +431,8 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
     setEditingShipment(null);
     form.reset({
         id_ruta: "",
-        id_motorista: "",
-        id_auxiliar: "",
+        id_motorista: undefined,
+        id_auxiliar: undefined,
         total_contado: 0,
         total_credito: 0,
         total_general: 0,

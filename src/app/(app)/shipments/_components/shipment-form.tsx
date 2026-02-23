@@ -19,23 +19,23 @@ const shipmentSchema = z.object({
     z.string().min(1, "ID de ruta es requerido.")
   ),
   id_motorista: z.preprocess(
-    (val) => String(val),
-    z.string().min(1, { message: "ID de motorista es requerido." })
+    (val) => val ? Number(val) : undefined,
+    z.number({ required_error: "ID de motorista es requerido.", invalid_type_error: "ID de motorista debe ser un número." })
   ),
   id_auxiliar: z.preprocess(
-    (val) => String(val),
-    z.string().min(1, { message: "ID de auxiliar es requerido." })
+    (val) => val ? Number(val) : undefined,
+    z.number({ required_error: "ID de auxiliar es requerido.", invalid_type_error: "ID de auxiliar debe ser un número." })
   ),
   total_contado: z.coerce.number().min(0).optional(),
   total_credito: z.coerce.number().min(0).optional(),
   total_general: z.coerce.number().min(0).optional(),
   fecha_despacho: z.string().min(1, "La fecha es requerida."),
-  facturacion: z.boolean().default(false),
-  bodega: z.boolean().default(false),
-  reparto: z.boolean().default(false),
-  asist_admon: z.boolean().default(false),
-  cobros: z.boolean().default(false),
-  gerente_admon: z.boolean().default(false),
+  facturacion: z.boolean().default(false).nullable(),
+  bodega: z.boolean().default(false).nullable(),
+  reparto: z.boolean().default(false).nullable(),
+  asist_admon: z.boolean().default(false).nullable(),
+  cobros: z.boolean().default(false).nullable(),
+  gerente_admon: z.boolean().default(false).nullable(),
 })
 
 type ShipmentFormValues = z.infer<typeof shipmentSchema>;
@@ -130,8 +130,8 @@ export function ShipmentForm({
                     <FormControl>
                       <Combobox
                         options={motoristaOptions}
-                        value={field.value}
-                        onChange={field.onChange}
+                        value={String(field.value)}
+                        onChange={(value) => field.onChange(Number(value))}
                         placeholder="Seleccione un motorista"
                         searchPlaceholder="Buscar motorista..."
                         emptyText="No se encontró el motorista."
@@ -150,8 +150,8 @@ export function ShipmentForm({
                     <FormControl>
                        <Combobox
                         options={auxiliarOptions}
-                        value={field.value}
-                        onChange={field.onChange}
+                        value={String(field.value)}
+                        onChange={(value) => field.onChange(Number(value))}
                         placeholder="Seleccione un auxiliar"
                         searchPlaceholder="Buscar auxiliar..."
                         emptyText="No se encontró el auxiliar."
@@ -186,7 +186,7 @@ export function ShipmentForm({
                       <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
                         <FormControl>
                           <Checkbox
-                            checked={field.value}
+                            checked={field.value ?? false}
                             onCheckedChange={field.onChange}
                             disabled={!!reviewRole && reviewRole !== 'facturacion'}
                           />
@@ -205,7 +205,7 @@ export function ShipmentForm({
                       <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
                         <FormControl>
                           <Checkbox
-                            checked={field.value}
+                            checked={field.value ?? false}
                             onCheckedChange={field.onChange}
                             disabled={!!reviewRole && reviewRole !== 'bodega'}
                           />
@@ -224,7 +224,7 @@ export function ShipmentForm({
                       <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
                         <FormControl>
                           <Checkbox
-                            checked={field.value}
+                            checked={field.value ?? false}
                             onCheckedChange={field.onChange}
                             disabled={!!reviewRole && reviewRole !== 'reparto'}
                           />
@@ -243,7 +243,7 @@ export function ShipmentForm({
                       <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
                         <FormControl>
                           <Checkbox
-                            checked={field.value}
+                            checked={field.value ?? false}
                             onCheckedChange={field.onChange}
                             disabled={!!reviewRole && reviewRole !== 'asist_admon'}
                           />
@@ -262,7 +262,7 @@ export function ShipmentForm({
                       <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
                         <FormControl>
                           <Checkbox
-                            checked={field.value}
+                            checked={field.value ?? false}
                             onCheckedChange={field.onChange}
                             disabled={!!reviewRole && reviewRole !== 'gerente_admon'}
                           />
@@ -281,7 +281,7 @@ export function ShipmentForm({
                       <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
                         <FormControl>
                           <Checkbox
-                            checked={field.value}
+                            checked={field.value ?? false}
                             onCheckedChange={field.onChange}
                             disabled={!!reviewRole && reviewRole !== 'cobros'}
                           />
@@ -308,5 +308,3 @@ export function ShipmentForm({
     </Dialog>
   )
 }
-
-    
