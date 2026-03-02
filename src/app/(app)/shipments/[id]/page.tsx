@@ -38,7 +38,7 @@ const BUCKET_NAME = 'comprobante';
  */
 const shipmentInvoiceEditSchema = (maxAmount: number) => z.object({
   comprobante: z.string().optional(),
-  forma_pago: z.enum(["Efectivo", "Tarjeta", "Transferencia"]),
+  forma_pago: z.enum(["Efectivo", "Tarjeta", "Transferencia", "Quedan", "Firma", "Credito"]),
   monto: z.coerce.number().min(0, "El monto debe ser un número positivo.").max(maxAmount, `El monto no puede ser mayor que el total de la factura: $${maxAmount.toFixed(2)}`),
   state: z.boolean(),
   fecha_entrega: z.string().optional().nullable(),
@@ -70,7 +70,7 @@ export type ShipmentInvoice = {
   id_factura: string
   code_customer: string
   comprobante: string
-  forma_pago: "Efectivo" | "Tarjeta" | "Transferencia"
+  forma_pago: "Efectivo" | "Tarjeta" | "Transferencia" | "Quedan" | "Firma" | "Credito"
   monto: number
   state: boolean
   fecha_entrega: string | null;
@@ -87,7 +87,7 @@ type Role = { id_ruta: string; ruta_desc: string }
 type Invoice = { id_factura: string, reference_number: string | number, code_customer: string, customer_name: string, grand_total: number }
 type Customer = { code_customer: string; id_impuesto: number; geocerca: any };
 type TaxType = { id_impuesto: number; impt_desc: string };
-const paymentMethods: ShipmentInvoice['forma_pago'][] = ["Efectivo", "Tarjeta", "Transferencia"];
+const paymentMethods: ShipmentInvoice['forma_pago'][] = ["Efectivo", "Tarjeta", "Transferencia", "Quedan", "Firma", "Credito"];
 const statusOptions: { label: string; value: boolean }[] = [
   { label: "Pagado", value: true },
   { label: "Pendiente", value: false },

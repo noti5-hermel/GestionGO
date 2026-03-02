@@ -47,7 +47,7 @@ const shipmentInvoiceSchema = z.object({
     z.string().min(1, "El ID de despacho es requerido.")
   ),
   comprobante: z.string().optional(), // La URL de la imagen se maneja por separado.
-  forma_pago: z.enum(["Efectivo", "Tarjeta", "Transferencia"]),
+  forma_pago: z.enum(["Efectivo", "Tarjeta", "Transferencia", "Quedan", "Firma", "Credito"]),
   monto: z.coerce.number().min(0, "El monto debe ser un número positivo."),
   state: z.boolean(),
 })
@@ -60,7 +60,7 @@ type Route = { id_ruta: string; ruta_desc: string };
 
 
 // Opciones estáticas para menús desplegables.
-const paymentMethods: ShipmentInvoice['forma_pago'][] = ["Efectivo", "Tarjeta", "Transferencia"];
+const paymentMethods: ShipmentInvoice['forma_pago'][] = ["Efectivo", "Tarjeta", "Transferencia", "Quedan", "Firma", "Credito"];
 const statusOptions: { label: string; value: boolean }[] = [
   { label: "Pagado", value: true },
   { label: "Pendiente", value: false },
