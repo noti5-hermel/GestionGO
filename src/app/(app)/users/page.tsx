@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useState, useEffect } from "react"
@@ -49,7 +50,7 @@ const userSchema = z.object({
 
 // Tipos de datos para la gestión de usuarios.
 type User = {
-  id_user: string;
+  id_user: number;
   name: string;
   correo: string;
   id_rol: string | number;
@@ -59,7 +60,7 @@ type Role = {
   rol_desc: string
 }
 type UserSession = {
-  id: string;
+  id: number;
   name: string;
   role: string;
 }
@@ -236,7 +237,7 @@ export default function UsersPage() {
     const { error } = await supabase
       .from('usuario')
       .update(userData)
-      .eq('id_user', parseInt(editingUser.id_user, 10));
+      .eq('id_user', editingUser.id_user);
 
     if (error) {
       toast({
@@ -267,7 +268,7 @@ export default function UsersPage() {
    * Elimina un usuario de la base de datos.
    * @param userId El ID del usuario a eliminar.
    */
-  const handleDelete = async (userId: string) => {
+  const handleDelete = async (userId: number) => {
     const { error } = await supabase
         .from('usuario')
         .delete()

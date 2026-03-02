@@ -48,9 +48,9 @@ export type Shipment = z.infer<typeof shipmentSchema> & {
   total_general: number;
 }
 export type Route = { id_ruta: string; ruta_desc: string; geocerca: string | null; }
-export type User = { id_user: string; name: string }
+export type User = { id_user: number; name: string }
 interface UserSession {
-  id: string;
+  id: number;
   name: string;
   role: string;
 }
@@ -148,8 +148,8 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
       // Filtra para mostrar solo los despachos del motorista/auxiliar si es su rol.
       if (userRole.includes('motorista') || userRole.includes('auxiliar')) {
         baseShipments = shipments.filter(s =>
-          String(s.id_motorista) === String(session.id) ||
-          String(s.id_auxiliar) === String(session.id)
+          s.id_motorista === session.id ||
+          s.id_auxiliar === session.id
         );
       }
       
@@ -248,7 +248,7 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
     if (error) {
       toast({ title: "Error", description: `No se pudieron cargar los usuarios: ${error.message}`, variant: "destructive" });
     } else {
-      setUsers(data || []);
+      setUsers(data as User[] || []);
     }
   }
 
@@ -302,7 +302,7 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
       if (motoristasError) {
         toast({ title: "Error al cargar motoristas", description: motoristasError.message, variant: "destructive" });
       } else {
-        setMotoristas(motoristasData || []);
+        setMotoristas(motoristasData as User[] || []);
       }
     }
 
@@ -323,7 +323,7 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
       if (auxiliaresError) {
         toast({ title: "Error al cargar auxiliares", description: `No se pudieron cargar los auxiliares: ${auxiliaresError.message}`, variant: "destructive" });
       } else {
-        setAuxiliares(auxiliaresData || []);
+        setAuxiliares(auxiliaresData as User[] || []);
       }
     }
   }

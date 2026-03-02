@@ -23,7 +23,7 @@ import { InstallButton } from '@/components/ui/install-button';
 
 // Definir un tipo para la sesión del usuario
 interface UserSession {
-  id: string;
+  id: number;
   name: string;
   role: string;
 }
@@ -71,9 +71,9 @@ const LocationTracker = () => {
       
       const locationPoint = `POINT(${longitude} ${latitude})`;
       const timestamp = new Date().toISOString();
-      const motoristaIdAsInt = parseInt(session.id, 10);
+      const motoristaId = session.id;
 
-      if (isNaN(motoristaIdAsInt)) {
+      if (typeof motoristaId !== 'number') {
         console.error("Invalid motorista ID for location tracking");
         return;
       }
@@ -82,7 +82,7 @@ const LocationTracker = () => {
       const { error: historyError } = await supabase
         .from('location_history')
         .insert({
-          id_motorista: motoristaIdAsInt,
+          id_motorista: motoristaId,
           location: locationPoint,
           timestamp: timestamp,
           id_despacho: parseInt(activeShipmentId, 10) // Asocia la ubicación al despacho.
@@ -96,7 +96,7 @@ const LocationTracker = () => {
       const { error: upsertError } = await supabase
         .from('locations_motoristas')
         .upsert({
-          id_motorista: motoristaIdAsInt,
+          id_motorista: motoristaId,
           location: locationPoint,
           last_update: timestamp,
         }, { onConflict: 'id_motorista' });
