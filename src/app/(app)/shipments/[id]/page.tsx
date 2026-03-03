@@ -86,6 +86,7 @@ type Role = { id_ruta: string; ruta_desc: string }
 type Invoice = { id_factura: string, reference_number: string | number, code_customer: string, customer_name: string, grand_total: number }
 type Customer = { code_customer: string; id_impuesto: number; geocerca: any };
 type TaxType = { id_impuesto: number; impt_desc: string };
+const creditoFiscalPaymentMethods: ShipmentInvoice['forma_pago'][] = ["Quedan", "Firma", "Transferencia"];
 const paymentMethods: ShipmentInvoice['forma_pago'][] = ["Efectivo", "Tarjeta", "Transferencia", "Quedan", "Firma", "Credito"];
 const statusOptions: { label: string; value: boolean }[] = [
   { label: "Pagado", value: true },
@@ -275,10 +276,16 @@ export default function ShipmentDetailPage() {
   // Efecto para rellenar el formulario de edición cuando se selecciona una factura.
   useEffect(() => {
     if (editingShipmentInvoice) {
+        const isCreditoFiscal = editingShipmentInvoice.tax_type === 'Crédito Fiscal';
+        const availablePaymentMethods = isCreditoFiscal ? creditoFiscalPaymentMethods : paymentMethods;
+
+        const currentPaymentMethodIsValid = availablePaymentMethods.includes(editingShipmentInvoice.forma_pago);
+        const newPaymentMethod = currentPaymentMethodIsValid ? editingShipmentInvoice.forma_pago : availablePaymentMethods[0];
+        
         // Resetea los valores del formulario.
         form.reset({
             comprobante: editingShipmentInvoice.comprobante,
-            forma_pago: editingShipmentInvoice.forma_pago,
+            forma_pago: newPaymentMethod,
             monto: editingShipmentInvoice.monto,
             state: editingShipmentInvoice.state,
             fecha_entrega: editingShipmentInvoice.fecha_entrega,
@@ -915,6 +922,13 @@ export default function ShipmentDetailPage() {
   const isMotorista = currentUser?.role?.toLowerCase() === 'motorista';
   const isFacturacion = currentUser?.role?.toLowerCase() === 'facturacion';
 
+  const paymentOptions = useMemo(() => {
+    if (editingShipmentInvoice?.tax_type === 'Crédito Fiscal') {
+      return creditoFiscalPaymentMethods;
+    }
+    return paymentMethods;
+  }, [editingShipmentInvoice]);
+
 
   if (loading && !shipment) {
     return <p>Cargando detalles del despacho...</p>
@@ -1182,14 +1196,14 @@ export default function ShipmentDetailPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Forma de Pago</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Seleccione una forma de pago" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {paymentMethods.map((method) => (
+                        {paymentOptions.map((method) => (
                           <SelectItem key={method} value={method}>
                             {method}
                           </SelectItem>

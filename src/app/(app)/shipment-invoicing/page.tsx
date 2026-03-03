@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react"
@@ -53,13 +52,14 @@ const shipmentInvoiceSchema = z.object({
 })
 
 // Tipos de datos para la gestión de facturación por despacho.
-type ShipmentInvoice = z.infer<typeof shipmentInvoiceSchema> & { id_fac_desp: number, comprobante: string, fecha_entrega: string | null }
+type ShipmentInvoice = z.infer<typeof shipmentInvoiceSchema> & { id_fac_desp: number, comprobante: string, fecha_entrega: string | null, tax_type?: string }
 type Invoice = { id_factura: string, reference_number: string | number, fecha: string, grand_total: number, customer_name: string, code_customer: string, geocerca: any | null, fecha_import: string | null }
 type Shipment = { id_despacho: number, fecha_despacho: string, id_ruta: string, estado_recorrido: 'pendiente' | 'en_curso' | 'finalizado' }
 type Route = { id_ruta: string; ruta_desc: string };
 
 
 // Opciones estáticas para menús desplegables.
+const creditoFiscalPaymentMethods: ShipmentInvoice['forma_pago'][] = ["Quedan", "Firma", "Transferencia"];
 const paymentMethods: ShipmentInvoice['forma_pago'][] = ["Efectivo", "Tarjeta", "Transferencia", "Quedan", "Firma", "Credito"];
 const statusOptions: { label: string; value: boolean }[] = [
   { label: "Pagado", value: true },
@@ -135,9 +135,16 @@ export default function ShipmentInvoicingPage() {
   // Rellena el formulario cuando se selecciona un registro para editar.
   useEffect(() => {
     if (editingShipmentInvoice) {
+      const isCreditoFiscal = editingShipmentInvoice.tax_type === 'Crédito Fiscal';
+      const availablePaymentMethods = isCreditoFiscal ? creditoFiscalPaymentMethods : paymentMethods;
+      
+      const currentPaymentMethodIsValid = availablePaymentMethods.includes(editingShipmentInvoice.forma_pago);
+      const newPaymentMethod = currentPaymentMethodIsValid ? editingShipmentInvoice.forma_pago : availablePaymentMethods[0];
+
       form.reset({
         ...editingShipmentInvoice,
         id_despacho: String(editingShipmentInvoice.id_despacho),
+        forma_pago: newPaymentMethod,
       })
     } else {
       form.reset({
@@ -233,7 +240,7 @@ export default function ShipmentInvoicingPage() {
     const from = (currentPage - 1) * ITEMS_PER_PAGE;
     const to = from + ITEMS_PER_PAGE - 1;
 
-    let query = supabase.from('facturacion_x_despacho').select('*', { count: 'exact' });
+    let query = supabase.from('facturacion_x_despacho').select('*, facturacion(code_customer, customer(id_impuesto, tipo_impuesto(impt_desc)))', { count: 'exact' });
 
     if (filterShipmentId) {
         query = query.eq('id_despacho', filterShipmentId);
@@ -260,7 +267,11 @@ export default function ShipmentInvoicingPage() {
     if (error) {
         toast({ title: "Error", description: "No se pudieron cargar los registros.", variant: "destructive" })
     } else {
-        setShipmentInvoices(data as ShipmentInvoice[]);
+        const enrichedData = data.map((d: any) => ({
+          ...d,
+          tax_type: d.facturacion?.customer?.tipo_impuesto?.impt_desc,
+        }));
+        setShipmentInvoices(enrichedData as ShipmentInvoice[]);
         setTotalRecords(count ?? 0);
     }
   }, [currentPage, filterShipmentId, filterAmount, filterDeliveryDate, filterPaymentMethod, filterState, toast]);
@@ -602,6 +613,13 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
   const availableShipments = useMemo(() => {
     return allShipments.filter(s => s.estado_recorrido === 'pendiente');
   }, [allShipments]);
+
+  const paymentOptions = useMemo(() => {
+    if (editingShipmentInvoice?.tax_type === 'Crédito Fiscal') {
+      return creditoFiscalPaymentMethods;
+    }
+    return paymentMethods;
+  }, [editingShipmentInvoice]);
 
 
   // --- RENDERIZADO DEL COMPONENTE ---
@@ -952,14 +970,14 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Forma de Pago</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Seleccione una forma de pago" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {paymentMethods.map((method) => (
+                        {paymentOptions.map((method) => (
                           <SelectItem key={method} value={method}>
                             {method}
                           </SelectItem>
