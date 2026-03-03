@@ -59,10 +59,11 @@ export type ShipmentInvoice = {
   id_fac_desp: number
   id_factura: string
   comprobante: string
-  forma_pago: "Efectivo" | "Tarjeta" | "Transferencia"
+  forma_pago: "Efectivo" | "Tarjeta" | "Transferencia" | "Quedan" | "Firma" | "Credito";
   monto: number
   state: boolean
   reference_number?: string | number
+  customer_name?: string
   tax_type?: string
   grand_total?: number
 }

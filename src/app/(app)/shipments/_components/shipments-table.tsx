@@ -92,7 +92,7 @@ export function ShipmentsTable({
     const invoiceIds = shipmentInvoices.map(inv => inv.id_factura);
 
     if (invoiceIds.length > 0) {
-        const { data: invoicesData, error: invoicesDetailsError } = await supabase.from('facturacion').select('id_factura, reference_number, code_customer, grand_total').in('id_factura', invoiceIds);
+        const { data: invoicesData, error: invoicesDetailsError } = await supabase.from('facturacion').select('id_factura, reference_number, code_customer, grand_total, customer_name').in('id_factura', invoiceIds);
         if (invoicesDetailsError) {
             toast({ title: "Error", description: "No se pudieron cargar los datos de facturas.", variant: "destructive" });
             return;
@@ -114,13 +114,14 @@ export function ShipmentsTable({
 
         const taxMap = new Map(taxesData.map(t => [t.id_impuesto, t.impt_desc]));
         const customerTaxMap = new Map(customersData.map(c => [c.code_customer, taxMap.get(c.id_impuesto)]));
-        const invoiceInfoMap = new Map(invoicesData.map(i => [i.id_factura, { reference_number: i.reference_number, code_customer: i.code_customer, grand_total: i.grand_total }]));
+        const invoiceInfoMap = new Map(invoicesData.map(i => [i.id_factura, { reference_number: i.reference_number, code_customer: i.code_customer, grand_total: i.grand_total, customer_name: i.customer_name }]));
 
         enrichedInvoices = shipmentInvoices.map(si => {
             const invoiceInfo = invoiceInfoMap.get(si.id_factura);
             return {
                 ...si,
                 reference_number: invoiceInfo?.reference_number,
+                customer_name: invoiceInfo?.customer_name,
                 grand_total: invoiceInfo?.grand_total,
                 tax_type: customerTaxMap.get(invoiceInfo?.code_customer || '')
             } as ShipmentInvoice;

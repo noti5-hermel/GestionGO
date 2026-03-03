@@ -76,7 +76,7 @@ export const generateShipmentPDF = (
     const tableColumn = ["No. Factura", "Cliente", "Tipo Cliente", "Total Factura", "Forma de Pago", "Monto Pagado", "Estado"];
     const tableRows = invoices.map(inv => [
       String(inv.reference_number || inv.id_factura),
-      (inv as any).customer_name || 'N/A',
+      inv.customer_name || 'N/A',
       inv.tax_type || 'N/A',
       `$${(inv.grand_total || 0).toFixed(2)}`,
       inv.forma_pago,
