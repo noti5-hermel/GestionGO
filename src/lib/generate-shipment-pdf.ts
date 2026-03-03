@@ -61,47 +61,39 @@ export const generateShipmentPDF = (
   doc.text(`Auxiliar: ${auxiliar.name}`, 14, yPos);
   yPos += 10;
 
-  const fiscalCreditInvoices = invoices.filter(inv => inv.tax_type === 'Crédito Fiscal');
-  const finalConsumerInvoices = invoices.filter(inv => inv.tax_type === 'Consumidor Final');
-  const otherInvoices = invoices.filter(inv => inv.tax_type !== 'Crédito Fiscal' && inv.tax_type !== 'Consumidor Final');
-  
-  const generateInvoiceTable = (title: string, invoiceList: ShipmentInvoice[]) => {
-      if (invoiceList.length === 0) return;
+  // 4. Tabla de Facturas Unificada
+  if (invoices.length > 0) {
+    if (yPos > pageHeight - 60) {
+      doc.addPage();
+      yPos = 20;
+    }
+    
+    yPos += 5;
+    doc.setFontSize(14);
+    doc.text("Listado de Facturas", 14, yPos);
+    yPos += 8;
 
-      if (yPos > pageHeight - 60) {
-        doc.addPage();
-        yPos = 20;
-      }
-      
-      yPos += 5;
-      doc.setFontSize(14);
-      doc.text(title, 14, yPos);
-      yPos += 8;
+    const tableColumn = ["No. Factura", "Cliente", "Tipo Cliente", "Total Factura", "Forma de Pago", "Monto Pagado", "Estado"];
+    const tableRows = invoices.map(inv => [
+      String(inv.reference_number || inv.id_factura),
+      (inv as any).customer_name || 'N/A',
+      inv.tax_type || 'N/A',
+      `$${(inv.grand_total || 0).toFixed(2)}`,
+      inv.forma_pago,
+      `$${inv.monto.toFixed(2)}`,
+      inv.state ? "Pagado" : "Pendiente"
+    ]);
 
-      const tableColumn = ["No. Factura", "Dirección", "Total Factura", "Forma de Pago", "Monto Pagado", "Estado"];
-      const tableRows = invoiceList.map(inv => [
-        String(inv.id_factura || inv.id_factura),
-        (inv as any).direccion || 'N/A', // Se castea a any para acceder a la propiedad añadida dinámicamente
-        `$${(inv.grand_total || 0).toFixed(2)}`,
-        inv.forma_pago,
-        `$${inv.monto.toFixed(2)}`,
-        inv.state ? "Pagado" : "Pendiente"
-      ]);
+    doc.autoTable({
+      head: [tableColumn],
+      body: tableRows,
+      startY: yPos,
+      theme: 'striped',
+      headStyles: { fillColor: [3, 166, 166] }, // Color del encabezado
+    });
 
-      doc.autoTable({
-        head: [tableColumn],
-        body: tableRows,
-        startY: yPos,
-        theme: 'striped',
-        headStyles: { fillColor: [3, 166, 166] }, // Color del encabezado
-      });
-
-      yPos = (doc as any).autoTable.previous.finalY + 10;
+    yPos = (doc as any).autoTable.previous.finalY + 10;
   }
-  
-  generateInvoiceTable("Facturas de Crédito Fiscal", fiscalCreditInvoices);
-  generateInvoiceTable("Facturas de Consumidor Final", finalConsumerInvoices);
-  generateInvoiceTable("Otras Facturas", otherInvoices);
 
 
   // Si el contenido excede la página, crea una nueva.
@@ -153,5 +145,3 @@ export const generateShipmentPDF = (
     fileName: `despacho_${shipment.id_despacho}.pdf`
   };
 };
-
-    

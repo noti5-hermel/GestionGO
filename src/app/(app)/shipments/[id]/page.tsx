@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from "react"
@@ -871,13 +870,15 @@ export default function ShipmentDetailPage() {
   };
   const handleGeneratePdf = () => {
     if (shipment) {
-      generateShipmentPDF(
+      const pdfOutput = generateShipmentPDF(
         shipment,
         invoices,
         routes.find(r => r.id_ruta === shipment.id_ruta) || { ruta_desc: 'N/A' },
         users.find(u => u.id_user === shipment.id_motorista) || { name: 'N/A', id_rol: 0 },
         users.find(u => u.id_user === shipment.id_auxiliar) || { name: 'N/A', id_rol: 0 }
       );
+      setPdfData(pdfOutput);
+      setIsPreviewOpen(true);
     }
   };
   const getStatusLabel = (status: boolean) => status ? "Pagado" : "Pendiente";
@@ -895,13 +896,6 @@ export default function ShipmentDetailPage() {
         const orderB = b.orden_visita === null ? Infinity : b.orden_visita;
         return orderA - orderB;
     });
-  }, [invoices]);
-
-  const { fiscalCreditInvoices, finalConsumerInvoices, otherInvoices } = useMemo(() => {
-    const fiscalCreditInvoices = invoices.filter(inv => inv.tax_type === 'Crédito Fiscal');
-    const finalConsumerInvoices = invoices.filter(inv => inv.tax_type === 'Consumidor Final');
-    const otherInvoices = invoices.filter(inv => inv.tax_type !== 'Crédito Fiscal' && inv.tax_type !== 'Consumidor Final');
-    return { fiscalCreditInvoices, finalConsumerInvoices, otherInvoices };
   }, [invoices]);
 
   // Calcula los totales dinámicamente basados en el `monto` de las facturas cargadas.
@@ -929,9 +923,9 @@ export default function ShipmentDetailPage() {
     return <p>Despacho no encontrado.</p>
   }
 
-  const renderInvoiceRow = (invoice: ShipmentInvoice, index: number, isUnifiedView: boolean = false) => (
+  const renderInvoiceRow = (invoice: ShipmentInvoice, index: number, isFacturacionView: boolean = false) => (
      <TableRow key={invoice.id_fac_desp}>
-        {isUnifiedView && isFacturacion && (
+        {isFacturacionView && (
             <TableCell>
                 <div className="flex items-center gap-1">
                     <Button variant="ghost" size="icon" className="h-6 w-6" disabled={index === 0 || loading} onClick={() => handleReorder(invoice.id_fac_desp, 'up')}>
@@ -1067,133 +1061,41 @@ export default function ShipmentDetailPage() {
          </CardContent>
       </Card>
       
-        {isFacturacion ? (
-            <Card>
-                <CardHeader>
-                    <CardTitle>Facturas del Despacho (Vista Unificada)</CardTitle>
-                    <CardDescription>
-                        Use las flechas para establecer un orden de visita manual para todas las facturas.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead className="w-20">Orden</TableHead>
-                                <TableHead>No. Factura</TableHead>
-                                <TableHead>Nombre del Cliente</TableHead>
-                                <TableHead>Tipo Cliente</TableHead>
-                                <TableHead>Geocerca</TableHead>
-                                <TableHead>Comprobante</TableHead>
-                                <TableHead>Fecha Entrega</TableHead>
-                                <TableHead>Total Factura</TableHead>
-                                <TableHead>Forma de Pago</TableHead>
-                                <TableHead>Monto Pagado</TableHead>
-                                <TableHead>Estado</TableHead>
-                                <TableHead className="text-right">Acciones</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {sortedInvoices.length > 0 ? sortedInvoices.map((invoice, index) => renderInvoiceRow(invoice, index, true)) : (
-                                <TableRow>
-                                    <TableCell colSpan={12} className="text-center">No hay facturas en este despacho.</TableCell>
-                                </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
-                </CardContent>
-            </Card>
-        ) : (
-             <>
-                {fiscalCreditInvoices.length > 0 && (
-                    <Card>
-                        <CardHeader><CardTitle>Facturas de Crédito Fiscal</CardTitle></CardHeader>
-                        <CardContent>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>No. Factura</TableHead>
-                                        <TableHead>Nombre del Cliente</TableHead>
-                                        <TableHead>Tipo Cliente</TableHead>
-                                        <TableHead>Geocerca</TableHead>
-                                        <TableHead>Comprobante</TableHead>
-                                        <TableHead>Fecha Entrega</TableHead>
-                                        <TableHead>Total Factura</TableHead>
-                                        <TableHead>Forma de Pago</TableHead>
-                                        <TableHead>Monto Pagado</TableHead>
-                                        <TableHead>Estado</TableHead>
-                                        <TableHead className="text-right">Acciones</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {fiscalCreditInvoices.map((invoice, index) => renderInvoiceRow(invoice, index))}
-                                </TableBody>
-                            </Table>
-                        </CardContent>
-                    </Card>
-                )}
-                {finalConsumerInvoices.length > 0 && (
-                    <Card>
-                        <CardHeader><CardTitle>Facturas de Consumidor Final</CardTitle></CardHeader>
-                        <CardContent>
-                            <Table>
-                                <TableHeader>
-                                     <TableRow>
-                                        <TableHead>No. Factura</TableHead>
-                                        <TableHead>Nombre del Cliente</TableHead>
-                                        <TableHead>Tipo Cliente</TableHead>
-                                        <TableHead>Geocerca</TableHead>
-                                        <TableHead>Comprobante</TableHead>
-                                        <TableHead>Fecha Entrega</TableHead>
-                                        <TableHead>Total Factura</TableHead>
-                                        <TableHead>Forma de Pago</TableHead>
-                                        <TableHead>Monto Pagado</TableHead>
-                                        <TableHead>Estado</TableHead>
-                                        <TableHead className="text-right">Acciones</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {finalConsumerInvoices.map((invoice, index) => renderInvoiceRow(invoice, index))}
-                                </TableBody>
-                            </Table>
-                        </CardContent>
-                    </Card>
-                )}
-                {otherInvoices.length > 0 && (
-                    <Card>
-                        <CardHeader><CardTitle>Otras Facturas</CardTitle></CardHeader>
-                        <CardContent>
-                             <Table>
-                                <TableHeader>
-                                     <TableRow>
-                                        <TableHead>No. Factura</TableHead>
-                                        <TableHead>Nombre del Cliente</TableHead>
-                                        <TableHead>Tipo Cliente</TableHead>
-                                        <TableHead>Geocerca</TableHead>
-                                        <TableHead>Comprobante</TableHead>
-                                        <TableHead>Fecha Entrega</TableHead>
-                                        <TableHead>Total Factura</TableHead>
-                                        <TableHead>Forma de Pago</TableHead>
-                                        <TableHead>Monto Pagado</TableHead>
-                                        <TableHead>Estado</TableHead>
-                                        <TableHead className="text-right">Acciones</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {otherInvoices.map((invoice, index) => renderInvoiceRow(invoice, index))}
-                                </TableBody>
-                            </Table>
-                        </CardContent>
-                    </Card>
-                )}
-                {invoices.length === 0 && (
-                    <Card>
-                        <CardHeader><CardTitle>Facturas del Despacho</CardTitle></CardHeader>
-                        <CardContent><p className="text-muted-foreground">No hay facturas en este despacho.</p></CardContent>
-                    </Card>
-                )}
-            </>
-        )}
+      <Card>
+          <CardHeader>
+              <CardTitle>Facturas del Despacho</CardTitle>
+              <CardDescription>
+                  {isFacturacion ? "Use las flechas para establecer un orden de visita manual." : "Listado de todas las facturas incluidas en este despacho."}
+              </CardDescription>
+          </CardHeader>
+          <CardContent>
+              <Table>
+                  <TableHeader>
+                      <TableRow>
+                          {isFacturacion && <TableHead className="w-20">Orden</TableHead>}
+                          <TableHead>No. Factura</TableHead>
+                          <TableHead>Nombre del Cliente</TableHead>
+                          <TableHead>Tipo Cliente</TableHead>
+                          <TableHead>Geocerca</TableHead>
+                          <TableHead>Comprobante</TableHead>
+                          <TableHead>Fecha Entrega</TableHead>
+                          <TableHead>Total Factura</TableHead>
+                          <TableHead>Forma de Pago</TableHead>
+                          <TableHead>Monto Pagado</TableHead>
+                          <TableHead>Estado</TableHead>
+                          <TableHead className="text-right">Acciones</TableHead>
+                      </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                      {sortedInvoices.length > 0 ? sortedInvoices.map((invoice, index) => renderInvoiceRow(invoice, index, isFacturacion)) : (
+                          <TableRow>
+                              <TableCell colSpan={isFacturacion ? 12 : 11} className="text-center">No hay facturas en este despacho.</TableCell>
+                          </TableRow>
+                      )}
+                  </TableBody>
+              </Table>
+          </CardContent>
+      </Card>
 
 
        {/* Diálogo para ver el orden de visita */}
