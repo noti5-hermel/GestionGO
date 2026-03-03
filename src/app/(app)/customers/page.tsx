@@ -1,5 +1,3 @@
-
-
 'use client'
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react"
@@ -332,28 +330,39 @@ export default function CustomersPage() {
             const workbook = xlsx.read(data, { type: 'array' });
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
-            const rows: any[][] = xlsx.utils.sheet_to_json(worksheet, { header: 1 });
-            
-            // Mapea y limpia los datos de cada fila.
-            const dataToValidate = rows
-              .slice(1) // Omitir la fila de encabezados
-              .map(row => {
-                  const parseNumberOrNull = (val: any): number | null => {
-                    const valueStr = String(val).trim().toUpperCase();
-                    if (val === null || val === undefined || valueStr === '' || valueStr === 'N/A' || isNaN(Number(val))) {
-                        return null;
-                    }
-                    return Number(val);
-                  };
+            // Convierte la hoja a un array de objetos JSON, usando la primera fila como encabezados.
+            const jsonRows: any[] = xlsx.utils.sheet_to_json(worksheet);
 
-                  return {
-                    code_customer: String(row[0] || '').trim(), // Limpia espacios en blanco.
-                    customer_name: String(row[1] || '').trim(), // Limpia espacios en blanco.
-                    ruta: parseNumberOrNull(row[2]),
-                    id_impuesto: parseNumberOrNull(row[3]),
-                    id_term: parseNumberOrNull(row[4]),
+            const dataToValidate = jsonRows.map(row => {
+                // Función para obtener el valor de una clave sin importar mayúsculas/minúsculas y espacios.
+                const findValue = (obj: any, keys: string[]) => {
+                    const rowKeys = Object.keys(obj);
+                    for (const key of keys) {
+                        const normalizedKey = key.toLowerCase().replace(/\s+/g, '');
+                        const foundKey = rowKeys.find(rk => rk.toLowerCase().replace(/\s+/g, '') === normalizedKey);
+                        if (foundKey && obj[foundKey] !== null && obj[foundKey] !== undefined) {
+                            return obj[foundKey];
+                        }
+                    }
+                    return undefined;
+                };
+
+                const parseNumberOrNull = (val: any): number | null => {
+                  const valueStr = String(val ?? '').trim().toUpperCase();
+                  if (val === null || val === undefined || valueStr === '' || valueStr === 'N/A' || isNaN(Number(val))) {
+                      return null;
                   }
-              });
+                  return Number(val);
+                };
+
+                return {
+                  code_customer: String(findValue(row, ["Código Cliente"]) ?? '').trim(),
+                  customer_name: String(findValue(row, ["Nombre Cliente"]) ?? '').trim(),
+                  ruta: parseNumberOrNull(findValue(row, ["Ruta"])),
+                  id_impuesto: parseNumberOrNull(findValue(row, ["ID Impuesto"])),
+                  id_term: parseNumberOrNull(findValue(row, ["ID Término Pago"])),
+                }
+            });
             
             // Filtra filas vacías.
             const nonEmptyData = dataToValidate.filter(
@@ -363,8 +372,9 @@ export default function CustomersPage() {
             if (nonEmptyData.length === 0) {
               toast({
                 title: "Archivo vacío o inválido",
-                description: "No se encontraron datos válidos para importar en el archivo. Verifique el formato.",
+                description: "No se encontraron datos válidos. Verifique que los encabezados sean: Código Cliente, Nombre Cliente, Ruta, ID Impuesto, ID Término Pago.",
                 variant: "destructive",
+                duration: 9000,
               });
               return;
             }
@@ -831,5 +841,3 @@ export default function CustomersPage() {
     </Card>
   )
 }
-
-    
