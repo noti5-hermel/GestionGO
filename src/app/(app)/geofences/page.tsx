@@ -36,19 +36,7 @@ import { Input } from "@/components/ui/input"
 // Esquema de validación para el formulario de geocerca.
 const geofenceSchema = z.object({
   code_customer: z.string().min(1, { message: "Debe seleccionar un cliente." }),
-  geocerca: z.string().min(10, { message: "El campo de geocerca no puede estar vacío." })
-    .refine(value => {
-        try {
-            // Normaliza el string: quita espacios al inicio/final y convierte a mayúsculas
-            const normalizedValue = value.trim().toUpperCase();
-            // Validación flexible: debe empezar con POLYGON o GEOMETRYCOLLECTION y contener los paréntesis.
-            const isPolygon = normalizedValue.startsWith('POLYGON') && normalizedValue.includes('((') && normalizedValue.includes('))');
-            const isGeometryCollection = normalizedValue.startsWith('GEOMETRYCOLLECTION') && normalizedValue.includes('POLYGON');
-            return isPolygon || isGeometryCollection;
-        } catch {
-            return false
-        }
-    }, { message: "Formato de geocerca inválido. Debe ser un POLYGON o GEOMETRYCOLLECTION." })
+  geocerca: z.string().min(10, { message: "El campo de geocerca debe tener al menos 10 caracteres y un formato WKT válido (ej: POLYGON(...))." })
 })
 
 // Tipos de datos para esta página.
@@ -423,5 +411,3 @@ export default function GeofencesPage() {
     </Card>
   )
 }
-
-    
