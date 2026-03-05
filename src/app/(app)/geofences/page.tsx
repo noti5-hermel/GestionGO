@@ -61,38 +61,6 @@ type Customer = {
 const ITEMS_PER_PAGE = 10;
 
 /**
- * Normaliza una cadena de texto WKT (Well-Known Text) de geocerca para asegurar una sintaxis válida.
- * Puede manejar un solo POLYGON o una GEOMETRYCOLLECTION con múltiples polígonos.
- * @param wktString - La cadena de texto de la geocerca.
- * @returns Una cadena WKT formateada correctamente o null si la entrada es inválida o vacía.
- */
-const normalizeGeometryCollectionWKT = (wktString: string | null | undefined): string | null => {
-    if (!wktString || wktString.trim() === '') {
-        return null;
-    }
-    
-    let wkt = wktString.trim();
-
-    // Regex para encontrar polígonos. Es compleja para manejar paréntesis anidados.
-    const polygonRegex = /POLYGON\s*\(\s*\((?:[^()]*|\((?:[^()]*|\([^()]*\))*\))*\)\s*\)/gi;
-    const polygons = wkt.match(polygonRegex);
-    
-    if (!polygons || polygons.length === 0) {
-        // No se encontraron polígonos válidos, devolver el texto original para que falle en la BD si es inválido
-        return wkt;
-    }
-
-    if (polygons.length === 1) {
-        // Si solo hay un polígono, se devuelve tal cual.
-        // Esto también maneja el caso de un GEOMETRYCOLLECTION con un solo polígono.
-        return polygons[0];
-    }
-
-    // Si hay múltiples polígonos, se asegura de que estén envueltos en GEOMETRYCOLLECTION
-    return `GEOMETRYCOLLECTION(${polygons.join(',')})`;
-};
-
-/**
  * Componente principal de la página de Geocercas.
  */
 export default function GeofencesPage() {
@@ -192,28 +160,31 @@ export default function GeofencesPage() {
    * @param values Los datos del formulario validados por Zod.
    */
   const onSubmit = async (values: z.infer<typeof geofenceSchema>) => {
-    // Normaliza la geocerca antes de guardarla para asegurar un formato WKT válido.
-    const normalizedGeocerca = normalizeGeometryCollectionWKT(values.geocerca);
+    // PostGIS es robusto, pasamos el string WKT directamente después de limpiarlo.
+    // La base de datos se encargará de la validación.
+    const geocercaWKT = values.geocerca.trim() || null;
 
     const { error } = await supabase
         .from('customer')
-        .update({ geocerca: normalizedGeocerca })
+        .update({ geocerca: geocercaWKT })
         .eq('code_customer', values.code_customer);
 
     if (error) {
-      toast({
-        title: "Error al guardar la geocerca",
-        description: error.message,
-        variant: "destructive",
-      })
+        // Proporciona un error más descriptivo
+        toast({
+            title: "Error al guardar la geocerca",
+            description: `El formato de la geocerca podría ser inválido. Error: ${error.message}`,
+            variant: "destructive",
+            duration: 9000, // Mensaje más largo para que el usuario pueda leerlo
+        })
     } else {
-      toast({
-        title: "Éxito",
-        description: "Geocerca guardada correctamente.",
-      })
-      fetchCustomers(); // Recarga la tabla de clientes paginados.
-      fetchAllCustomersForSelect(); // Recarga la lista completa por si el estado cambió.
-      handleCloseDialog();
+        toast({
+            title: "Éxito",
+            description: "Geocerca guardada correctamente.",
+        })
+        fetchCustomers();
+        fetchAllCustomersForSelect();
+        handleCloseDialog();
     }
   }
 
@@ -452,3 +423,5 @@ export default function GeofencesPage() {
     </Card>
   )
 }
+
+    

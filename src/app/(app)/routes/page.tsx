@@ -50,39 +50,6 @@ type Route = {
 
 const ITEMS_PER_PAGE = 10;
 
-/**
- * Normaliza una cadena de texto WKT de geocerca para asegurar una sintaxis válida.
- * Puede manejar un solo POLYGON o una GEOMETRYCOLLECTION con múltiples polígonos.
- * @param wktString - La cadena de texto de la geocerca.
- * @returns Una cadena WKT formateada correctamente o null si la entrada es inválida o vacía.
- */
-const normalizeGeometryCollectionWKT = (wktString: string | null | undefined): string | null => {
-    if (!wktString || wktString.trim() === '') {
-        return null;
-    }
-    
-    let wkt = wktString.trim();
-
-    // Regex para encontrar polígonos. Es compleja para manejar paréntesis anidados.
-    const polygonRegex = /POLYGON\s*\(\s*\((?:[^()]*|\((?:[^()]*|\([^()]*\))*\))*\)\s*\)/gi;
-    const polygons = wkt.match(polygonRegex);
-    
-    if (!polygons || polygons.length === 0) {
-        // No se encontraron polígonos válidos, devolver el texto original para que falle en la BD si es inválido
-        return wkt;
-    }
-
-    if (polygons.length === 1) {
-        // Si solo hay un polígono, se devuelve tal cual.
-        // Esto también maneja el caso de un GEOMETRYCOLLECTION con un solo polígono.
-        return polygons[0];
-    }
-
-    // Si hay múltiples polígonos, se asegura de que estén envueltos en GEOMETRYCOLLECTION
-    return `GEOMETRYCOLLECTION(${polygons.join(',')})`;
-};
-
-
 export default function RoutesPage() {
   const [routes, setRoutes] = useState<Route[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -130,13 +97,13 @@ export default function RoutesPage() {
 
   const onSubmit = async (values: z.infer<typeof routeSchema>) => {
     let error;
-    
-    // Normaliza la geocerca antes de guardarla.
-    const normalizedGeocerca = normalizeGeometryCollectionWKT(values.geocerca);
+
+    // PostGIS es robusto, pasamos el string WKT directamente después de limpiarlo.
+    const geocercaWKT = values.geocerca ? values.geocerca.trim() : null;
 
     const dataToSubmit = {
       ...values,
-      geocerca: normalizedGeocerca,
+      geocerca: geocercaWKT,
     };
 
     if (editingRoute) {
@@ -157,8 +124,9 @@ export default function RoutesPage() {
     if (error) {
       toast({
         title: "Error al guardar",
-        description: error.message,
+        description: `El formato de la geocerca podría ser inválido. Error: ${error.message}`,
         variant: "destructive",
+        duration: 9000,
       })
     } else {
       toast({
@@ -443,3 +411,5 @@ export default function RoutesPage() {
     </Card>
   )
 }
+
+    
