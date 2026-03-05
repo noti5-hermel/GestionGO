@@ -81,6 +81,11 @@ export type ShipmentInvoice = {
   geocerca?: any;
 }
 
+// Tipo temporal para guardar la ubicación capturada
+type ShipmentInvoiceWithLocation = ShipmentInvoice & {
+  _capturedLocation?: { latitude: number; longitude: number } | null;
+}
+
 type User = { id_user: string; name: string; id_rol: number; }
 type Role = { id_ruta: string; ruta_desc: string }
 type Invoice = { id_factura: string, reference_number: string | number, code_customer: string, customer_name: string, grand_total: number }
@@ -123,7 +128,7 @@ export default function ShipmentDetailPage() {
 
   // Estados para el diálogo de edición de factura.
   const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
-  const [editingShipmentInvoice, setEditingShipmentInvoice] = useState<ShipmentInvoice | null>(null);
+  const [editingShipmentInvoice, setEditingShipmentInvoice] = useState<ShipmentInvoiceWithLocation | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -133,7 +138,7 @@ export default function ShipmentDetailPage() {
 
   // Estados para la funcionalidad de la cámara.
   const [isCameraDialogOpen, setIsCameraDialogOpen] = useState(false);
-  const [invoiceForCamera, setInvoiceForCamera] = useState<ShipmentInvoice | null>(null);
+  const [invoiceForCamera, setInvoiceForCamera] = useState<ShipmentInvoiceWithLocation | null>(null);
   const [hasCameraPermission, setHasCameraPermission] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -288,7 +293,7 @@ export default function ShipmentDetailPage() {
             forma_pago: newPaymentMethod,
             monto: editingShipmentInvoice.monto,
             state: editingShipmentInvoice.state,
-            fecha_entrega: editingShipmentInvoice.fecha_entrega,
+            fecha_entrega: editingShipmentInvoice.fecha_entrega ? new Date(editingShipmentInvoice.fecha_entrega).toISOString().split('T')[0] : null
         });
     }
     setSelectedFile(null);
@@ -448,6 +453,16 @@ export default function ShipmentDetailPage() {
     // Si se subió un nuevo archivo, se establece la fecha de entrega.
     if (selectedFile) {
         dataToUpdate.fecha_entrega = new Date().toISOString();
+
+        // Y si se capturó una ubicación, se guarda.
+        if (editingShipmentInvoice._capturedLocation) {
+            const { latitude, longitude } = editingShipmentInvoice._capturedLocation;
+            await supabase
+                .from('customer')
+                .update({ last_known_location: `POINT(${longitude} ${latitude})` })
+                .eq('code_customer', editingShipmentInvoice.code_customer);
+            toast({ title: "Ubicación registrada", description: "Se ha guardado la ubicación actual del cliente." });
+        }
     }
 
     const { error } = await supabase
@@ -516,6 +531,16 @@ export default function ShipmentDetailPage() {
           fecha_entrega: new Date().toISOString(),
        })
       .eq('id_fac_desp', invoiceForCamera.id_fac_desp);
+    
+    // Si se capturó una ubicación (porque el cliente no tenía geocerca), guárdala ahora.
+    if (invoiceForCamera._capturedLocation) {
+        const { latitude, longitude } = invoiceForCamera._capturedLocation;
+        await supabase
+            .from('customer')
+            .update({ last_known_location: `POINT(${longitude} ${latitude})` })
+            .eq('code_customer', invoiceForCamera.code_customer);
+        toast({ title: "Ubicación registrada", description: "Se ha guardado la ubicación actual del cliente." });
+    }
 
     setLoading(false);
 
@@ -529,15 +554,17 @@ export default function ShipmentDetailPage() {
   };
   
   /**
-   * Verifica si el motorista está dentro de la geocerca de un cliente antes de ejecutar una acción.
-   * Si el cliente no tiene geocerca, guarda la ubicación actual del motorista.
-   * @param invoice - La factura del cliente a verificar.
-   * @param onSuccess - La función a ejecutar si la verificación es exitosa.
+   * Verifica la geocerca. Si es válida, ejecuta onSuccess.
+   * Si el cliente no tiene geocerca, pasa la ubicación actual a onSuccess.
+   * @param invoice - La factura a verificar.
+   * @param onSuccess - Callback a ejecutar. Recibe la factura y la ubicación opcional.
    */
-  const handleGeofenceProtectedAction = (invoice: ShipmentInvoice, onSuccess: (invoice: ShipmentInvoice) => void) => {
-    // Si el usuario no es motorista, permite la acción sin verificar.
+  const handleGeofenceProtectedAction = (
+    invoice: ShipmentInvoice, 
+    onSuccess: (invoice: ShipmentInvoice, location: { latitude: number; longitude: number } | null) => void
+  ) => {
     if (currentUser?.role?.toLowerCase() !== 'motorista') {
-      onSuccess(invoice);
+      onSuccess(invoice, null);
       return;
     }
   
@@ -547,7 +574,6 @@ export default function ShipmentDetailPage() {
       async (position) => {
         const { latitude, longitude } = position.coords;
   
-        // Si el cliente tiene geocerca, la validamos.
         if (invoice.geocerca) {
           const { data, error } = await supabase.rpc('is_user_in_client_geofence', {
             user_latitude: latitude,
@@ -563,27 +589,14 @@ export default function ShipmentDetailPage() {
           }
   
           if (data === true) {
-            onSuccess(invoice); // Usuario está en la geocerca, procede.
+            onSuccess(invoice, null); // Dentro de geocerca, no necesita pasar ubicación.
           } else {
             toast({ title: "Acción no permitida", description: "Debe estar dentro de la geocerca del cliente para realizar esta acción.", variant: "destructive" });
           }
         } else {
-          // Si el cliente NO tiene geocerca, guardamos su ubicación y procedemos.
+          // No hay geocerca, pasa la ubicación actual al callback para ser guardada después.
           setVerifyingLocationInvoiceId(null);
-          toast({ title: "Ubicación registrada", description: "El cliente no tiene geocerca. Se guardará su ubicación actual." });
-          
-          onSuccess(invoice); // Procede con la acción (editar/abrir cámara).
-  
-          // Después, actualizamos la ubicación del cliente en segundo plano.
-          const { error: updateError } = await supabase
-            .from('customer')
-            .update({ last_known_location: `POINT(${longitude} ${latitude})` })
-            .eq('code_customer', invoice.code_customer);
-  
-          if (updateError) {
-            console.error("Error updating last_known_location:", updateError);
-            toast({ title: "Advertencia", description: "No se pudo guardar la ubicación del cliente.", variant: "destructive" });
-          }
+          onSuccess(invoice, { latitude, longitude });
         }
       },
       (error) => {
@@ -882,11 +895,12 @@ export default function ShipmentDetailPage() {
   };
 
   const handleEditInvoice = (invoice: ShipmentInvoice) => {
-    handleGeofenceProtectedAction(invoice, (inv) => {
-      setEditingShipmentInvoice(inv);
+    handleGeofenceProtectedAction(invoice, (inv, location) => {
+      setEditingShipmentInvoice({ ...inv, _capturedLocation: location });
       setIsInvoiceDialogOpen(true);
     });
   };
+
   const closeInvoiceDialog = () => {
     setIsInvoiceDialogOpen(false);
     setEditingShipmentInvoice(null);
@@ -897,12 +911,14 @@ export default function ShipmentDetailPage() {
     setSelectedImage(imageUrl);
     setImageModalOpen(true);
   }
+  
   const openCameraDialog = (invoice: ShipmentInvoice) => {
-      handleGeofenceProtectedAction(invoice, (inv) => {
-      setInvoiceForCamera(inv);
+    handleGeofenceProtectedAction(invoice, (inv, location) => {
+      setInvoiceForCamera({ ...inv, _capturedLocation: location });
       setIsCameraDialogOpen(true);
     });
   };
+
   const closeCameraDialog = () => {
     setIsCameraDialogOpen(false);
     setInvoiceForCamera(null);
