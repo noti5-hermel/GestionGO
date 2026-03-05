@@ -127,7 +127,6 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
   const getReviewRoleFromSession = (userRole: string): ReviewRole | null => {
     if (userRole.includes('motorista')) return 'reparto';
     if (userRole.includes('auxiliar')) return 'reparto';
-    if (userRole.includes('facturacion')) return 'facturacion';
     if (userRole.includes('bodega')) return 'bodega';
     if (userRole.includes('reparto')) return 'reparto';
     if (userRole.includes('asist.admon')) return 'asist_admon';

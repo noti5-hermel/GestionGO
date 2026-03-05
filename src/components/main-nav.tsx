@@ -1,4 +1,3 @@
-
 'use client'
 
 import Link from 'next/link'
@@ -40,6 +39,7 @@ const allMenuItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/customers', label: 'Clientes', icon: Users },
   { href: '/shipments', label: 'Despachos', icon: Truck },
+  { href: '/live-map', label: 'Mapa en Vivo', icon: ScanEye },
   { href: '/route-generation', label: 'Generación de Ruta', icon: Map },
   { href: '/invoicing', label: 'Facturación', icon: FileText },
   { href: '/shipment-invoicing', label: 'Facturación por Despacho', icon: ClipboardList },
@@ -50,7 +50,6 @@ const allMenuItems = [
 ]
 
 const adminMenuItems = [
-    { href: '/live-map', label: 'Mapa en Vivo', icon: ScanEye },
     { href: '/users', label: 'Usuarios', icon: User },
     { href: '/user-roles', label: 'Roles de Usuario', icon: Shield },
     { href: '/image-test', label: 'Test de Imágenes', icon: ImageIcon },
