@@ -361,6 +361,55 @@ export default function ShipmentDetailPage() {
   };
 
   /**
+   * Recalcula y actualiza los totales del despacho en la base de datos.
+   * @param shipmentId El ID del despacho a recalcular.
+   */
+  const recalculateAndSaveShipmentTotals = async (shipmentId: string) => {
+    // 1. Obtener todas las facturas asociadas a este despacho
+    const { data: shipmentInvoicesData, error: shipmentInvoicesError } = await supabase
+      .from('facturacion_x_despacho')
+      .select('monto, facturacion(code_customer, customer(id_impuesto, tipo_impuesto(impt_desc)))')
+      .eq('id_despacho', shipmentId);
+  
+    if (shipmentInvoicesError) {
+      toast({ title: "Error de cálculo", description: "No se pudieron obtener las facturas para recalcular los totales.", variant: "destructive" });
+      return;
+    }
+  
+    // 2. Calcular los totales
+    let totalContado = 0;
+    let totalCredito = 0;
+  
+    shipmentInvoicesData.forEach(inv => {
+      // @ts-ignore - La estructura anidada es correcta
+      const taxDesc = inv.facturacion?.customer?.tipo_impuesto?.impt_desc;
+      
+      if (taxDesc === 'Consumidor Final') {
+        totalContado += inv.monto || 0;
+      } else if (taxDesc === 'Crédito Fiscal') {
+        totalCredito += inv.monto || 0;
+      }
+    });
+  
+    const totalGeneral = totalContado + totalCredito;
+  
+    // 3. Actualizar el registro del despacho
+    const { error: updateError } = await supabase
+      .from('despacho')
+      .update({
+        total_contado: totalContado,
+        total_credito: totalCredito,
+        total_general: totalGeneral
+      })
+      .eq('id_despacho', shipmentId);
+  
+    if (updateError) {
+      toast({ title: "Error de sincronización", description: "No se pudieron guardar los nuevos totales del despacho.", variant: "destructive" });
+    }
+    // No muestro toast de éxito para no saturar al usuario, la actualización de la UI es suficiente.
+  };
+
+  /**
    * Actualiza los detalles de una factura asociada al despacho.
    * @param values Los datos del formulario de edición.
    */
@@ -414,6 +463,9 @@ export default function ShipmentDetailPage() {
         title: "Éxito",
         description: "Factura del despacho actualizada correctamente.",
       });
+      if (shipment) {
+        await recalculateAndSaveShipmentTotals(shipment.id_despacho);
+      }
       fetchData(); // Recarga los datos para reflejar los cambios.
       closeInvoiceDialog();
     }
@@ -953,7 +1005,6 @@ export default function ShipmentDetailPage() {
         )}
         <TableCell className="font-medium">{String(invoice.reference_number || invoice.id_factura)}</TableCell>
         <TableCell>{invoice.customer_name || 'N/A'}</TableCell>
-        <TableCell><Badge variant="secondary">{invoice.tax_type || 'N/A'}</Badge></TableCell>
         <TableCell>
             <Badge variant={invoice.geocerca ? 'default' : 'outline'}>{invoice.geocerca ? 'Sí' : 'No'}</Badge>
         </TableCell>
@@ -1089,7 +1140,6 @@ export default function ShipmentDetailPage() {
                           {isFacturacion && <TableHead className="w-20">Orden</TableHead>}
                           <TableHead>No. Factura</TableHead>
                           <TableHead>Nombre del Cliente</TableHead>
-                          <TableHead>Tipo Cliente</TableHead>
                           <TableHead>Geocerca</TableHead>
                           <TableHead>Comprobante</TableHead>
                           <TableHead>Fecha Entrega</TableHead>
@@ -1103,7 +1153,7 @@ export default function ShipmentDetailPage() {
                   <TableBody>
                       {sortedInvoices.length > 0 ? sortedInvoices.map((invoice, index) => renderInvoiceRow(invoice, index, isFacturacion)) : (
                           <TableRow>
-                              <TableCell colSpan={isFacturacion ? 12 : 11} className="text-center">No hay facturas en este despacho.</TableCell>
+                              <TableCell colSpan={isFacturacion ? 11 : 10} className="text-center">No hay facturas en este despacho.</TableCell>
                           </TableRow>
                       )}
                   </TableBody>
@@ -1355,3 +1405,5 @@ export default function ShipmentDetailPage() {
     </div>
   )
 }
+
+    
