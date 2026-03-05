@@ -419,15 +419,18 @@ export default function ShipmentDetailPage() {
     // 1. Validar manualmente los datos del formulario contra el esquema dinámico
     const validationSchema = shipmentInvoiceEditSchema(editingShipmentInvoice.grand_total);
     const validationResult = validationSchema.safeParse(values);
-    
+
     if (!validationResult.success) {
-      // Si la validación falla, muestra el error en el campo correspondiente
-      const { errors } = validationResult.error;
-      if (errors[0] && errors[0].path[0] === 'monto') {
-        form.setError('monto', { type: 'manual', message: errors[0].message });
-      }
+      // Si la validación falla, muestra errores para todos los campos.
+      validationResult.error.issues.forEach((issue) => {
+        form.setError(issue.path[0] as keyof ShipmentInvoiceEditValues, {
+          type: 'manual',
+          message: issue.message,
+        });
+      });
       return; // Detiene la ejecución
     }
+
 
     // 2. Si la validación es exitosa, proceder a guardar
     const imageUrl = await uploadComprobante();
@@ -1233,7 +1236,7 @@ export default function ShipmentDetailPage() {
                   <FormItem>
                     <FormLabel>Fecha de Entrega</FormLabel>
                     <FormControl>
-                      <Input value={new Date(field.value || '').toLocaleString()} disabled />
+                      <Input value={field.value ? new Date(field.value).toLocaleString() : 'N/A'} disabled />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -1405,5 +1408,3 @@ export default function ShipmentDetailPage() {
     </div>
   )
 }
-
-    
