@@ -330,11 +330,24 @@ export default function CustomersPage() {
             const workbook = xlsx.read(data, { type: 'array' });
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
-            // Convierte la hoja a un array de objetos JSON, usando la primera fila como encabezados.
             const jsonRows: any[] = xlsx.utils.sheet_to_json(worksheet);
 
+            // Fetch valid IDs for foreign key validation
+            const [termsRes, taxesRes] = await Promise.all([
+                supabase.from('terminos_pago').select('id_term'),
+                supabase.from('tipo_impuesto').select('id_impuesto')
+            ]);
+
+            if (termsRes.error || taxesRes.error) {
+                toast({ title: "Error de preparación", description: "No se pudieron obtener los datos para validación (términos e impuestos).", variant: "destructive" });
+                if(event.target) event.target.value = '';
+                return;
+            }
+
+            const validTermIds = new Set(termsRes.data.map(t => Number(t.id_term)));
+            const validTaxIds = new Set(taxesRes.data.map(t => Number(t.id_impuesto)));
+
             const dataToValidate = jsonRows.map(row => {
-                // Función para obtener el valor de una clave sin importar mayúsculas/minúsculas y espacios.
                 const findValue = (obj: any, keys: string[]) => {
                     const rowKeys = Object.keys(obj);
                     for (const key of keys) {
@@ -348,23 +361,27 @@ export default function CustomersPage() {
                 };
 
                 const parseNumberOrNull = (val: any): number | null => {
-                  const valueStr = String(val ?? '').trim().toUpperCase();
-                  if (val === null || val === undefined || valueStr === '' || valueStr === 'N/A' || isNaN(Number(val))) {
-                      return null;
-                  }
-                  return Number(val);
+                    const str = String(val ?? '').trim();
+                    if (str === '' || str.toUpperCase() === 'N/A') return null;
+                    const num = Number(str);
+                    return isNaN(num) ? null : num;
+                };
+                
+                const getValidatedFkId = (val: any, validIds: Set<number>): number | null => {
+                    const num = parseNumberOrNull(val);
+                    if (num === null) return null;
+                    return validIds.has(num) ? num : null;
                 };
 
                 return {
                   code_customer: String(findValue(row, ["Código Cliente"]) ?? '').trim(),
                   customer_name: String(findValue(row, ["Nombre Cliente"]) ?? '').trim(),
                   ruta: parseNumberOrNull(findValue(row, ["Ruta"])),
-                  id_impuesto: parseNumberOrNull(findValue(row, ["ID Impuesto"])),
-                  id_term: parseNumberOrNull(findValue(row, ["ID Término Pago"])),
+                  id_impuesto: getValidatedFkId(findValue(row, ["ID Impuesto"]), validTaxIds),
+                  id_term: getValidatedFkId(findValue(row, ["ID Término Pago"]), validTermIds),
                 }
             });
             
-            // Filtra filas vacías.
             const nonEmptyData = dataToValidate.filter(
               row => row.code_customer && row.customer_name
             );
@@ -376,14 +393,13 @@ export default function CustomersPage() {
                 variant: "destructive",
                 duration: 9000,
               });
+              if(event.target) event.target.value = '';
               return;
             }
 
-            // Valida los datos contra el esquema Zod.
             const validatedCustomers = z.array(customerSchema.omit({ geocerca: true, last_known_location: true })).safeParse(nonEmptyData);
 
             if (!validatedCustomers.success) {
-                // Muestra un mensaje de error detallado si la validación falla.
                 const errorIssues = validatedCustomers.error.issues;
                 const errorMessage = errorIssues
                     .map(issue => `Fila ${Number(issue.path[0]) + 2}: En columna '${issue.path[1]}', ${issue.message}`)
@@ -395,6 +411,7 @@ export default function CustomersPage() {
                     variant: "destructive",
                     duration: 9000,
                 });
+                if(event.target) event.target.value = '';
                 return;
             }
             
@@ -404,18 +421,16 @@ export default function CustomersPage() {
                 description: "No se encontraron datos válidos para importar en el archivo.",
                 variant: "destructive",
               });
+              if(event.target) event.target.value = '';
               return;
             }
 
-            // De-duplica clientes dentro del archivo para prevenir el error "cannot affect row a second time".
-            // Si el mismo código de cliente aparece varias veces, la última fila en la hoja de cálculo gana.
             const uniqueCustomersMap = new Map<string, any>();
             for (const customer of validatedCustomers.data) {
                 uniqueCustomersMap.set(String(customer.code_customer), customer);
             }
             const uniqueCustomersToUpsert = Array.from(uniqueCustomersMap.values());
             
-            // Sube los datos a Supabase usando 'upsert' para actualizar o insertar.
             const { error: upsertError } = await supabase.from('customer').upsert(uniqueCustomersToUpsert, {
               onConflict: 'code_customer' 
             });
@@ -431,9 +446,9 @@ export default function CustomersPage() {
             console.error("Error al procesar el archivo:", error);
             toast({ title: "Error", description: "No se pudo procesar el archivo Excel.", variant: "destructive" });
         }
+        if(event.target) event.target.value = '';
     };
     reader.readAsArrayBuffer(file);
-    if(event.target) event.target.value = ''; // Resetea el input para poder re-subir el mismo archivo.
   };
 
   // --- FUNCIONES AUXILIARES DE LA UI ---
