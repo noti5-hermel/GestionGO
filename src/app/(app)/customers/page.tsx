@@ -406,16 +406,24 @@ export default function CustomersPage() {
               });
               return;
             }
+
+            // De-duplica clientes dentro del archivo para prevenir el error "cannot affect row a second time".
+            // Si el mismo código de cliente aparece varias veces, la última fila en la hoja de cálculo gana.
+            const uniqueCustomersMap = new Map<string, any>();
+            for (const customer of validatedCustomers.data) {
+                uniqueCustomersMap.set(String(customer.code_customer), customer);
+            }
+            const uniqueCustomersToUpsert = Array.from(uniqueCustomersMap.values());
             
             // Sube los datos a Supabase usando 'upsert' para actualizar o insertar.
-            const { error: upsertError } = await supabase.from('customer').upsert(validatedCustomers.data, {
+            const { error: upsertError } = await supabase.from('customer').upsert(uniqueCustomersToUpsert, {
               onConflict: 'code_customer' 
             });
 
             if (upsertError) {
                 toast({ title: "Error al importar", description: upsertError.message, variant: "destructive" });
             } else {
-                toast({ title: "Éxito", description: `Proceso finalizado: ${validatedCustomers.data.length} registros procesados. Los clientes nuevos fueron creados y los existentes fueron actualizados.` });
+                toast({ title: "Éxito", description: `Proceso finalizado: ${uniqueCustomersToUpsert.length} registros procesados. Los clientes nuevos fueron creados y los existentes fueron actualizados.` });
                 fetchCustomers();
             }
 
