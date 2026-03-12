@@ -131,7 +131,7 @@ export default function CustomersPage() {
     // Construye la consulta a Supabase de forma dinámica.
     let query = supabase
       .from('customer')
-      .select('code_customer,customer_name,id_impuesto,id_term,ruta,geocerca,last_known_location', { count: 'exact' });
+      .select('code_customer,customer_name,id_impuesto,id_term,ruta,geocerca::text,last_known_location::text', { count: 'exact' });
 
     // Aplica el filtro de búsqueda si existe.
     if (searchQuery) {
