@@ -415,7 +415,7 @@ export default function CustomersPage() {
             if (upsertError) {
                 toast({ title: "Error al importar", description: upsertError.message, variant: "destructive" });
             } else {
-                toast({ title: "Éxito", description: `${validatedCustomers.data.length} clientes importados/actualizados correctamente.` });
+                toast({ title: "Éxito", description: `Proceso finalizado: ${validatedCustomers.data.length} registros procesados. Los clientes nuevos fueron creados y los existentes fueron actualizados.` });
                 fetchCustomers();
             }
 
