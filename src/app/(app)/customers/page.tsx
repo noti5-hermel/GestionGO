@@ -63,14 +63,52 @@ type Customer = {
   id_impuesto: number | null;
   id_term: number | null;
   ruta: number | null;
-  geocerca?: string | null;
-  last_known_location?: string | null;
+  geocerca?: any;
+  last_known_location?: any;
 }
 type PaymentTerm = { id_term: string | number; term_desc: string }
 type Tax = { id_impuesto: string | number; impt_desc: string }
 type RouteNumber = { ruta: number };
 
 const ITEMS_PER_PAGE = 10;
+
+/**
+ * Convierte un objeto de geometría (como GeoJSON) a un string WKT legible.
+ * @param geom El objeto de geometría o string.
+ * @returns Un string en formato WKT (ej. "POINT(x y)") o el string original.
+ */
+const formatGeometryToString = (geom: any): string => {
+    if (!geom) return "";
+    // Si ya es un string legible, lo devuelve.
+    if (typeof geom === 'string' && (geom.toUpperCase().startsWith('POINT') || geom.toUpperCase().startsWith('POLYGON') || geom.toUpperCase().startsWith('GEOMETRYCOLLECTION'))) {
+        return geom;
+    }
+    // Si es un objeto GeoJSON, lo formatea a WKT.
+    if (typeof geom === 'object' && geom.type && geom.coordinates) {
+        if (geom.type === 'Point') {
+            return `POINT(${geom.coordinates[0]} ${geom.coordinates[1]})`;
+        }
+        if (geom.type === 'Polygon' && Array.isArray(geom.coordinates) && geom.coordinates.length > 0) {
+            const points = geom.coordinates[0].map((p: number[]) => `${p[0]} ${p[1]}`).join(', ');
+            return `POLYGON((${points}))`;
+        }
+        if (geom.type === 'GeometryCollection' && Array.isArray(geom.geometries)) {
+             const geometriesWKT = geom.geometries.map((g: any) => {
+                 if (g.type === 'Polygon' && Array.isArray(g.coordinates) && g.coordinates.length > 0) {
+                     const points = g.coordinates[0].map((p: number[]) => `${p[0]} ${p[1]}`).join(', ');
+                     return `POLYGON((${points}))`;
+                 }
+                 return '';
+             }).filter(Boolean).join(', ');
+             return `GEOMETRYCOLLECTION(${geometriesWKT})`;
+        }
+    }
+    // Si es un string hexadecimal u otro formato, lo muestra como está.
+    if (typeof geom === 'string') {
+        return geom;
+    }
+    return "[Geometría no legible]";
+};
 
 /**
  * Componente principal de la página de clientes.
@@ -131,7 +169,7 @@ export default function CustomersPage() {
     // Construye la consulta a Supabase de forma dinámica.
     let query = supabase
       .from('customer')
-      .select('code_customer,customer_name,id_impuesto,id_term,ruta,geocerca::text,last_known_location::text', { count: 'exact' });
+      .select('code_customer,customer_name,id_impuesto,id_term,ruta,geocerca,last_known_location', { count: 'exact' });
 
     // Aplica el filtro de búsqueda si existe.
     if (searchQuery) {
@@ -222,8 +260,8 @@ export default function CustomersPage() {
         id_impuesto: editingCustomer.id_impuesto !== null ? Number(editingCustomer.id_impuesto) : undefined,
         id_term: editingCustomer.id_term !== null ? Number(editingCustomer.id_term) : undefined,
         ruta: editingCustomer.ruta !== null ? Number(editingCustomer.ruta) : undefined,
-        geocerca: editingCustomer.geocerca ?? "",
-        last_known_location: editingCustomer.last_known_location ?? "",
+        geocerca: formatGeometryToString(editingCustomer.geocerca),
+        last_known_location: formatGeometryToString(editingCustomer.last_known_location),
       });
     } else {
       form.reset({
