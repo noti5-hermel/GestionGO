@@ -380,35 +380,45 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
   }
 
   /**
-   * Elimina un despacho de la base de datos.
+   * Elimina un despacho y todos sus registros asociados en cascada.
    * @param shipmentId El ID del despacho a eliminar.
    */
   const handleDelete = async (shipmentId: string) => {
-    const { error } = await supabase
+    // Primero, eliminar los registros asociados en facturacion_x_despacho
+    const { error: deleteAssociationsError } = await supabase
+      .from('facturacion_x_despacho')
+      .delete()
+      .eq('id_despacho', shipmentId);
+
+    if (deleteAssociationsError) {
+      toast({
+        title: "Error al eliminar asociaciones",
+        description: "No se pudieron eliminar las facturas asociadas al despacho.",
+        variant: "destructive",
+      });
+      return; // Detener si falla el primer paso
+    }
+
+    // Si el paso anterior fue exitoso, eliminar el despacho principal
+    const { error: deleteShipmentError } = await supabase
       .from('despacho')
       .delete()
-      .eq('id_despacho', shipmentId)
+      .eq('id_despacho', shipmentId);
 
-    if (error) {
-      if (error.code === '23503') {
-        toast({
-          title: "Error al eliminar",
-          description: "No se puede eliminar el despacho porque está asociado a otros registros.",
-          variant: "destructive",
-        })
-      } else {
-        toast({
-          title: "Error al eliminar",
-          description: "Ocurrió un error inesperado al eliminar el despacho.",
-          variant: "destructive",
-        })
-      }
+    if (deleteShipmentError) {
+      // Esto no debería suceder si la eliminación de asociaciones fue exitosa,
+      // pero es bueno tener un manejo de errores.
+      toast({
+        title: "Error al eliminar el despacho",
+        description: `Ocurrió un error inesperado al eliminar el despacho principal: ${deleteShipmentError.message}`,
+        variant: "destructive",
+      });
     } else {
       toast({
         title: "Éxito",
-        description: "Despacho eliminado correctamente.",
-      })
-      fetchShipments()
+        description: "Despacho y todos sus registros asociados eliminados correctamente.",
+      });
+      fetchShipments(); // Recargar la lista de despachos
     }
   }
   
