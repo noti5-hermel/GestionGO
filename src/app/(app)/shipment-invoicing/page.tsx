@@ -59,7 +59,6 @@ type Route = { id_ruta: string; ruta_desc: string };
 
 
 // Opciones estáticas para menús desplegables.
-const creditoFiscalPaymentMethods: ShipmentInvoice['forma_pago'][] = ["Quedan", "Firma", "Transferencia"];
 const paymentMethods: ShipmentInvoice['forma_pago'][] = ["Efectivo", "Tarjeta", "Transferencia", "Quedan", "Firma", "Credito"];
 const statusOptions: { label: string; value: boolean }[] = [
   { label: "Pagado", value: true },
@@ -135,16 +134,10 @@ export default function ShipmentInvoicingPage() {
   // Rellena el formulario cuando se selecciona un registro para editar.
   useEffect(() => {
     if (editingShipmentInvoice) {
-      const isCreditoFiscal = editingShipmentInvoice.tax_type === 'Crédito Fiscal';
-      const availablePaymentMethods = isCreditoFiscal ? creditoFiscalPaymentMethods : paymentMethods;
-      
-      const currentPaymentMethodIsValid = availablePaymentMethods.includes(editingShipmentInvoice.forma_pago);
-      const newPaymentMethod = currentPaymentMethodIsValid ? editingShipmentInvoice.forma_pago : availablePaymentMethods[0];
-
       form.reset({
         ...editingShipmentInvoice,
         id_despacho: String(editingShipmentInvoice.id_despacho),
-        forma_pago: newPaymentMethod,
+        forma_pago: editingShipmentInvoice.forma_pago,
       })
     } else {
       form.reset({
@@ -615,11 +608,8 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
   }, [allShipments]);
 
   const paymentOptions = useMemo(() => {
-    if (editingShipmentInvoice?.tax_type === 'Crédito Fiscal') {
-      return creditoFiscalPaymentMethods;
-    }
     return paymentMethods;
-  }, [editingShipmentInvoice]);
+  }, []);
 
 
   // --- RENDERIZADO DEL COMPONENTE ---
