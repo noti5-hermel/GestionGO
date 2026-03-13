@@ -48,11 +48,13 @@ const shipmentInvoiceSchema = z.object({
   comprobante: z.string().optional(), // La URL de la imagen se maneja por separado.
   forma_pago: z.enum(["Efectivo", "Tarjeta", "Transferencia", "Quedan", "Firma", "Credito"]),
   monto: z.coerce.number().min(0, "El monto debe ser un número positivo."),
-  state: z.boolean(),
+  state: z.enum(["Pendiente", "Pagado", "Devolucion"]),
 })
 
+type ShipmentInvoiceState = "Pendiente" | "Pagado" | "Devolucion";
+
 // Tipos de datos para la gestión de facturación por despacho.
-type ShipmentInvoice = z.infer<typeof shipmentInvoiceSchema> & { id_fac_desp: number, comprobante: string, fecha_entrega: string | null, tax_type?: string }
+type ShipmentInvoice = Omit<z.infer<typeof shipmentInvoiceSchema>, 'state'> & { id_fac_desp: number, comprobante: string, fecha_entrega: string | null, tax_type?: string, state: ShipmentInvoiceState }
 type Invoice = { id_factura: string, reference_number: string | number, fecha: string, grand_total: number, customer_name: string, code_customer: string, geocerca: any | null, fecha_import: string | null }
 type Shipment = { id_despacho: number, fecha_despacho: string, id_ruta: string, estado_recorrido: 'pendiente' | 'en_curso' | 'finalizado' }
 type Route = { id_ruta: string; ruta_desc: string };
@@ -60,10 +62,7 @@ type Route = { id_ruta: string; ruta_desc: string };
 
 // Opciones estáticas para menús desplegables.
 const paymentMethods: ShipmentInvoice['forma_pago'][] = ["Efectivo", "Tarjeta", "Transferencia", "Quedan", "Firma", "Credito"];
-const statusOptions: { label: string; value: boolean }[] = [
-  { label: "Pagado", value: true },
-  { label: "Pendiente", value: false },
-]
+const statusOptions: ShipmentInvoiceState[] = ["Pendiente", "Pagado", "Devolucion"];
 
 const ITEMS_PER_PAGE = 10;
 
@@ -103,7 +102,7 @@ export default function ShipmentInvoicingPage() {
   const [filterAmount, setFilterAmount] = useState('');
   const [filterDeliveryDate, setFilterDeliveryDate] = useState('');
   const [filterPaymentMethod, setFilterPaymentMethod] = useState('');
-  const [filterState, setFilterState] = useState('');
+  const [filterState, setFilterState] = useState<ShipmentInvoiceState | ''>('');
 
 
   const form = useForm<z.infer<typeof shipmentInvoiceSchema>>({
@@ -114,7 +113,7 @@ export default function ShipmentInvoicingPage() {
       comprobante: "",
       forma_pago: "Efectivo",
       monto: 0,
-      state: false,
+      state: "Pendiente",
     },
   })
 
@@ -138,6 +137,7 @@ export default function ShipmentInvoicingPage() {
         ...editingShipmentInvoice,
         id_despacho: String(editingShipmentInvoice.id_despacho),
         forma_pago: editingShipmentInvoice.forma_pago,
+        state: editingShipmentInvoice.state,
       })
     } else {
       form.reset({
@@ -146,7 +146,7 @@ export default function ShipmentInvoicingPage() {
         comprobante: "",
         forma_pago: "Efectivo",
         monto: 0,
-        state: false,
+        state: "Pendiente",
       })
     }
     setSelectedFile(null); // Resetea el archivo al abrir el diálogo.
@@ -250,8 +250,8 @@ export default function ShipmentInvoicingPage() {
     if (filterPaymentMethod) {
         query = query.eq('forma_pago', filterPaymentMethod);
     }
-    if (filterState !== '') {
-        query = query.eq('state', filterState === 'true');
+    if (filterState) {
+        query = query.eq('state', filterState);
     }
     
     query = query.range(from, to).order('id_fac_desp', { ascending: false });
@@ -465,7 +465,7 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
     } else {
       toast({ title: "Éxito", description: "Registro eliminado correctamente." })
       // Después de eliminar, recalcula y guarda los nuevos totales.
-      await recalculateAndSaveShipmentTotals(shipmentInvoice.id_despacho);
+      await recalculateAndSaveShipmentTotals(Number(shipmentInvoice.id_despacho));
       fetchShipmentInvoices()
     }
   }
@@ -490,7 +490,7 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
             id_despacho: parseInt(selectedShipmentForMassAssign, 10),
             id_factura: invoiceId,
             monto: 0, // Se establece en 0 por defecto al asignar masivamente.
-            state: false, // Estado pendiente por defecto
+            state: "Pendiente" as const, // Estado pendiente por defecto
             forma_pago: 'Efectivo' as const, // Forma de pago por defecto
         };
     });
@@ -563,8 +563,15 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
     setCurrentPage(1);
   };
   
-  const getBadgeVariant = (status: boolean) => status ? "default" : "secondary"
-  const getStatusLabel = (status: boolean) => status ? "Pagado" : "Pendiente"
+  const getBadgeVariant = (status: ShipmentInvoiceState) => {
+    switch (status) {
+      case "Pagado": return "default";
+      case "Pendiente": return "secondary";
+      case "Devolucion": return "destructive";
+      default: return "outline";
+    }
+  }
+
   const getInvoiceNumber = (invoiceId: string) => allInvoices.find(inv => inv.id_factura === invoiceId)?.reference_number || invoiceId;
   const getShipmentDate = (shipmentId: string | number) => {
       const id = typeof shipmentId === 'string' ? parseInt(shipmentId, 10) : shipmentId;
@@ -797,13 +804,13 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
                     ))}
                 </SelectContent>
             </Select>
-            <Select value={filterState} onValueChange={setFilterState}>
+            <Select value={filterState} onValueChange={(value) => setFilterState(value as ShipmentInvoiceState | '')}>
                 <SelectTrigger className="w-full sm:w-auto min-w-[160px]">
                     <SelectValue placeholder="Filtrar por Estado" />
                 </SelectTrigger>
                 <SelectContent>
                     {statusOptions.map(option => (
-                        <SelectItem key={option.label} value={String(option.value)}>{option.label}</SelectItem>
+                        <SelectItem key={option} value={option}>{option}</SelectItem>
                     ))}
                 </SelectContent>
             </Select>
@@ -850,7 +857,7 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
                   <TableCell>{formatDateTime(shipmentInvoice.fecha_entrega)}</TableCell>
                   <TableCell>{shipmentInvoice.forma_pago}</TableCell>
                   <TableCell>${shipmentInvoice.monto.toFixed(2)}</TableCell>
-                  <TableCell><Badge variant={getBadgeVariant(shipmentInvoice.state)}>{getStatusLabel(shipmentInvoice.state)}</Badge></TableCell>
+                  <TableCell><Badge variant={getBadgeVariant(shipmentInvoice.state)}>{shipmentInvoice.state}</Badge></TableCell>
                    <TableCell>
                     <div className="flex justify-end items-center gap-2">
                       <Button variant="ghost" size="icon" onClick={() => handleEdit(shipmentInvoice)}>
@@ -998,8 +1005,8 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
                   <FormItem>
                     <FormLabel>Estado</FormLabel>
                     <Select
-                      onValueChange={(value) => field.onChange(value === 'true')}
-                      value={String(field.value)}
+                      onValueChange={field.onChange}
+                      value={field.value}
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -1008,8 +1015,8 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
                       </FormControl>
                       <SelectContent>
                         {statusOptions.map((option) => (
-                          <SelectItem key={option.label} value={String(option.value)}>
-                            {option.label}
+                          <SelectItem key={option} value={option}>
+                            {option}
                           </SelectItem>
                         ))}
                       </SelectContent>

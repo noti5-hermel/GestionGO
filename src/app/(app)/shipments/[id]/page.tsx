@@ -39,11 +39,12 @@ const shipmentInvoiceEditSchema = (maxAmount: number) => z.object({
   comprobante: z.string().optional(),
   forma_pago: z.enum(["Efectivo", "Tarjeta", "Transferencia", "Quedan", "Firma", "Credito"]),
   monto: z.coerce.number().min(0, "El monto debe ser un número positivo.").max(maxAmount, `El monto no puede ser mayor que el total de la factura: $${maxAmount.toFixed(2)}`),
-  state: z.boolean(),
+  state: z.enum(["Pendiente", "Pagado", "Devolucion"]),
   fecha_entrega: z.string().optional().nullable(),
 });
 
 type ShipmentInvoiceEditValues = z.infer<ReturnType<typeof shipmentInvoiceEditSchema>>;
+type ShipmentInvoiceState = "Pendiente" | "Pagado" | "Devolucion";
 
 // Tipos de datos para la página de detalle del despacho.
 type Shipment = {
@@ -71,7 +72,7 @@ export type ShipmentInvoice = {
   comprobante: string
   forma_pago: "Efectivo" | "Tarjeta" | "Transferencia" | "Quedan" | "Firma" | "Credito"
   monto: number
-  state: boolean
+  state: ShipmentInvoiceState
   fecha_entrega: string | null;
   orden_visita: number | null; // Nuevo campo para el orden manual
   reference_number?: string | number // Opcional, se añade después desde la tabla `facturacion`
@@ -92,10 +93,7 @@ type Invoice = { id_factura: string, reference_number: string | number, code_cus
 type Customer = { code_customer: string; id_impuesto: number; geocerca: any };
 type TaxType = { id_impuesto: number; impt_desc: string };
 const paymentMethods: ShipmentInvoice['forma_pago'][] = ["Efectivo", "Tarjeta", "Transferencia", "Quedan", "Firma", "Credito"];
-const statusOptions: { label: string; value: boolean }[] = [
-  { label: "Pagado", value: true },
-  { label: "Pendiente", value: false },
-]
+const statusOptions: ShipmentInvoiceState[] = ["Pendiente", "Pagado", "Devolucion"];
 const BODEGA_LOCATION = { lat: 13.725410116705362, lng: -89.21911777270175 };
 
 
@@ -162,7 +160,7 @@ export default function ShipmentDetailPage() {
       comprobante: "",
       forma_pago: "Efectivo",
       monto: 0,
-      state: false,
+      state: "Pendiente",
       fecha_entrega: null,
     },
   });
@@ -952,8 +950,16 @@ export default function ShipmentDetailPage() {
       setIsPreviewOpen(true);
     }
   };
-  const getStatusLabel = (status: boolean) => status ? "Pagado" : "Pendiente";
-  const getBadgeVariant = (status: boolean) => status ? "default" : "secondary";
+  
+  const getBadgeVariant = (status: ShipmentInvoiceState) => {
+    switch (status) {
+      case "Pagado": return "default";
+      case "Pendiente": return "secondary";
+      case "Devolucion": return "destructive";
+      default: return "outline";
+    }
+  }
+
   const formatDateTime = (dateString: string | null) => {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
@@ -1028,7 +1034,7 @@ export default function ShipmentDetailPage() {
         <TableCell>${(invoice.grand_total ?? 0).toFixed(2)}</TableCell>
         <TableCell>{invoice.forma_pago}</TableCell>
         <TableCell>${invoice.monto.toFixed(2)}</TableCell>
-        <TableCell><Badge variant={getBadgeVariant(invoice.state)}>{getStatusLabel(invoice.state)}</Badge></TableCell>
+        <TableCell><Badge variant={getBadgeVariant(invoice.state)}>{invoice.state}</Badge></TableCell>
         <TableCell className="text-right">
             <div className="flex justify-end items-center gap-2">
                 <Button variant="ghost" size="icon" onClick={() => handleEditInvoice(invoice)} disabled={verifyingLocationInvoiceId === invoice.id_fac_desp}>
@@ -1293,8 +1299,8 @@ export default function ShipmentDetailPage() {
                   <FormItem>
                     <FormLabel>Estado</FormLabel>
                     <Select
-                      onValueChange={(value) => field.onChange(value === 'true')}
-                      value={String(field.value)}
+                      onValueChange={field.onChange}
+                      value={field.value}
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -1303,8 +1309,8 @@ export default function ShipmentDetailPage() {
                       </FormControl>
                       <SelectContent>
                         {statusOptions.map((option) => (
-                          <SelectItem key={option.label} value={String(option.value)}>
-                            {option.label}
+                          <SelectItem key={option} value={option}>
+                            {option}
                           </SelectItem>
                         ))}
                       </SelectContent>
