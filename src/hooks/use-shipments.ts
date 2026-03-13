@@ -398,16 +398,29 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
       });
       return; // Detener si falla el primer paso
     }
+    
+    // Segundo, eliminar el historial de ubicaciones asociado
+    const { error: deleteLocationHistoryError } = await supabase
+      .from('location_history')
+      .delete()
+      .eq('id_despacho', shipmentId);
 
-    // Si el paso anterior fue exitoso, eliminar el despacho principal
+    if (deleteLocationHistoryError) {
+        toast({
+            title: "Error al eliminar historial de ruta",
+            description: `No se pudo eliminar el historial de ubicaciones: ${deleteLocationHistoryError.message}`,
+            variant: "destructive",
+        });
+        return;
+    }
+
+    // Si los pasos anteriores fueron exitosos, eliminar el despacho principal
     const { error: deleteShipmentError } = await supabase
       .from('despacho')
       .delete()
       .eq('id_despacho', shipmentId);
 
     if (deleteShipmentError) {
-      // Esto no debería suceder si la eliminación de asociaciones fue exitosa,
-      // pero es bueno tener un manejo de errores.
       toast({
         title: "Error al eliminar el despacho",
         description: `Ocurrió un error inesperado al eliminar el despacho principal: ${deleteShipmentError.message}`,
