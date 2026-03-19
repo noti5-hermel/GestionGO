@@ -46,7 +46,7 @@ const shipmentInvoiceSchema = z.object({
     z.string().min(1, "El ID de despacho es requerido.")
   ),
   comprobante: z.string().optional(), // La URL de la imagen se maneja por separado.
-  forma_pago: z.enum(["Efectivo", "Tarjeta", "Transferencia", "Quedan", "Firma", "Credito"]),
+  forma_pago: z.enum(["Efectivo", "Tarjeta", "Transferencia", "Quedan", "Firma", "Credito", "Devolucion"]),
   monto: z.coerce.number().min(0, "El monto debe ser un número positivo."),
   state: z.enum(["Pendiente", "Pagado", "Devolucion"]),
 })
@@ -55,13 +55,13 @@ type ShipmentInvoiceState = "Pendiente" | "Pagado" | "Devolucion";
 
 // Tipos de datos para la gestión de facturación por despacho.
 type ShipmentInvoice = Omit<z.infer<typeof shipmentInvoiceSchema>, 'state'> & { id_fac_desp: number, comprobante: string, fecha_entrega: string | null, tax_type?: string, state: ShipmentInvoiceState }
-type Invoice = { id_factura: string, reference_number: string | number, fecha: string, grand_total: number, customer_name: string, code_customer: string, geocerca: any | null, fecha_import: string | null }
+type Invoice = { id_factura: string, reference_number: string | number, fecha: string, net_to_pay: number, customer_name: string, code_customer: string, geocerca: any | null, fecha_import: string | null }
 type Shipment = { id_despacho: number, fecha_despacho: string, id_ruta: string, estado_recorrido: 'pendiente' | 'en_curso' | 'finalizado' }
 type Route = { id_ruta: string; ruta_desc: string };
 
 
 // Opciones estáticas para menús desplegables.
-const paymentMethods: ShipmentInvoice['forma_pago'][] = ["Efectivo", "Tarjeta", "Transferencia", "Quedan", "Firma", "Credito"];
+const paymentMethods: ShipmentInvoice['forma_pago'][] = ["Efectivo", "Tarjeta", "Transferencia", "Quedan", "Firma", "Credito", "Devolucion"];
 const statusOptions: ShipmentInvoiceState[] = ["Pendiente", "Pagado", "Devolucion"];
 
 const ITEMS_PER_PAGE = 10;
@@ -279,7 +279,7 @@ export default function ShipmentInvoicingPage() {
             reference_number, 
             fecha, 
             fecha_import,
-            grand_total, 
+            net_to_pay, 
             customer_name, 
             code_customer,
             customer ( geocerca )
@@ -703,7 +703,7 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
                         <TableHead>ID Factura</TableHead>
                         <TableHead>Referencia</TableHead>
                         <TableHead>Cliente</TableHead>
-                        <TableHead>Monto Total</TableHead>
+                        <TableHead>Neto a Pagar</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -738,7 +738,7 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
                                   {invoice.customer_name}
                                   {invoice.geocerca === null && <span className="text-muted-foreground text-xs ml-2">(Sin geocerca)</span>}
                                 </TableCell>
-                                <TableCell>${invoice.grand_total.toFixed(2)}</TableCell>
+                                <TableCell>${invoice.net_to_pay.toFixed(2)}</TableCell>
                               </TableRow>
                             ))
                           ) : (

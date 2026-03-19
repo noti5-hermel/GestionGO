@@ -73,12 +73,12 @@ export const generateShipmentPDF = (
     doc.text("Listado de Facturas", 14, yPos);
     yPos += 8;
 
-    const tableColumn = ["No. Factura", "Cliente", "Tipo Cliente", "Total Factura", "Forma de Pago", "Monto Pagado", "Estado"];
+    const tableColumn = ["No. Factura", "Cliente", "Tipo Cliente", "Neto a Pagar", "Forma de Pago", "Monto Pagado", "Estado"];
     const tableRows = invoices.map(inv => [
       String(inv.reference_number || inv.id_factura),
       inv.customer_name || 'N/A',
       inv.tax_type || 'N/A',
-      `$${(inv.grand_total || 0).toFixed(2)}`,
+      `$${(inv.net_to_pay || 0).toFixed(2)}`,
       inv.forma_pago,
       `$${inv.monto.toFixed(2)}`,
       inv.state

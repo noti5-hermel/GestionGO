@@ -481,7 +481,7 @@ export default function InvoicingPage() {
 
                 if (uniqueInvoicesToUpsert.length === 0) continue;
 
-                const { data: createdInvoices, error: insertInvoicesError } = await supabase.from('facturacion').upsert(uniqueInvoicesToUpsert, { onConflict: 'id_factura' }).select('id_factura, grand_total');
+                const { data: createdInvoices, error: insertInvoicesError } = await supabase.from('facturacion').upsert(uniqueInvoicesToUpsert, { onConflict: 'id_factura' }).select('id_factura, net_to_pay');
                 if (insertInvoicesError) {
                     toast({ title: `Error en hoja "${sheetName}"`, description: `No se pudieron guardar las facturas: ${insertInvoicesError.message}`, variant: "destructive", duration: 7000 });
                     hasErrors = true;
@@ -499,7 +499,7 @@ export default function InvoicingPage() {
                     continue;
                 }
 
-                const total_general = createdInvoices.reduce((sum, inv) => sum + (inv.grand_total || 0), 0);
+                const total_general = createdInvoices.reduce((sum, inv) => sum + (inv.net_to_pay || 0), 0);
                 await supabase.from('despacho').update({ total_general }).eq('id_despacho', newDespachoId);
             }
 

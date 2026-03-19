@@ -35,15 +35,15 @@ const BUCKET_NAME = 'comprobante';
  * Esquema de validación para el formulario de edición de la factura del despacho.
  * El `maxAmount` se pasa dinámicamente para asegurar que el monto pagado no exceda el total de la factura.
  */
-const shipmentInvoiceEditSchema = (maxAmount: number) => z.object({
+const shipmentInvoiceEditSchema = z.object({
   comprobante: z.string().optional(),
-  forma_pago: z.enum(["Efectivo", "Tarjeta", "Transferencia", "Quedan", "Firma", "Credito"]),
-  monto: z.coerce.number().min(0, "El monto debe ser un número positivo.").max(maxAmount, `El monto no puede ser mayor que el total de la factura: $${maxAmount.toFixed(2)}`),
+  forma_pago: z.enum(["Efectivo", "Tarjeta", "Transferencia", "Quedan", "Firma", "Credito", "Devolucion"]),
+  monto: z.coerce.number().min(0, "El monto debe ser un número positivo."),
   state: z.enum(["Pendiente", "Pagado", "Devolucion"]),
   fecha_entrega: z.string().optional().nullable(),
 });
 
-type ShipmentInvoiceEditValues = z.infer<ReturnType<typeof shipmentInvoiceEditSchema>>;
+type ShipmentInvoiceEditValues = z.infer<typeof shipmentInvoiceEditSchema>;
 type ShipmentInvoiceState = "Pendiente" | "Pagado" | "Devolucion";
 
 // Tipos de datos para la página de detalle del despacho.
@@ -70,7 +70,7 @@ export type ShipmentInvoice = {
   id_factura: string
   code_customer: string
   comprobante: string
-  forma_pago: "Efectivo" | "Tarjeta" | "Transferencia" | "Quedan" | "Firma" | "Credito"
+  forma_pago: "Efectivo" | "Tarjeta" | "Transferencia" | "Quedan" | "Firma" | "Credito" | "Devolucion"
   monto: number
   state: ShipmentInvoiceState
   fecha_entrega: string | null;
@@ -78,7 +78,7 @@ export type ShipmentInvoice = {
   reference_number?: string | number // Opcional, se añade después desde la tabla `facturacion`
   customer_name?: string
   tax_type?: string // Opcional, se añade después a través de joins
-  grand_total: number // No es opcional para la validación
+  net_to_pay: number // No es opcional para la validación
   geocerca?: any;
 }
 
@@ -89,10 +89,10 @@ type ShipmentInvoiceWithLocation = ShipmentInvoice & {
 
 type User = { id_user: string; name: string; id_rol: number; }
 type Role = { id_ruta: string; ruta_desc: string }
-type Invoice = { id_factura: string, reference_number: string | number, code_customer: string, customer_name: string, grand_total: number }
+type Invoice = { id_factura: string, reference_number: string | number, code_customer: string, customer_name: string, net_to_pay: number }
 type Customer = { code_customer: string; id_impuesto: number; geocerca: any };
 type TaxType = { id_impuesto: number; impt_desc: string };
-const paymentMethods: ShipmentInvoice['forma_pago'][] = ["Efectivo", "Tarjeta", "Transferencia", "Quedan", "Firma", "Credito"];
+const paymentMethods: ShipmentInvoice['forma_pago'][] = ["Efectivo", "Tarjeta", "Transferencia", "Quedan", "Firma", "Credito", "Devolucion"];
 const statusOptions: ShipmentInvoiceState[] = ["Pendiente", "Pagado", "Devolucion"];
 const BODEGA_LOCATION = { lat: 13.725410116705362, lng: -89.21911777270175 };
 
@@ -207,7 +207,7 @@ export default function ShipmentDetailPage() {
 
       if (invoiceIds.length > 0) {
           // Obtiene detalles de las facturas.
-          const { data: invoicesData, error: invoicesError } = await supabase.from('facturacion').select('id_factura, reference_number, code_customer, customer_name, grand_total').in('id_factura', invoiceIds)
+          const { data: invoicesData, error: invoicesError } = await supabase.from('facturacion').select('id_factura, reference_number, code_customer, customer_name, net_to_pay').in('id_factura', invoiceIds)
           if (invoicesError) {
               toast({ title: "Error", description: "No se pudieron cargar los datos de facturas.", variant: "destructive" });
           } else {
@@ -231,7 +231,7 @@ export default function ShipmentDetailPage() {
                         reference_number: i.reference_number,
                         code_customer: i.code_customer,
                         customer_name: i.customer_name,
-                        grand_total: i.grand_total,
+                        net_to_pay: i.net_to_pay,
                       }]));
 
                       // Combina todos los datos en un solo array de facturas enriquecidas.
@@ -242,7 +242,7 @@ export default function ShipmentDetailPage() {
                           ...si,
                           reference_number: invoiceInfo?.reference_number,
                           customer_name: invoiceInfo?.customer_name,
-                          grand_total: invoiceInfo?.grand_total ?? 0,
+                          net_to_pay: invoiceInfo?.net_to_pay ?? 0,
                           tax_type: customerInfo?.tax,
                           geocerca: customerInfo?.geofence,
                         }
@@ -358,7 +358,6 @@ export default function ShipmentDetailPage() {
 
   /**
    * Recalcula y actualiza los totales del despacho en la base de datos.
-   * @param shipmentId El ID del despacho a recalcular.
    */
   const recalculateAndSaveShipmentTotals = async (shipmentId: string) => {
     // 1. Obtener todas las facturas asociadas a este despacho
@@ -387,15 +386,12 @@ export default function ShipmentDetailPage() {
       }
     });
   
-    const totalGeneral = totalContado + totalCredito;
-  
     // 3. Actualizar el registro del despacho
     const { error: updateError } = await supabase
       .from('despacho')
       .update({
         total_contado: totalContado,
         total_credito: totalCredito,
-        total_general: totalGeneral
       })
       .eq('id_despacho', shipmentId);
   
@@ -412,8 +408,8 @@ export default function ShipmentDetailPage() {
   const handleUpdateInvoice = async (values: ShipmentInvoiceEditValues) => {
     if (!editingShipmentInvoice) return;
 
-    // 1. Validar manualmente los datos del formulario contra el esquema dinámico
-    const validationSchema = shipmentInvoiceEditSchema(editingShipmentInvoice.grand_total);
+    // 1. Validar manualmente los datos del formulario
+    const validationSchema = shipmentInvoiceEditSchema;
     const validationResult = validationSchema.safeParse(values);
 
     if (!validationResult.success) {
@@ -1031,7 +1027,7 @@ export default function ShipmentDetailPage() {
             ) : (<span className="text-muted-foreground">N/A</span>)}
         </TableCell>
         <TableCell>{formatDateTime(invoice.fecha_entrega)}</TableCell>
-        <TableCell>${(invoice.grand_total ?? 0).toFixed(2)}</TableCell>
+        <TableCell>${(invoice.net_to_pay ?? 0).toFixed(2)}</TableCell>
         <TableCell>{invoice.forma_pago}</TableCell>
         <TableCell>${invoice.monto.toFixed(2)}</TableCell>
         <TableCell><Badge variant={getBadgeVariant(invoice.state)}>{invoice.state}</Badge></TableCell>
