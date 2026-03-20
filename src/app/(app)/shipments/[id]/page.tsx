@@ -1201,7 +1201,7 @@ export default function ShipmentDetailPage() {
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleUpdateInvoice)} className="space-y-4">
+            <form onSubmit={(e) => e.preventDefault()} className="space-y-4">
               <FormItem>
                   <FormLabel>Comprobante</FormLabel>
                    <FormControl>
@@ -1306,7 +1306,7 @@ export default function ShipmentDetailPage() {
                 <DialogClose asChild>
                   <Button type="button" variant="secondary" onClick={closeInvoiceDialog}>Cancelar</Button>
                 </DialogClose>
-                <Button type="submit" disabled={loading}>{loading ? 'Guardando...' : 'Guardar Cambios'}</Button>
+                <Button type="button" onClick={form.handleSubmit(handleUpdateInvoice)} disabled={loading}>{loading ? 'Guardando...' : 'Guardar Cambios'}</Button>
               </DialogFooter>
             </form>
           </Form>
