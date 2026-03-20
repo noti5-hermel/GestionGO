@@ -239,8 +239,18 @@ export default function ShipmentDetailPage() {
                       const enrichedInvoices = shipmentInvoicesData.map(si => {
                         const invoiceInfo = invoiceInfoMap.get(si.id_factura);
                         const customerInfo = customerMap.get(invoiceInfo?.code_customer || '');
+                        
+                        // Normaliza el valor del estado para asegurar compatibilidad.
+                        let normalizedState: ShipmentInvoiceState = "Pendiente";
+                        if (si.state === 'Pagado' || si.state === true) {
+                          normalizedState = "Pagado";
+                        } else if (si.state === 'Devolucion') {
+                          normalizedState = "Devolucion";
+                        }
+
                         return {
                           ...si,
+                          state: normalizedState,
                           reference_number: invoiceInfo?.reference_number,
                           customer_name: invoiceInfo?.customer_name,
                           net_to_pay: invoiceInfo?.net_to_pay ?? 0,
