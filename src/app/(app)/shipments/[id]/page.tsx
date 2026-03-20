@@ -242,7 +242,7 @@ export default function ShipmentDetailPage() {
                         
                         // Normaliza el valor del estado para asegurar compatibilidad.
                         let normalizedState: ShipmentInvoiceState = "Pendiente";
-                        if (si.state === 'Pagado' || si.state === true) {
+                        if (si.state === 'Pagado' || (si.state as any) === true) {
                           normalizedState = "Pagado";
                         } else if (si.state === 'Devolucion') {
                           normalizedState = "Devolucion";
@@ -1211,7 +1211,7 @@ export default function ShipmentDetailPage() {
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
-            <form onSubmit={(e) => e.preventDefault()} className="space-y-4">
+            <form onSubmit={form.handleSubmit(handleUpdateInvoice)} className="space-y-4">
               <FormItem>
                   <FormLabel>Comprobante</FormLabel>
                    <FormControl>
@@ -1316,7 +1316,7 @@ export default function ShipmentDetailPage() {
                 <DialogClose asChild>
                   <Button type="button" variant="secondary" onClick={closeInvoiceDialog}>Cancelar</Button>
                 </DialogClose>
-                <Button type="button" onClick={form.handleSubmit(handleUpdateInvoice)} disabled={loading}>{loading ? 'Guardando...' : 'Guardar Cambios'}</Button>
+                <Button type="submit" disabled={loading}>{loading ? 'Guardando...' : 'Guardar Cambios'}</Button>
               </DialogFooter>
             </form>
           </Form>
