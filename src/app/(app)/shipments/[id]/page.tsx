@@ -156,6 +156,7 @@ export default function ShipmentDetailPage() {
 
   // --- FORMULARIO ---
   const form = useForm<ShipmentInvoiceEditValues>({
+    resolver: zodResolver(shipmentInvoiceEditSchema),
     defaultValues: {
       comprobante: "",
       forma_pago: "Efectivo",
@@ -363,7 +364,7 @@ export default function ShipmentDetailPage() {
     // 1. Obtener todas las facturas asociadas a este despacho
     const { data: shipmentInvoicesData, error: shipmentInvoicesError } = await supabase
       .from('facturacion_x_despacho')
-      .select('monto, facturacion(code_customer, customer(id_impuesto, tipo_impuesto(impt_desc)))')
+      .select('monto, facturacion(net_to_pay, code_customer, customer(id_impuesto, tipo_impuesto(impt_desc)))')
       .eq('id_despacho', shipmentId);
   
     if (shipmentInvoicesError) {
@@ -374,6 +375,7 @@ export default function ShipmentDetailPage() {
     // 2. Calcular los totales
     let totalContado = 0;
     let totalCredito = 0;
+    let totalGeneral = 0;
   
     shipmentInvoicesData.forEach(inv => {
       // @ts-ignore - La estructura anidada es correcta
@@ -384,6 +386,8 @@ export default function ShipmentDetailPage() {
       } else if (taxDesc === 'Crédito Fiscal') {
         totalCredito += inv.monto || 0;
       }
+      // @ts-ignore
+      totalGeneral += inv.facturacion?.net_to_pay || 0;
     });
   
     // 3. Actualizar el registro del despacho
@@ -392,13 +396,13 @@ export default function ShipmentDetailPage() {
       .update({
         total_contado: totalContado,
         total_credito: totalCredito,
+        total_general: totalGeneral
       })
       .eq('id_despacho', shipmentId);
   
     if (updateError) {
       toast({ title: "Error de sincronización", description: "No se pudieron guardar los nuevos totales del despacho.", variant: "destructive" });
     }
-    // No muestro toast de éxito para no saturar al usuario, la actualización de la UI es suficiente.
   };
 
   /**
@@ -407,24 +411,7 @@ export default function ShipmentDetailPage() {
    */
   const handleUpdateInvoice = async (values: ShipmentInvoiceEditValues) => {
     if (!editingShipmentInvoice) return;
-
-    // 1. Validar manualmente los datos del formulario
-    const validationSchema = shipmentInvoiceEditSchema;
-    const validationResult = validationSchema.safeParse(values);
-
-    if (!validationResult.success) {
-      // Si la validación falla, muestra errores para todos los campos.
-      validationResult.error.issues.forEach((issue) => {
-        form.setError(issue.path[0] as keyof ShipmentInvoiceEditValues, {
-          type: 'manual',
-          message: issue.message,
-        });
-      });
-      return; // Detiene la ejecución
-    }
-
-
-    // 2. Si la validación es exitosa, proceder a guardar
+    
     const imageUrl = await uploadComprobante();
     if (!imageUrl && selectedFile) { 
         return; // Detiene si la carga falla.
