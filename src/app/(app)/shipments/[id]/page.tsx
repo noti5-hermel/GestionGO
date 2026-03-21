@@ -33,18 +33,16 @@ const BUCKET_NAME = 'comprobante';
 
 /**
  * Esquema de validación para el formulario de edición de la factura del despacho.
- * El `maxAmount` se pasa dinámicamente para asegurar que el monto pagado no exceda el total de la factura.
  */
 const shipmentInvoiceEditSchema = z.object({
   comprobante: z.string().optional(),
   forma_pago: z.enum(["Efectivo", "Tarjeta", "Transferencia", "Quedan", "Firma", "Credito", "Devolucion"]),
   monto: z.coerce.number().min(0, "El monto debe ser un número positivo."),
-  state: z.enum(["Pendiente", "Pagado", "Devolucion"]),
+  state: z.boolean(),
   fecha_entrega: z.string().optional().nullable(),
 });
 
 type ShipmentInvoiceEditValues = z.infer<typeof shipmentInvoiceEditSchema>;
-type ShipmentInvoiceState = "Pendiente" | "Pagado" | "Devolucion";
 
 // Tipos de datos para la página de detalle del despacho.
 type Shipment = {
@@ -72,7 +70,7 @@ export type ShipmentInvoice = {
   comprobante: string
   forma_pago: "Efectivo" | "Tarjeta" | "Transferencia" | "Quedan" | "Firma" | "Credito" | "Devolucion"
   monto: number
-  state: ShipmentInvoiceState
+  state: boolean
   fecha_entrega: string | null;
   orden_visita: number | null; // Nuevo campo para el orden manual
   reference_number?: string | number // Opcional, se añade después desde la tabla `facturacion`
@@ -93,7 +91,6 @@ type Invoice = { id_factura: string, reference_number: string | number, code_cus
 type Customer = { code_customer: string; id_impuesto: number; geocerca: any };
 type TaxType = { id_impuesto: number; impt_desc: string };
 const paymentMethods: ShipmentInvoice['forma_pago'][] = ["Efectivo", "Tarjeta", "Transferencia", "Quedan", "Firma", "Credito", "Devolucion"];
-const statusOptions: ShipmentInvoiceState[] = ["Pendiente", "Pagado", "Devolucion"];
 const BODEGA_LOCATION = { lat: 13.725410116705362, lng: -89.21911777270175 };
 
 
@@ -161,7 +158,7 @@ export default function ShipmentDetailPage() {
       comprobante: "",
       forma_pago: "Efectivo",
       monto: 0,
-      state: "Pendiente",
+      state: false,
       fecha_entrega: null,
     },
   });
@@ -240,13 +237,7 @@ export default function ShipmentDetailPage() {
                         const invoiceInfo = invoiceInfoMap.get(si.id_factura);
                         const customerInfo = customerMap.get(invoiceInfo?.code_customer || '');
                         
-                        // Normaliza el valor del estado para asegurar compatibilidad.
-                        let normalizedState: ShipmentInvoiceState = "Pendiente";
-                        if (si.state === 'Pagado' || (si.state as any) === true) {
-                          normalizedState = "Pagado";
-                        } else if (si.state === 'Devolucion') {
-                          normalizedState = "Devolucion";
-                        }
+                        const normalizedState: boolean = si.state === true || (si.state as any) === 'Pagado';
 
                         return {
                           ...si,
@@ -944,13 +935,8 @@ export default function ShipmentDetailPage() {
     }
   };
   
-  const getBadgeVariant = (status: ShipmentInvoiceState) => {
-    switch (status) {
-      case "Pagado": return "default";
-      case "Pendiente": return "secondary";
-      case "Devolucion": return "destructive";
-      default: return "outline";
-    }
+  const getBadgeVariant = (status: boolean) => {
+    return status ? "default" : "secondary";
   }
 
   const formatDateTime = (dateString: string | null) => {
@@ -1027,7 +1013,7 @@ export default function ShipmentDetailPage() {
         <TableCell>${(invoice.net_to_pay ?? 0).toFixed(2)}</TableCell>
         <TableCell>{invoice.forma_pago}</TableCell>
         <TableCell>${invoice.monto.toFixed(2)}</TableCell>
-        <TableCell><Badge variant={getBadgeVariant(invoice.state)}>{invoice.state}</Badge></TableCell>
+        <TableCell><Badge variant={getBadgeVariant(invoice.state)}>{invoice.state ? "Pagado" : "Pendiente"}</Badge></TableCell>
         <TableCell className="text-right">
             <div className="flex justify-end items-center gap-2">
                 <Button variant="ghost" size="icon" onClick={() => handleEditInvoice(invoice)} disabled={verifyingLocationInvoiceId === invoice.id_fac_desp}>
@@ -1292,8 +1278,8 @@ export default function ShipmentDetailPage() {
                   <FormItem>
                     <FormLabel>Estado</FormLabel>
                     <Select
-                      onValueChange={field.onChange}
-                      value={field.value}
+                      onValueChange={(value) => field.onChange(value === 'true')}
+                      value={String(field.value)}
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -1301,11 +1287,8 @@ export default function ShipmentDetailPage() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {statusOptions.map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {option}
-                          </SelectItem>
-                        ))}
+                        <SelectItem value="true">Pagado</SelectItem>
+                        <SelectItem value="false">Pendiente</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
