@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from "react"
@@ -237,7 +238,7 @@ export default function ShipmentDetailPage() {
                         const invoiceInfo = invoiceInfoMap.get(si.id_factura);
                         const customerInfo = customerMap.get(invoiceInfo?.code_customer || '');
                         
-                        const normalizedState: boolean = si.state === true || (si.state as any) === 'Pagado';
+                        const normalizedState: boolean = si.state === true;
 
                         return {
                           ...si,
@@ -1197,7 +1198,7 @@ export default function ShipmentDetailPage() {
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleUpdateInvoice)} className="space-y-4">
+            <form className="space-y-4">
               <FormItem>
                   <FormLabel>Comprobante</FormLabel>
                    <FormControl>
@@ -1299,7 +1300,7 @@ export default function ShipmentDetailPage() {
                 <DialogClose asChild>
                   <Button type="button" variant="secondary" onClick={closeInvoiceDialog}>Cancelar</Button>
                 </DialogClose>
-                <Button type="submit" disabled={loading}>{loading ? 'Guardando...' : 'Guardar Cambios'}</Button>
+                <Button type="button" onClick={form.handleSubmit(handleUpdateInvoice)} disabled={loading}>{loading ? 'Guardando...' : 'Guardar Cambios'}</Button>
               </DialogFooter>
             </form>
           </Form>
