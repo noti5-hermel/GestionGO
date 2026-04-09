@@ -441,12 +441,12 @@ export default function ShipmentDetailPage() {
     if (selectedFile) {
         dataToUpdate.fecha_entrega = new Date().toISOString();
 
-        // Y si se capturó una ubicación, se guarda.
+        // Y si se capturó una ubicación, se guarda.Ñ
         if (editingShipmentInvoice._capturedLocation) {
             const { latitude, longitude } = editingShipmentInvoice._capturedLocation;
             await supabase
                 .from('customer')
-                .update({ last_known_location: `POINT(${longitude} ${latitude})` })
+                .update({ last_known_location: `POINT(${longitude} ${latitude})`,geocerca: `ST_Buffer(ST_SetSRID(ST_MakePoint(${longitude}, ${latitude}), 4326)::geography, 8)::geometry` })
                 .eq('code_customer', editingShipmentInvoice.code_customer);
             toast({ title: "Ubicación registrada", description: "Se ha guardado la ubicación actual del cliente." });
         }
