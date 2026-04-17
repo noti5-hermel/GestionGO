@@ -93,7 +93,7 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
   const { toast } = useToast()
 
   // --- ESTADOS DE FILTRADO Y PAGINACIÓN ---
-  const [filterType, setFilterType] = useState<'all' | 'today' | 'date'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'today' | 'date'>('today');
   const [customDate, setCustomDate] = useState<string>("")
   const [currentPage, setCurrentPage] = useState(1);
   const [session, setSession] = useState<UserSession | null>(null);
@@ -246,7 +246,7 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
   const fetchAllUsers = async () => {
     const { data, error } = await supabase.from('usuario').select('id_user, name');
     if (error) {
-      toast({ title: "Error", description: `No se pudieron cargar los usuarios: ${error.message}`, variant: "destructive" });
+      toast({ title: "Error", description: `No se pudieron cargar los usuarios: ${''}` });
     } else {
       setUsers(data as User[] || []);
     }
@@ -321,7 +321,7 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
         .select('id_user, name')
         .in('id_rol', auxiliarRoleIds);
       if (auxiliaresError) {
-        toast({ title: "Error al cargar auxiliares", description: `No se pudieron cargar los auxiliares: ${auxiliaresError.message}`, variant: "destructive" });
+        toast({ title: "Error al cargar auxiliares", description: `No se pudieron cargar los auxiliares: ${''}`, variant: "destructive" });
       } else {
         setAuxiliares(auxiliaresData as User[] || []);
       }
@@ -408,7 +408,7 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
     if (deleteLocationHistoryError) {
         toast({
             title: "Error al eliminar historial de ruta",
-            description: `No se pudo eliminar el historial de ubicaciones: ${deleteLocationHistoryError.message}`,
+            description: `No se pudo eliminar el historial de ubicaciones: ${''}`,
             variant: "destructive",
         });
         return;
@@ -423,7 +423,7 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
     if (deleteShipmentError) {
       toast({
         title: "Error al eliminar el despacho",
-        description: `Ocurrió un error inesperado al eliminar el despacho principal: ${deleteShipmentError.message}`,
+        description: `Ocurrió un error inesperado al eliminar el despacho principal: ${''}`,
         variant: "destructive",
       });
     } else {
