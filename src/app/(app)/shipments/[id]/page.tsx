@@ -1014,7 +1014,7 @@ export default function ShipmentDetailPage() {
         <TableCell>${(invoice.net_to_pay ?? 0).toFixed(2)}</TableCell>
         <TableCell>{invoice.forma_pago}</TableCell>
         <TableCell>${invoice.monto.toFixed(2)}</TableCell>
-        <TableCell><Badge variant={getBadgeVariant(invoice.state)}>{invoice.state ? "Pagado" : "Pendiente"}</Badge></TableCell>
+        <TableCell><Badge variant={getBadgeVariant(invoice.state)}>{invoice.state ? "Completado" : "Pendiente"}</Badge></TableCell>
         <TableCell className="text-right">
             <div className="flex justify-end items-center gap-2">
                 <Button variant="ghost" size="icon" onClick={() => handleEditInvoice(invoice)} disabled={verifyingLocationInvoiceId === invoice.id_fac_desp}>
@@ -1288,7 +1288,7 @@ export default function ShipmentDetailPage() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="true">Pagado</SelectItem>
+                        <SelectItem value="true">Completado</SelectItem>
                         <SelectItem value="false">Pendiente</SelectItem>
                       </SelectContent>
                     </Select>
@@ -1397,3 +1397,5 @@ export default function ShipmentDetailPage() {
     </div>
   )
 }
+
+    

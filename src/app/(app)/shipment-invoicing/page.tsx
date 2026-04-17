@@ -61,7 +61,7 @@ type Route = { id_ruta: string; ruta_desc: string };
 
 // Opciones estáticas para menús desplegables.
 const paymentMethods: ShipmentInvoice['forma_pago'][] = ["Efectivo", "Tarjeta", "Transferencia", "Quedan", "Firma", "Credito", "Devolucion"];
-const statusOptions: {label: string, value: string}[] = [{label: "Pagado", value: "true"}, {label: "Pendiente", value: "false"}];
+const statusOptions: {label: string, value: string}[] = [{label: "Completado", value: "true"}, {label: "Pendiente", value: "false"}];
 
 const ITEMS_PER_PAGE = 10;
 
@@ -851,7 +851,7 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
                   <TableCell>{formatDateTime(shipmentInvoice.fecha_entrega)}</TableCell>
                   <TableCell>{shipmentInvoice.forma_pago}</TableCell>
                   <TableCell>${shipmentInvoice.monto.toFixed(2)}</TableCell>
-                  <TableCell><Badge variant={getBadgeVariant(shipmentInvoice.state)}>{shipmentInvoice.state ? "Pagado" : "Pendiente"}</Badge></TableCell>
+                  <TableCell><Badge variant={getBadgeVariant(shipmentInvoice.state)}>{shipmentInvoice.state ? "Completado" : "Pendiente"}</Badge></TableCell>
                    <TableCell>
                     <div className="flex justify-end items-center gap-2">
                       <Button variant="ghost" size="icon" onClick={() => handleEdit(shipmentInvoice)}>
@@ -1008,7 +1008,7 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                         <SelectItem value="true">Pagado</SelectItem>
+                         <SelectItem value="true">Completado</SelectItem>
                          <SelectItem value="false">Pendiente</SelectItem>
                       </SelectContent>
                     </Select>
@@ -1029,3 +1029,5 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
     </Card>
   )
 }
+
+    

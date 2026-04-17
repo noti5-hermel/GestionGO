@@ -81,7 +81,7 @@ export const generateShipmentPDF = (
       `$${(inv.net_to_pay || 0).toFixed(2)}`,
       inv.forma_pago,
       `$${inv.monto.toFixed(2)}`,
-      inv.state ? "Pagado" : "Pendiente"
+      inv.state ? "Completado" : "Pendiente"
     ]);
 
     doc.autoTable({
@@ -145,3 +145,5 @@ export const generateShipmentPDF = (
     fileName: `despacho_${shipment.id_despacho}.pdf`
   };
 };
+
+    

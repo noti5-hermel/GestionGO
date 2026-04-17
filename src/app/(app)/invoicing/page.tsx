@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from "react"
@@ -65,7 +64,7 @@ const invoiceSchema = z.object({
   fecha: z.string().min(1, "La fecha es requerida."),
   fecha_import: z.string().optional(),
   state: z.preprocess(
-      (val) => (String(val).toLowerCase() === 'pagada' || val === true),
+      (val) => (String(val).toLowerCase() === 'completado' || val === true),
       z.boolean()
   ),
   ruta: z.preprocess(
@@ -87,7 +86,7 @@ type Customer = { code_customer: string, customer_name: string, ruta: string | n
 type PaymentTerm = { id_term: number, term_desc: string }
 
 // Opciones estáticas para la interfaz de usuario.
-const statusOptions = ["Pagada", "Pendiente"]
+const statusOptions = ["Completado", "Pendiente"]
 const ITEMS_PER_PAGE = 10;
 
 /**
@@ -590,15 +589,15 @@ export default function InvoicingPage() {
     }
   }
 
-  /** Obtiene la etiqueta del estado ("Pagada" o "Pendiente") a partir de un booleano. */
-  const getStatusLabel = (status: boolean): "Pagada" | "Pendiente" => {
-    return status ? "Pagada" : "Pendiente";
+  /** Obtiene la etiqueta del estado ("Completado" o "Pendiente") a partir de un booleano. */
+  const getStatusLabel = (status: boolean): "Completado" | "Pendiente" => {
+    return status ? "Completado" : "Pendiente";
   };
 
   /** Obtiene la variante de color del Badge según el estado. */
-  const getBadgeVariant = (status: "Pagada" | "Pendiente") => {
+  const getBadgeVariant = (status: "Completado" | "Pendiente") => {
     switch (status) {
-      case "Pagada":
+      case "Completado":
         return "default"
       case "Pendiente":
         return "secondary"
@@ -857,7 +856,7 @@ export default function InvoicingPage() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Estado</FormLabel>
-                          <Select onValueChange={(value) => field.onChange(value === 'Pagada')} value={getStatusLabel(field.value)}>
+                          <Select onValueChange={(value) => field.onChange(value === 'Completado')} value={getStatusLabel(field.value)}>
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="Seleccione un estado" />
@@ -1064,3 +1063,5 @@ export default function InvoicingPage() {
     </Card>
   )
 }
+
+    
