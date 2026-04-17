@@ -423,8 +423,13 @@ export default function ShipmentDetailPage() {
         comprobante: imageUrl,
         forma_pago: values.forma_pago,
         monto: values.monto,
-        state: values.state
+        state: values.state,
     };
+    
+    const hasComprobante = !!selectedFile || !!imageUrl;
+    if (values.forma_pago === 'Efectivo' && hasComprobante && values.monto > 0) {
+        dataToUpdate.state = true;
+    }
 
     // Si se subió un nuevo archivo, se establece la fecha de entrega.
     if (selectedFile) {
@@ -1288,8 +1293,8 @@ export default function ShipmentDetailPage() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="true">Completado</SelectItem>
-                        <SelectItem value="false">Pendiente</SelectItem>
+                         <SelectItem value="true">Completado</SelectItem>
+                         <SelectItem value="false">Pendiente</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -1397,5 +1402,3 @@ export default function ShipmentDetailPage() {
     </div>
   )
 }
-
-    
