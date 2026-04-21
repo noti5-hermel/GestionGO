@@ -524,21 +524,14 @@ export default function ShipmentDetailPage() {
       .update(dataToUpdate)
       .eq('id_fac_desp', invoiceForCamera.id_fac_desp);
     
-    // Si se capturó una ubicación (porque el cliente no tenía geocerca), guárdala ahora.
+    // Si se capturó una ubicación (porque el cliente no tenía geocerca), guárdala ahora en last_known_location.
     if (invoiceForCamera._capturedLocation) {
       const { latitude, longitude } = invoiceForCamera._capturedLocation;
-      const { error: geofenceError } = await supabase.rpc('set_customer_geofence_from_point', {
-          p_code_customer: invoiceForCamera.code_customer,
-          p_longitude: longitude,
-          p_latitude: latitude,
-          p_radius_meters: 8
-      });
-      
-      if (geofenceError) {
-        toast({ title: "Error al crear geocerca", description: geofenceError.message, variant: "destructive" });
-      } else {
-        toast({ title: "Geocerca creada", description: "Se ha creado una geocerca de 8m para el cliente." });
-      }
+      await supabase
+        .from('customer')
+        .update({ last_known_location: `POINT(${longitude} ${latitude})` })
+        .eq('code_customer', invoiceForCamera.code_customer);
+      toast({ title: "Ubicación registrada", description: "Se ha guardado la ubicación actual del cliente en 'Última Ubicación'." });
     }
 
     setLoading(false);
