@@ -21,6 +21,7 @@ import Image from "next/image"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 import { generateShipmentPDF } from "@/lib/generate-shipment-pdf"
 import { PdfPreviewModal } from "@/components/pdf-preview-modal"
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 
 /**
  * @file shipments/[id]/page.tsx
@@ -504,23 +505,37 @@ export default function ShipmentDetailPage() {
 
     const { data: { publicUrl } } = supabase.storage.from(BUCKET_NAME).getPublicUrl(fileName);
 
+    const dataToUpdate: any = { 
+        comprobante: publicUrl,
+        fecha_entrega: new Date().toISOString(),
+    };
+    
+    // Condición para actualizar el estado si el pago es en efectivo y hay monto.
+    if (invoiceForCamera.forma_pago === 'Efectivo' && invoiceForCamera.monto > 0) {
+      dataToUpdate.state = true;
+    }
+
     // Actualiza el registro en la base de datos con la nueva URL y la fecha de entrega.
     const { error: dbError } = await supabase
       .from('facturacion_x_despacho')
-      .update({ 
-          comprobante: publicUrl,
-          fecha_entrega: new Date().toISOString(),
-       })
+      .update(dataToUpdate)
       .eq('id_fac_desp', invoiceForCamera.id_fac_desp);
     
     // Si se capturó una ubicación (porque el cliente no tenía geocerca), guárdala ahora.
     if (invoiceForCamera._capturedLocation) {
-        const { latitude, longitude } = invoiceForCamera._capturedLocation;
-        await supabase
-            .from('customer')
-            .update({ last_known_location: `POINT(${longitude} ${latitude})` })
-            .eq('code_customer', invoiceForCamera.code_customer);
-        toast({ title: "Ubicación registrada", description: "Se ha guardado la ubicación actual del cliente." });
+      const { latitude, longitude } = invoiceForCamera._capturedLocation;
+      const { error: geofenceError } = await supabase.rpc('set_customer_geofence_from_point', {
+          p_code_customer: invoiceForCamera.code_customer,
+          p_longitude: longitude,
+          p_latitude: latitude,
+          p_radius_meters: 8
+      });
+      
+      if (geofenceError) {
+        toast({ title: "Error al crear geocerca", description: geofenceError.message, variant: "destructive" });
+      } else {
+        toast({ title: "Geocerca creada", description: "Se ha creado una geocerca de 8m para el cliente." });
+      }
     }
 
     setLoading(false);
@@ -529,6 +544,9 @@ export default function ShipmentDetailPage() {
       toast({ title: "Error al guardar", description: "No se pudo actualizar la factura.", variant: "destructive" });
     } else {
       toast({ title: "Éxito", description: "Comprobante guardado correctamente." });
+      if (shipment) {
+        await recalculateAndSaveShipmentTotals(shipment.id_despacho);
+      }
       fetchData();
       closeCameraDialog();
     }
@@ -1127,13 +1145,15 @@ export default function ShipmentDetailPage() {
       </Card>
       
       <Card>
-          <CardHeader>
-              <CardTitle>Facturas del Despacho</CardTitle>
-              <CardDescription>
-                  {isFacturacion ? "Use las flechas para establecer un orden de visita manual." : "Listado de todas las facturas incluidas en este despacho."}
-              </CardDescription>
-          </CardHeader>
-          <CardContent>
+        <CardHeader>
+            <CardTitle>Facturas del Despacho</CardTitle>
+            <CardDescription>
+                {isFacturacion ? "Use las flechas para establecer un orden de visita manual." : "Listado de todas las facturas incluidas en este despacho."}
+            </CardDescription>
+        </CardHeader>
+        <CardContent>
+            {/* Desktop view */}
+            <div className="hidden md:block">
               <Table>
                   <TableHeader>
                       <TableRow>
@@ -1158,7 +1178,74 @@ export default function ShipmentDetailPage() {
                       )}
                   </TableBody>
               </Table>
-          </CardContent>
+            </div>
+            {/* Mobile view */}
+            <div className="md:hidden">
+              <Accordion type="single" collapsible className="w-full">
+                  {sortedInvoices.length > 0 ? sortedInvoices.map((invoice, index) => (
+                      <AccordionItem value={`item-${invoice.id_fac_desp}`} key={invoice.id_fac_desp} className="border-b">
+                          <AccordionTrigger className="w-full p-4 text-left hover:no-underline [&[data-state=open]>svg]:text-primary">
+                              <div className="flex w-full justify-between items-center">
+                                  <div className="flex-1 text-left">
+                                      <div className="flex items-center gap-2">
+                                          <p className="font-semibold text-primary">{String(invoice.reference_number || invoice.id_factura)}</p>
+                                          <Badge variant={invoice.state ? 'default' : 'secondary'} className="text-xs">
+                                              {invoice.state ? "Completado" : "Pendiente"}
+                                          </Badge>
+                                      </div>
+                                      <p className="text-sm text-muted-foreground truncate font-normal mt-1">{invoice.customer_name || 'N/A'}</p>
+                                  </div>
+                              </div>
+                          </AccordionTrigger>
+                          <AccordionContent className="p-4 pt-0">
+                              <div className="grid grid-cols-2 gap-y-4 gap-x-2 mb-4 text-sm">
+                              <div className="space-y-1">
+                                  <p className="text-xs font-medium text-muted-foreground">GEOCERCA</p>
+                                  <Badge variant={invoice.geocerca ? 'default' : 'outline'} className="text-xs">{invoice.geocerca ? 'Sí' : 'No'}</Badge>
+                              </div>
+                              <div className="space-y-1">
+                                  <p className="text-xs font-medium text-muted-foreground">COMPROBANTE</p>
+                                  {invoice.comprobante ? (
+                                  <button onClick={() => handleOpenImageModal(invoice.comprobante)}>
+                                      <Image src={invoice.comprobante} alt={`Comprobante de ${invoice.id_factura}`} width={40} height={40} className="h-10 w-10 rounded-md object-cover" />
+                                  </button>
+                                  ) : (<p className="text-sm font-normal">N/A</p>)}
+                              </div>
+                              <div className="space-y-1">
+                                  <p className="text-xs font-medium text-muted-foreground">FECHA ENTREGA</p>
+                                  <p className="font-normal">{formatDateTime(invoice.fecha_entrega)}</p>
+                              </div>
+                              <div className="space-y-1">
+                                  <p className="text-xs font-medium text-muted-foreground">TOTAL FACTURA</p>
+                                  <p className="font-semibold">${(invoice.net_to_pay ?? 0).toFixed(2)}</p>
+                              </div>
+                              <div className="space-y-1">
+                                  <p className="text-xs font-medium text-muted-foreground">FORMA DE PAGO</p>
+                                  <p className="font-normal">{invoice.forma_pago}</p>
+                              </div>
+                              <div className="space-y-1">
+                                  <p className="text-xs font-medium text-muted-foreground">MONTO PAGADO</p>
+                                  <p className="font-semibold">${invoice.monto.toFixed(2)}</p>
+                              </div>
+                              </div>
+                              <div className="flex gap-2 mt-4">
+                              <Button variant="outline" className="flex-1" onClick={() => handleEditInvoice(invoice)} disabled={verifyingLocationInvoiceId === invoice.id_fac_desp}>
+                                  {verifyingLocationInvoiceId === invoice.id_fac_desp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
+                                  <span className="ml-2">Editar</span>
+                              </Button>
+                              <Button className="flex-1" onClick={() => openCameraDialog(invoice)} disabled={verifyingLocationInvoiceId === invoice.id_fac_desp}>
+                                  {verifyingLocationInvoiceId === invoice.id_fac_desp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+                                  <span className="ml-2">Foto</span>
+                              </Button>
+                              </div>
+                          </AccordionContent>
+                      </AccordionItem>
+                  )) : (
+                      <p className="text-center text-muted-foreground py-8">No hay facturas en este despacho.</p>
+                  )}
+              </Accordion>
+            </div>
+        </CardContent>
       </Card>
 
 
