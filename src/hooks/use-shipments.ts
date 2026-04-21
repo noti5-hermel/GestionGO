@@ -140,13 +140,14 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
    */
   const applyFilters = () => {
     let baseShipments = [...shipments];
+    const isMotoristaOrAuxiliar = session?.role?.toLowerCase().includes('motorista') || session?.role?.toLowerCase().includes('auxiliar');
     
     if (session) {
       const userRole = session.role.toLowerCase();
       const reviewRole = getReviewRoleFromSession(userRole);
 
       // Filtra para mostrar solo los despachos del motorista/auxiliar si es su rol.
-      if (userRole.includes('motorista') || userRole.includes('auxiliar')) {
+      if (isMotoristaOrAuxiliar) {
         baseShipments = shipments.filter(s =>
           s.id_motorista === session.id ||
           s.id_auxiliar === session.id
@@ -154,7 +155,7 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
       }
       
       // Filtra por estado de revisión (pendiente/revisado) para los roles de revisión.
-      if (reviewRole && !(userRole.includes('motorista') || userRole.includes('auxiliar'))) {
+      if (reviewRole && !isMotoristaOrAuxiliar) {
         if (reviewFilter === 'pending') {
           baseShipments = shipments.filter(s => s[reviewRole] === false);
         } else {
@@ -166,11 +167,24 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
     // Aplica el filtro de fecha.
     let newFilteredShipments = [...baseShipments];
     if (filterType === 'today') {
-        const today = new Date().toISOString().split('T')[0];
-        newFilteredShipments = baseShipments.filter(s => s.fecha_despacho === today);
+        const today = new Date();
+        const todayString = today.toISOString().split('T')[0];
+        
+        if (isMotoristaOrAuxiliar) {
+            const threeDaysAgo = new Date();
+            threeDaysAgo.setDate(today.getDate() - 3);
+            const threeDaysAgoString = threeDaysAgo.toISOString().split('T')[0];
+            
+            newFilteredShipments = baseShipments.filter(s => 
+                s.fecha_despacho >= threeDaysAgoString && s.fecha_despacho <= todayString
+            );
+        } else {
+            newFilteredShipments = baseShipments.filter(s => s.fecha_despacho === todayString);
+        }
     } else if (filterType === 'date' && customDate) {
         newFilteredShipments = baseShipments.filter(s => s.fecha_despacho === customDate);
     }
+    
     setFilteredShipments(newFilteredShipments);
     setCurrentPage(1); // Resetea la paginación al cambiar filtros.
   };
