@@ -21,7 +21,7 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { PlusCircle, Pencil, Search, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from "lucide-react"
+import { PlusCircle, Pencil, Search, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, RefreshCw, Loader2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 import { Input } from "@/components/ui/input"
@@ -67,6 +67,7 @@ export default function GeofencesPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCustomers, setTotalCustomers] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
 
   // --- FORMULARIO ---
   const form = useForm<z.infer<typeof geofenceSchema>>({
@@ -175,6 +176,40 @@ export default function GeofencesPage() {
         handleCloseDialog();
     }
   }
+  
+  /**
+   * Llama a una función RPC de Supabase para generar geocercas
+   * para todos los clientes que tienen una `last_known_location` pero no una `geocerca`.
+   */
+  const handleUpdateMissingGeofences = async () => {
+    setIsUpdating(true);
+    const { data, error } = await supabase.rpc('generate_geofences_from_last_location');
+
+    setIsUpdating(false);
+
+    if (error) {
+        toast({
+            title: "Error al actualizar",
+            description: `No se pudieron generar las geocercas faltantes. Error: ${error.message}`,
+            variant: "destructive",
+            duration: 9000
+        });
+    } else {
+        if (data > 0) {
+            toast({
+                title: "Éxito",
+                description: `${data} geocercas fueron generadas a partir de la última ubicación conocida.`,
+            });
+            fetchCustomers(); // Refresca la tabla
+            fetchAllCustomersForSelect(); // Refresca la lista del dropdown
+        } else {
+            toast({
+                title: "Nada que actualizar",
+                description: "No se encontraron clientes con ubicaciones pendientes para generar geocercas.",
+            });
+        }
+    }
+  };
 
   // --- FUNCIONES AUXILIARES DE LA UI ---
 
@@ -230,73 +265,79 @@ export default function GeofencesPage() {
             <CardTitle>Geocercas de Clientes</CardTitle>
             <CardDescription>Asigne o edite las geocercas de sus clientes.</CardDescription>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={handleOpenDialog}>
-            <DialogTrigger asChild>
-              <Button onClick={() => { setEditingCustomer(null); form.reset(); setIsDialogOpen(true); }}>
-                <PlusCircle className="mr-2 h-4 w-4" /> Añadir/Editar Geocerca
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>{editingCustomer ? 'Editar Geocerca' : 'Añadir Nueva Geocerca'}</DialogTitle>
-                <DialogDescription>
-                  {editingCustomer ? 'Modifique los datos de la geocerca para el cliente.' : 'Seleccione un cliente y añada los datos de su geocerca.'}
-                </DialogDescription>
-              </DialogHeader>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={handleUpdateMissingGeofences} variant="outline" disabled={isUpdating}>
+              {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+              Actualizar Faltantes
+            </Button>
+            <Dialog open={isDialogOpen} onOpenChange={handleOpenDialog}>
+              <DialogTrigger asChild>
+                <Button onClick={() => { setEditingCustomer(null); form.reset(); setIsDialogOpen(true); }}>
+                  <PlusCircle className="mr-2 h-4 w-4" /> Añadir/Editar Geocerca
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{editingCustomer ? 'Editar Geocerca' : 'Añadir Nueva Geocerca'}</DialogTitle>
+                  <DialogDescription>
+                    {editingCustomer ? 'Modifique los datos de la geocerca para el cliente.' : 'Seleccione un cliente y añada los datos de su geocerca.'}
+                  </DialogDescription>
+                </DialogHeader>
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                      <FormField
+                        control={form.control}
+                        name="code_customer"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Cliente</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value} disabled={!!editingCustomer}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Seleccione un cliente" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {allCustomers.map((customer) => (
+                                  <SelectItem key={customer.code_customer} value={customer.code_customer}>
+                                    {customer.customer_name} ({customer.code_customer})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                     <FormField
                       control={form.control}
-                      name="code_customer"
+                      name="geocerca"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Cliente</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value} disabled={!!editingCustomer}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Seleccione un cliente" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {allCustomers.map((customer) => (
-                                <SelectItem key={customer.code_customer} value={customer.code_customer}>
-                                  {customer.customer_name} ({customer.code_customer})
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <FormLabel>Datos de Geocerca (Formato POLYGON)</FormLabel>
+                          <FormControl>
+                             <Textarea
+                              placeholder="Ej: POLYGON((long1 lat1, long2 lat2, ...)) o GEOMETRYCOLLECTION(POLYGON(...), ...)"
+                              className="resize-y"
+                              rows={5}
+                              {...field}
+                            />
+                          </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                  <FormField
-                    control={form.control}
-                    name="geocerca"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Datos de Geocerca (Formato POLYGON)</FormLabel>
-                        <FormControl>
-                           <Textarea
-                            placeholder="Ej: POLYGON((long1 lat1, long2 lat2, ...)) o GEOMETRYCOLLECTION(POLYGON(...), ...)"
-                            className="resize-y"
-                            rows={5}
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <DialogFooter>
-                    <DialogClose asChild>
-                      <Button type="button" variant="secondary" onClick={handleCloseDialog}>Cancelar</Button>
-                    </DialogClose>
-                    <Button type="submit">Guardar Geocerca</Button>
-                  </DialogFooter>
-                </form>
-              </Form>
-            </DialogContent>
-          </Dialog>
+                    <DialogFooter>
+                      <DialogClose asChild>
+                        <Button type="button" variant="secondary" onClick={handleCloseDialog}>Cancelar</Button>
+                      </DialogClose>
+                      <Button type="submit">Guardar Geocerca</Button>
+                    </DialogFooter>
+                  </form>
+                </Form>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
         <div className="flex flex-col sm:flex-row flex-wrap items-center gap-2 mt-4">
             <div className="relative w-full sm:w-auto flex-grow sm:flex-grow-0">
