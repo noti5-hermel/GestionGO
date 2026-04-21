@@ -1,7 +1,7 @@
 
 'use client'
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
-import { List, MapPin } from "lucide-react"
+import { List, MapPin, Search } from "lucide-react"
+import { Input } from "@/components/ui/input"
 
 /**
  * @file route-generation/page.tsx
@@ -110,6 +111,7 @@ export default function RouteGenerationPage() {
   const [selectedCustomers, setSelectedCustomers] = useState<Record<string, boolean>>({});
   const [generatedRoute, setGeneratedRoute] = useState<CustomerWithGeofence[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
   const { toast } = useToast();
 
   /**
@@ -195,25 +197,56 @@ export default function RouteGenerationPage() {
     setGeneratedRoute(waypointsData.map(wp => wp.customer));
   };
   
+  const filteredCustomers = useMemo(() => {
+      if (!searchQuery) {
+          return customers;
+      }
+      return customers.filter(customer => 
+          customer.customer_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          customer.code_customer.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+  }, [customers, searchQuery]);
+
   const handleSelectAll = (checked: boolean) => {
-    const newSelection: Record<string, boolean> = {};
+    const newSelection: Record<string, boolean> = { ...selectedCustomers };
     if (checked) {
-        customers.forEach(customer => newSelection[customer.code_customer] = true);
+        filteredCustomers.forEach(customer => newSelection[customer.code_customer] = true);
+    } else {
+        filteredCustomers.forEach(customer => delete newSelection[customer.code_customer]);
     }
     setSelectedCustomers(newSelection);
   }
 
-  const allSelected = customers.length > 0 && customers.every(c => selectedCustomers[c.code_customer]);
+  const allSelected = filteredCustomers.length > 0 && filteredCustomers.every(c => selectedCustomers[c.code_customer]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
       {/* Columna de Selección de Clientes */}
       <Card className="lg:col-span-1 flex flex-col">
         <CardHeader>
-          <CardTitle>Selección de Clientes</CardTitle>
-          <CardDescription>Marque los clientes con geocerca para incluirlos en la ruta.</CardDescription>
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                  <CardTitle>Selección de Clientes</CardTitle>
+                  <CardDescription>Marque los clientes con geocerca para incluirlos en la ruta.</CardDescription>
+              </div>
+              <Button onClick={handleGenerateRoute} className="w-full md:w-auto">
+                  <MapPin className="mr-2 h-4 w-4" />
+                  Generar Ruta
+              </Button>
+          </div>
         </CardHeader>
         <CardContent className="flex-1 flex flex-col gap-4 overflow-hidden">
+          <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                  type="search"
+                  placeholder="Buscar por código o nombre..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-8 w-full"
+              />
+          </div>
+          
            <div className="flex items-center space-x-2 border p-2 rounded-md">
             <Checkbox
               id="select-all"
@@ -224,12 +257,13 @@ export default function RouteGenerationPage() {
               Seleccionar Todos
             </Label>
           </div>
+
           <ScrollArea className="flex-1 pr-4">
             <div className="space-y-4">
               {loading ? (
                 <p>Cargando clientes...</p>
-              ) : customers.length > 0 ? (
-                customers.map(customer => (
+              ) : filteredCustomers.length > 0 ? (
+                filteredCustomers.map(customer => (
                   <div key={customer.code_customer} className="flex items-center space-x-2">
                     <Checkbox
                       id={customer.code_customer}
@@ -242,14 +276,10 @@ export default function RouteGenerationPage() {
                   </div>
                 ))
               ) : (
-                <p className="text-muted-foreground">No hay clientes con geocercas definidas.</p>
+                <p className="text-muted-foreground">No hay clientes que coincidan con la búsqueda.</p>
               )}
             </div>
           </ScrollArea>
-           <Button onClick={handleGenerateRoute} className="mt-4">
-            <MapPin className="mr-2 h-4 w-4" />
-            Generar Ruta en Google Maps
-          </Button>
         </CardContent>
       </Card>
 
@@ -281,5 +311,3 @@ export default function RouteGenerationPage() {
     </div>
   )
 }
-
-    
