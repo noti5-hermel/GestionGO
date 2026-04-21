@@ -1,4 +1,5 @@
 
+
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from "react"
@@ -12,7 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
-import { ArrowLeft, Pencil, Upload, Camera, X, FileText, Loader2, MapPin, Play, Square, ListOrdered, ArrowUp, ArrowDown } from "lucide-react"
+import { ArrowLeft, Pencil, Upload, Camera, X, FileText, Loader2, MapPin, Play, Square, ListOrdered, ArrowUp, ArrowDown, Search } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
@@ -151,6 +152,8 @@ export default function ShipmentDetailPage() {
   const [orderedRoute, setOrderedRoute] = useState<ShipmentInvoice[]>([]);
   const [isOrderDialogOpen, setIsOrderDialogOpen] = useState(false);
   const [isOptimizingRoute, setIsOptimizingRoute] = useState(false);
+
+  const [searchQuery, setSearchQuery] = useState('');
 
 
   // --- FORMULARIO ---
@@ -978,6 +981,19 @@ export default function ShipmentDetailPage() {
     });
   }, [invoices]);
 
+  const filteredAndSortedInvoices = useMemo(() => {
+      if (!searchQuery) {
+          return sortedInvoices;
+      }
+      return sortedInvoices.filter(invoice => {
+          const query = searchQuery.toLowerCase();
+          const customerName = invoice.customer_name?.toLowerCase() || '';
+          const customerCode = invoice.code_customer?.toLowerCase() || '';
+          const referenceNumber = String(invoice.reference_number || '').toLowerCase();
+          return customerName.includes(query) || customerCode.includes(query) || referenceNumber.includes(query);
+      });
+  }, [sortedInvoices, searchQuery]);
+
   // Calcula los totales dinámicamente basados en el `monto` de las facturas cargadas.
   const { totalContadoCalculado, totalCreditoCalculado, totalGeneralCalculado } = useMemo(() => {
       const totalContadoCalculado = invoices
@@ -1150,6 +1166,16 @@ export default function ShipmentDetailPage() {
             <CardDescription>
                 {isFacturacion ? "Use las flechas para establecer un orden de visita manual." : "Listado de todas las facturas incluidas en este despacho."}
             </CardDescription>
+            <div className="relative pt-4">
+                <Search className="absolute left-2.5 top-6 h-4 w-4 text-muted-foreground" />
+                <Input
+                    type="search"
+                    placeholder="Buscar por cliente, código o No. factura..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-8 w-full sm:w-[350px]"
+                />
+            </div>
         </CardHeader>
         <CardContent>
             {/* Desktop view */}
@@ -1171,9 +1197,9 @@ export default function ShipmentDetailPage() {
                       </TableRow>
                   </TableHeader>
                   <TableBody>
-                      {sortedInvoices.length > 0 ? sortedInvoices.map((invoice, index) => renderInvoiceRow(invoice, index, isFacturacion)) : (
+                      {filteredAndSortedInvoices.length > 0 ? filteredAndSortedInvoices.map((invoice, index) => renderInvoiceRow(invoice, index, isFacturacion)) : (
                           <TableRow>
-                              <TableCell colSpan={isFacturacion ? 11 : 10} className="text-center">No hay facturas en este despacho.</TableCell>
+                              <TableCell colSpan={isFacturacion ? 11 : 10} className="text-center">No hay facturas que coincidan con la búsqueda.</TableCell>
                           </TableRow>
                       )}
                   </TableBody>
@@ -1182,7 +1208,7 @@ export default function ShipmentDetailPage() {
             {/* Mobile view */}
             <div className="md:hidden">
               <Accordion type="single" collapsible className="w-full">
-                  {sortedInvoices.length > 0 ? sortedInvoices.map((invoice, index) => (
+                  {filteredAndSortedInvoices.length > 0 ? filteredAndSortedInvoices.map((invoice, index) => (
                       <AccordionItem value={`item-${invoice.id_fac_desp}`} key={invoice.id_fac_desp} className="border-b">
                           <AccordionTrigger className="w-full p-4 text-left hover:no-underline [&[data-state=open]>svg]:text-primary">
                               <div className="flex w-full justify-between items-center">
@@ -1241,7 +1267,7 @@ export default function ShipmentDetailPage() {
                           </AccordionContent>
                       </AccordionItem>
                   )) : (
-                      <p className="text-center text-muted-foreground py-8">No hay facturas en este despacho.</p>
+                      <p className="text-center text-muted-foreground py-8">No hay facturas que coincidan con la búsqueda.</p>
                   )}
               </Accordion>
             </div>
