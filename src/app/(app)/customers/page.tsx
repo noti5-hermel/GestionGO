@@ -24,7 +24,7 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { PlusCircle, Trash2, Pencil, Upload, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, FilterX, Search } from "lucide-react"
+import { PlusCircle, Trash2, Pencil, Upload, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, FilterX, Search, Download } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 import { Textarea } from "@/components/ui/textarea"
@@ -489,6 +489,28 @@ export default function CustomersPage() {
     };
     reader.readAsArrayBuffer(file);
   };
+  
+    /**
+   * Genera un archivo Excel con las cabeceras requeridas y lo descarga.
+   */
+  const handleDownloadTemplate = () => {
+    // Definir los encabezados que el sistema espera.
+    const headers = [
+      "Código Cliente",
+      "Nombre Cliente",
+      "Ruta",
+      "ID Impuesto",
+      "ID Término Pago",
+    ];
+    // Crear una hoja de trabajo vacía solo con los encabezados.
+    const ws = xlsx.utils.aoa_to_sheet([headers]);
+    // Crear un nuevo libro de trabajo.
+    const wb = xlsx.utils.book_new();
+    // Añadir la hoja de trabajo al libro.
+    xlsx.utils.book_append_sheet(wb, ws, "Clientes");
+    // Escribir el archivo y forzar la descarga.
+    xlsx.writeFile(wb, "plantilla_clientes.xlsx");
+  };
 
   // --- FUNCIONES AUXILIARES DE LA UI ---
 
@@ -564,6 +586,9 @@ export default function CustomersPage() {
             <CardDescription>Gestione su base de clientes.</CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={handleDownloadTemplate} variant="outline">
+              <Download className="mr-2 h-4 w-4" /> Descargar Plantilla
+            </Button>
             <Button onClick={handleImportClick} variant="outline">
                 <Upload className="mr-2 h-4 w-4" /> Importar
             </Button>
