@@ -18,7 +18,7 @@ import {
   DialogTrigger,
   DialogClose
 } from "@/components/ui/dialog"
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { PlusCircle, Pencil, Search, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, RefreshCw, Loader2 } from "lucide-react"
@@ -29,14 +29,15 @@ import { Input } from "@/components/ui/input"
 /**
  * @file geofences/page.tsx
  * @description Página para la gestión de geocercas asociadas a clientes.
- * Permite crear y actualizar los datos de geometría de las geocercas.
- * Las geocercas son fundamentales para la lógica de negocio de rutas y entregas.
+ * Permite crear y actualizar los datos de geometría de las geocercas, ya sea
+ * manualmente con formato WKT o automáticamente a partir de coordenadas.
  */
 
 // Esquema de validación para el formulario de geocerca.
 const geofenceSchema = z.object({
   code_customer: z.string().min(1, { message: "Debe seleccionar un cliente." }),
-  geocerca: z.string().min(10, { message: "El campo de geocerca debe tener al menos 10 caracteres y un formato WKT válido (ej: POLYGON(...))." })
+  geocerca: z.string().optional(), // Para entrada manual de WKT
+  coordinates: z.string().optional(), // Para entrada de "lat, lon"
 })
 
 // Tipos de datos para esta página.
@@ -53,13 +54,9 @@ const ITEMS_PER_PAGE = 10;
  */
 export default function GeofencesPage() {
   // --- ESTADOS ---
-  // Almacena todos los clientes para el selector del formulario (no paginado).
   const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
-  // Almacena los clientes para mostrar en la tabla (paginado).
   const [paginatedCustomers, setPaginatedCustomers] = useState<Customer[]>([]);
-  // Controla la visibilidad del diálogo de edición/creación.
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  // Almacena el cliente cuya geocerca se está editando.
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const { toast } = useToast()
   
@@ -75,15 +72,12 @@ export default function GeofencesPage() {
     defaultValues: {
       code_customer: "",
       geocerca: "",
+      coordinates: "",
     },
   })
 
   // --- LÓGICA DE DATOS Y EFECTOS ---
 
-  /**
-   * Obtiene la lista de clientes paginada y filtrada para mostrar en la tabla.
-   * La consulta se hace del lado del servidor para optimizar el rendimiento.
-   */
   const fetchCustomers = useCallback(async () => {
     const from = (currentPage - 1) * ITEMS_PER_PAGE;
     const to = from + ITEMS_PER_PAGE - 1;
@@ -111,10 +105,6 @@ export default function GeofencesPage() {
     }
   }, [toast, currentPage, searchQuery]);
   
-  /**
-   * Obtiene la lista completa de todos los clientes para poblar el menú desplegable del formulario.
-   * No se pagina para que el usuario pueda seleccionar cualquier cliente.
-   */
   const fetchAllCustomersForSelect = useCallback(async () => {
     const { data, error } = await supabase.from('customer').select('code_customer, customer_name, geocerca').order('customer_name');
     if (!error && data) {
@@ -122,58 +112,96 @@ export default function GeofencesPage() {
     }
   }, []);
 
-  // Carga los clientes paginados cada vez que cambia la página o la búsqueda.
   useEffect(() => {
     fetchCustomers();
   }, [fetchCustomers]);
   
-  // Carga todos los clientes para el selector solo una vez al montar el componente.
   useEffect(() => {
     fetchAllCustomersForSelect();
   }, [fetchAllCustomersForSelect]);
   
-  // Rellena el formulario con los datos del cliente a editar.
   useEffect(() => {
     if (editingCustomer) {
       form.reset({
           code_customer: editingCustomer.code_customer,
           geocerca: editingCustomer.geocerca ?? '',
+          coordinates: "", // Siempre limpiar este campo al abrir
       });
     } else {
-      form.reset({ code_customer: "", geocerca: "" });
+      form.reset({ code_customer: "", geocerca: "", coordinates: "" });
     }
   }, [editingCustomer, form]);
 
   /**
    * Gestiona el envío del formulario para guardar o actualizar la geocerca de un cliente.
+   * Prioriza la entrada por coordenadas si se proporciona.
    * @param values Los datos del formulario validados por Zod.
    */
   const onSubmit = async (values: z.infer<typeof geofenceSchema>) => {
-    // PostGIS es robusto, pasamos el string WKT directamente después de limpiarlo.
-    // La base de datos se encargará de la validación.
-    const geocercaWKT = values.geocerca.trim() || null;
+    // Opción 1: Regenerar a partir de coordenadas.
+    if (values.coordinates && values.coordinates.trim() !== '') {
+        const coords = values.coordinates.split(',').map(c => c.trim());
+        if (coords.length !== 2 || isNaN(parseFloat(coords[0])) || isNaN(parseFloat(coords[1]))) {
+            toast({
+                title: "Formato de coordenadas inválido",
+                description: "Use el formato 'latitud, longitud'. Ej: 13.711, -89.223",
+                variant: "destructive",
+            });
+            return;
+        }
+        const [lat, lon] = coords.map(parseFloat);
+        const last_known_location = `POINT(${lon} ${lat})`;
 
-    const { error } = await supabase
-        .from('customer')
-        .update({ geocerca: geocercaWKT })
-        .eq('code_customer', values.code_customer);
+        // Paso 1: Actualizar last_known_location y poner geocerca a null para forzar la regeneración.
+        const { error: updateError } = await supabase
+            .from('customer')
+            .update({ last_known_location, geocerca: null })
+            .eq('code_customer', values.code_customer);
 
-    if (error) {
-        // Proporciona un error más descriptivo
+        if (updateError) {
+            toast({
+                title: "Error al actualizar ubicación",
+                description: `No se pudo guardar la nueva ubicación. Error: ${updateError.message}`,
+                variant: "destructive",
+            });
+            return;
+        }
+
         toast({
-            title: "Error al guardar la geocerca",
-            description: `El formato de la geocerca podría ser inválido. Error: ${error.message}`,
-            variant: "destructive",
-            duration: 9000, // Mensaje más largo para que el usuario pueda leerlo
-        })
-    } else {
-        toast({
-            title: "Éxito",
-            description: "Geocerca guardada correctamente.",
-        })
+            title: "Ubicación actualizada",
+            description: "La ubicación se guardó. Ahora se generará la nueva geocerca...",
+        });
+
+        // Paso 2: Llamar a la función que genera la geocerca para los clientes que la necesiten.
+        await handleUpdateMissingGeofences(); 
+        
         fetchCustomers();
         fetchAllCustomersForSelect();
         handleCloseDialog();
+        
+    } else { // Opción 2: Guardar manualmente el WKT de la geocerca.
+        const geocercaWKT = values.geocerca ? values.geocerca.trim() : null;
+        const { error } = await supabase
+            .from('customer')
+            .update({ geocerca: geocercaWKT })
+            .eq('code_customer', values.code_customer);
+        
+        if (error) {
+            toast({
+                title: "Error al guardar la geocerca",
+                description: `El formato de la geocerca podría ser inválido. Error: ${error.message}`,
+                variant: "destructive",
+                duration: 9000,
+            })
+        } else {
+            toast({
+                title: "Éxito",
+                description: "Geocerca guardada manualmente.",
+            })
+            fetchCustomers();
+            fetchAllCustomersForSelect();
+            handleCloseDialog();
+        }
     }
   }
   
@@ -213,13 +241,11 @@ export default function GeofencesPage() {
 
   // --- FUNCIONES AUXILIARES DE LA UI ---
 
-  /** Prepara el formulario para editar la geocerca de un cliente. */
   const handleEdit = (customer: Customer) => {
     setEditingCustomer(customer);
     setIsDialogOpen(true);
   }
   
-  /** Controla la apertura y cierre del diálogo, reseteando el estado de edición. */
   const handleOpenDialog = (open: boolean) => {
     setIsDialogOpen(open);
     if (!open) {
@@ -227,16 +253,14 @@ export default function GeofencesPage() {
     }
   };
 
-  /** Cierra el diálogo y resetea el estado y el formulario. */
   const handleCloseDialog = () => {
     setEditingCustomer(null);
-    form.reset({ code_customer: "", geocerca: "" });
+    form.reset({ code_customer: "", geocerca: "", coordinates: "" });
     setIsDialogOpen(false);
   }
   
   const totalPages = Math.ceil(totalCustomers / ITEMS_PER_PAGE);
 
-  /** Genera los números de página para mostrar en la paginación. */
   const getPaginationNumbers = () => {
     const pages = [];
     const totalVisiblePages = 5;
@@ -276,7 +300,7 @@ export default function GeofencesPage() {
                   <PlusCircle className="mr-2 h-4 w-4" /> Añadir/Editar Geocerca
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>{editingCustomer ? 'Editar Geocerca' : 'Añadir Nueva Geocerca'}</DialogTitle>
                   <DialogDescription>
@@ -309,18 +333,52 @@ export default function GeofencesPage() {
                           </FormItem>
                         )}
                       />
+                     <FormField
+                        control={form.control}
+                        name="coordinates"
+                        render={({ field }) => (
+                            <FormItem>
+                            <FormLabel>Actualizar desde Coordenadas (lat, lon)</FormLabel>
+                            <FormControl>
+                                <Textarea
+                                placeholder="Ej: 13.7115, -89.2238"
+                                className="resize-y"
+                                rows={2}
+                                {...field}
+                                />
+                            </FormControl>
+                            <FormDescription>
+                                Pegue las coordenadas para generar una geocerca circular de 100m. Esto tendrá prioridad.
+                            </FormDescription>
+                            <FormMessage />
+                            </FormItem>
+                        )}
+                        />
+
+                        <div className="relative">
+                            <div className="absolute inset-0 flex items-center">
+                                <span className="w-full border-t" />
+                            </div>
+                            <div className="relative flex justify-center text-xs uppercase">
+                                <span className="bg-background px-2 text-muted-foreground">
+                                O
+                                </span>
+                            </div>
+                        </div>
+
                     <FormField
                       control={form.control}
                       name="geocerca"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Datos de Geocerca (Formato POLYGON)</FormLabel>
+                          <FormLabel>Datos de Geocerca Manual (Formato WKT)</FormLabel>
                           <FormControl>
                              <Textarea
-                              placeholder="Ej: POLYGON((long1 lat1, long2 lat2, ...)) o GEOMETRYCOLLECTION(POLYGON(...), ...)"
+                              placeholder="Ej: POLYGON((long1 lat1, long2 lat2, ...))"
                               className="resize-y"
                               rows={5}
                               {...field}
+                              value={field.value ?? ''}
                             />
                           </FormControl>
                           <FormMessage />
@@ -452,3 +510,5 @@ export default function GeofencesPage() {
     </Card>
   )
 }
+
+    
