@@ -77,11 +77,15 @@ export function MainNav({ session }: MainNavProps) {
   const isRestrictedRole = restrictedRoles.some(role => userRole.includes(role));
   const isFacturacionRole = userRole.includes('facturacion');
   const isAdmin = userRole.includes('admin');
+  const isVerificador = userRole.includes('verificador');
 
   // Lógica de menú mejorada.
   let menuItemsToRender = allMenuItems;
 
-  if (isRestrictedRole) {
+  if (isVerificador) {
+    // Rol de verificador solo ve generación de ruta.
+    menuItemsToRender = allMenuItems.filter(item => item.href === '/route-generation');
+  } else if (isRestrictedRole) {
     // Roles operativos solo ven despachos.
     menuItemsToRender = allMenuItems.filter(item => item.href === '/shipments');
   } else if (isFacturacionRole) {

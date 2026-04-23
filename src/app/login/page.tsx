@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 
-// Se lee la clave secreta desde las variables de entorno para el hash de contraseñas.
+// Se lee la clave secreta desde las variables de entorno.
 // Es crucial que esta variable esté definida en tu entorno.
 const HMAC_SECRET_KEY = process.env.NEXT_PUBLIC_HMAC_SECRET_KEY;
 
@@ -118,7 +118,9 @@ export default function LoginPage() {
         
         const isRestricted = restrictedRoles.some(role => userRole.includes(role));
 
-        if (isRestricted) {
+        if (userRole.includes('verificador')) {
+          window.location.href = "/route-generation";
+        } else if (isRestricted) {
           window.location.href = "/shipments";
         } else if (userRole.includes('facturacion')) {
           window.location.href = "/invoicing";
