@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useState, useEffect } from "react"
@@ -36,7 +35,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Card, CardFooter, CardContent } from "@/components/ui/card"
 
 const taxSchema = z.object({
-  id_impuesto: z.string().min(1, { message: "El ID del impuesto es requerido." }),
+  id_impuesto: z.coerce.number({ invalid_type_error: "El ID debe ser un número." }).positive({ message: "El ID no puede ser cero o negativo." }),
   impt_desc: z.string().min(1, { message: "La descripción es requerida." }),
 })
 
@@ -51,7 +50,7 @@ export default function Taxes() {
   const form = useForm<Tax>({
     resolver: zodResolver(taxSchema),
     defaultValues: {
-      id_impuesto: "",
+      id_impuesto: undefined,
       impt_desc: "",
     },
   })
@@ -64,7 +63,7 @@ export default function Taxes() {
     if (editingTax) {
       form.reset(editingTax);
     } else {
-      form.reset({ id_impuesto: "", impt_desc: "" });
+      form.reset({ id_impuesto: undefined, impt_desc: "" });
     }
   }, [editingTax, form]);
 
@@ -86,7 +85,7 @@ export default function Taxes() {
     if (editingTax) {
       const { error: updateError } = await supabase
         .from('tipo_impuesto')
-        .update(values)
+        .update({ impt_desc: values.impt_desc })
         .eq('id_impuesto', editingTax.id_impuesto)
         .select()
       error = updateError;
@@ -114,7 +113,7 @@ export default function Taxes() {
     }
   }
 
-  const handleDelete = async (taxId: string) => {
+  const handleDelete = async (taxId: number) => {
     const { error } = await supabase
       .from('tipo_impuesto')
       .delete()
@@ -157,7 +156,7 @@ export default function Taxes() {
   
   const handleCloseDialog = () => {
     setEditingTax(null);
-    form.reset({ id_impuesto: "", impt_desc: "" });
+    form.reset({ id_impuesto: undefined, impt_desc: "" });
     setIsDialogOpen(false);
   }
 
@@ -187,7 +186,7 @@ export default function Taxes() {
                       <FormItem>
                         <FormLabel>ID Impuesto</FormLabel>
                         <FormControl>
-                          <Input placeholder="Ej: IVA-15" {...field} disabled={!!editingTax} />
+                          <Input type="number" placeholder="Ej: 1" {...field} disabled={!!editingTax} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -273,5 +272,3 @@ export default function Taxes() {
     </Card>
   )
 }
-
-    

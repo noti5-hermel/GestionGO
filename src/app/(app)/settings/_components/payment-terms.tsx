@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useState, useEffect } from "react"
@@ -36,7 +35,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Card, CardFooter, CardContent } from "@/components/ui/card"
 
 const paymentTermSchema = z.object({
-  id_term: z.string().min(1, { message: "El ID del término es requerido." }),
+  id_term: z.coerce.number({ invalid_type_error: "El ID debe ser un número." }).positive({ message: "El ID no puede ser cero o negativo." }),
   term_desc: z.string().min(1, { message: "La descripción es requerida." }),
 })
 
@@ -51,7 +50,7 @@ export default function PaymentTerms() {
   const form = useForm<PaymentTerm>({
     resolver: zodResolver(paymentTermSchema),
     defaultValues: {
-      id_term: "",
+      id_term: undefined,
       term_desc: "",
     },
   })
@@ -64,7 +63,7 @@ export default function PaymentTerms() {
     if (editingTerm) {
       form.reset(editingTerm);
     } else {
-      form.reset({ id_term: "", term_desc: "" });
+      form.reset({ id_term: undefined, term_desc: "" });
     }
   }, [editingTerm, form]);
 
@@ -86,7 +85,7 @@ export default function PaymentTerms() {
     if (editingTerm) {
       const { error: updateError } = await supabase
         .from('terminos_pago')
-        .update(values)
+        .update({ term_desc: values.term_desc })
         .eq('id_term', editingTerm.id_term)
         .select()
       error = updateError;
@@ -114,7 +113,7 @@ export default function PaymentTerms() {
     }
   }
 
-  const handleDelete = async (termId: string) => {
+  const handleDelete = async (termId: number) => {
     const { error } = await supabase
       .from('terminos_pago')
       .delete()
@@ -157,7 +156,7 @@ export default function PaymentTerms() {
   
   const handleCloseDialog = () => {
     setEditingTerm(null);
-    form.reset({ id_term: "", term_desc: "" });
+    form.reset({ id_term: undefined, term_desc: "" });
     setIsDialogOpen(false);
   }
 
@@ -187,7 +186,7 @@ export default function PaymentTerms() {
                       <FormItem>
                         <FormLabel>ID Término</FormLabel>
                         <FormControl>
-                          <Input placeholder="Ej: Neto-15" {...field} disabled={!!editingTerm} />
+                          <Input type="number" placeholder="Ej: 1" {...field} disabled={!!editingTerm} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -273,5 +272,3 @@ export default function PaymentTerms() {
     </Card>
   )
 }
-
-    
