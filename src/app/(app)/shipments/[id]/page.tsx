@@ -1032,6 +1032,7 @@ export default function ShipmentDetailPage() {
         )}
         <TableCell className="font-medium">{String(invoice.reference_number || invoice.id_factura)}</TableCell>
         <TableCell>{invoice.customer_name || 'N/A'}</TableCell>
+        <TableCell>{invoice.code_customer}</TableCell>
         <TableCell>
             <Badge variant={invoice.geocerca ? 'default' : 'outline'}>{invoice.geocerca ? 'Sí' : 'No'}</Badge>
         </TableCell>
@@ -1179,6 +1180,7 @@ export default function ShipmentDetailPage() {
                           {isFacturacion && <TableHead className="w-20">Orden</TableHead>}
                           <TableHead>No. Factura</TableHead>
                           <TableHead>Nombre del Cliente</TableHead>
+                          <TableHead>Código Cliente</TableHead>
                           <TableHead>Geocerca</TableHead>
                           <TableHead>Comprobante</TableHead>
                           <TableHead>Fecha Entrega</TableHead>
@@ -1192,7 +1194,7 @@ export default function ShipmentDetailPage() {
                   <TableBody>
                       {filteredAndSortedInvoices.length > 0 ? filteredAndSortedInvoices.map((invoice, index) => renderInvoiceRow(invoice, index, isFacturacion)) : (
                           <TableRow>
-                              <TableCell colSpan={isFacturacion ? 11 : 10} className="text-center">No hay facturas que coincidan con la búsqueda.</TableCell>
+                              <TableCell colSpan={isFacturacion ? 12 : 11} className="text-center">No hay facturas que coincidan con la búsqueda.</TableCell>
                           </TableRow>
                       )}
                   </TableBody>
@@ -1212,7 +1214,7 @@ export default function ShipmentDetailPage() {
                                               {invoice.state ? "Completado" : "Pendiente"}
                                           </Badge>
                                       </div>
-                                      <p className="text-sm text-muted-foreground truncate font-normal mt-1">{invoice.customer_name || 'N/A'}</p>
+                                      <p className="text-sm text-muted-foreground truncate font-normal mt-1">{invoice.code_customer} - {invoice.customer_name || 'N/A'}</p>
                                   </div>
                               </div>
                           </AccordionTrigger>
