@@ -83,8 +83,9 @@ export function MainNav({ session }: MainNavProps) {
   let menuItemsToRender = allMenuItems;
 
   if (isVerificador) {
-    // Rol de verificador solo ve generación de ruta.
-    menuItemsToRender = allMenuItems.filter(item => item.href === '/route-generation');
+    // Rol de verificador solo ve generación de ruta y geocercas.
+    const allowedHrefs = ['/route-generation', '/geofences'];
+    menuItemsToRender = allMenuItems.filter(item => allowedHrefs.includes(item.href));
   } else if (isRestrictedRole) {
     // Roles operativos solo ven despachos.
     menuItemsToRender = allMenuItems.filter(item => item.href === '/shipments');
