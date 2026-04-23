@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from "react"
@@ -9,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
-import { List, MapPin, Search } from "lucide-react"
+import { List, MapPin, Search, Trash2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 
 /**
@@ -217,6 +216,16 @@ export default function RouteGenerationPage() {
     setSelectedCustomers(newSelection);
   }
 
+  const handleRemoveFromGeneratedRoute = (customerId: string) => {
+    // Remove from the visual generated list
+    setGeneratedRoute(prev => prev.filter(c => c.code_customer !== customerId));
+    // Uncheck the customer from the selection list
+    setSelectedCustomers(prev => ({
+      ...prev,
+      [customerId]: false,
+    }));
+  };
+
   const allSelected = filteredCustomers.length > 0 && filteredCustomers.every(c => selectedCustomers[c.code_customer]);
 
   return (
@@ -296,7 +305,12 @@ export default function RouteGenerationPage() {
                 <ScrollArea className="h-[calc(100%-40px)]">
                     <ol className="list-decimal list-inside space-y-2">
                     {generatedRoute.map(customer => (
-                        <li key={customer.code_customer}>{customer.customer_name}</li>
+                        <li key={customer.code_customer} className="flex items-center justify-between">
+                            <span>{customer.customer_name}</span>
+                             <Button variant="ghost" size="icon" onClick={() => handleRemoveFromGeneratedRoute(customer.code_customer)}>
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                        </li>
                     ))}
                     </ol>
                 </ScrollArea>
