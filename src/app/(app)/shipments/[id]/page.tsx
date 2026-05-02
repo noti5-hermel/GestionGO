@@ -1,8 +1,7 @@
 
-
 'use client'
 
-import { useState, useEffect, useRef, useMemo } from "react"
+import { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -13,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
-import { ArrowLeft, Pencil, Upload, Camera, X, FileText, Loader2, MapPin, Play, Square, ListOrdered, ArrowUp, ArrowDown, Search } from "lucide-react"
+import { ArrowLeft, Pencil, Upload, Camera, X, FileText, Loader2, MapPin, Play, Square, ListOrdered, ArrowUp, ArrowDown, Search, PlusCircle } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
@@ -23,6 +22,7 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 import { generateShipmentPDF } from "@/lib/generate-shipment-pdf"
 import { PdfPreviewModal } from "@/components/pdf-preview-modal"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import { AsyncCombobox } from "@/components/ui/async-combobox"
 
 /**
  * @file shipments/[id]/page.tsx
@@ -46,6 +46,19 @@ const shipmentInvoiceEditSchema = z.object({
 });
 
 type ShipmentInvoiceEditValues = z.infer<typeof shipmentInvoiceEditSchema>;
+
+/**
+ * Esquema de validación para crear una nueva factura desde el despacho.
+ */
+const newInvoiceInShipmentSchema = z.object({
+  id_factura: z.string().min(1, "El número de factura es requerido."),
+  code_customer: z.string().min(1, "El código de cliente es requerido."),
+  customer_name: z.string().min(1, "El nombre del cliente es requerido."),
+  grand_total: z.coerce.number().min(0.01, "El total debe ser mayor a 0."),
+  ruta: z.string().min(1, "La ruta es requerida."),
+});
+
+type NewInvoiceInShipmentValues = z.infer<typeof newInvoiceInShipmentSchema>;
 
 // Tipos de datos para la página de detalle del despacho.
 type Shipment = {
@@ -155,8 +168,10 @@ export default function ShipmentDetailPage() {
 
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Estado para el diálogo de nueva factura
+  const [isAddInvoiceDialogOpen, setIsAddInvoiceDialogOpen] = useState(false);
 
-  // --- FORMULARIO ---
+  // --- FORMULARIOS ---
   const form = useForm<ShipmentInvoiceEditValues>({
     resolver: zodResolver(shipmentInvoiceEditSchema),
     defaultValues: {
@@ -165,6 +180,17 @@ export default function ShipmentDetailPage() {
       monto: 0,
       state: false,
       fecha_entrega: null,
+    },
+  });
+
+  const addInvoiceForm = useForm<NewInvoiceInShipmentValues>({
+    resolver: zodResolver(newInvoiceInShipmentSchema),
+    defaultValues: {
+      id_factura: "",
+      code_customer: "",
+      customer_name: "",
+      grand_total: 0,
+      ruta: "",
     },
   });
 
@@ -471,6 +497,78 @@ export default function ShipmentDetailPage() {
       }
       fetchData(); // Recarga los datos para reflejar los cambios.
       closeInvoiceDialog();
+    }
+  };
+
+  /**
+   * Crea una nueva factura y la asigna al despacho.
+   */
+  const handleCreateAndAssignInvoice = async (values: NewInvoiceInShipmentValues) => {
+    if (!shipment) return;
+    setLoading(true);
+
+    try {
+      // 1. Obtener detalles adicionales del cliente (término de pago)
+      const { data: customer, error: customerError } = await supabase
+        .from('customer')
+        .select('id_term')
+        .eq('code_customer', values.code_customer)
+        .single();
+
+      if (customerError) throw new Error("No se pudieron obtener detalles del cliente.");
+
+      const { data: term, error: termError } = await supabase
+        .from('terminos_pago')
+        .select('term_desc')
+        .eq('id_term', customer.id_term)
+        .single();
+      
+      const termDesc = term?.term_desc || "N/A";
+
+      // 2. Insertar en la tabla 'facturacion'
+      const { error: insertInvoiceError } = await supabase.from('facturacion').insert({
+        id_factura: values.id_factura,
+        reference_number: values.id_factura,
+        code_customer: values.code_customer,
+        customer_name: values.customer_name,
+        tax_id_number: '0',
+        subtotal: values.grand_total,
+        total_sale: 0,
+        grand_total: values.grand_total,
+        payment: 0,
+        net_to_pay: values.grand_total,
+        term_description: termDesc,
+        fecha: new Date().toISOString().split('T')[0],
+        fecha_import: new Date().toISOString(),
+        state: false,
+        ruta: values.ruta,
+      });
+
+      if (insertInvoiceError) throw new Error(`Error al crear factura: ${insertInvoiceError.message}`);
+
+      // 3. Asociar al despacho en 'facturacion_x_despacho'
+      const { error: assignError } = await supabase.from('facturacion_x_despacho').insert({
+        id_despacho: parseInt(shipment.id_despacho, 10),
+        id_factura: values.id_factura,
+        monto: 0,
+        state: false,
+        forma_pago: 'Efectivo',
+      });
+
+      if (assignError) throw new Error(`Error al asignar factura: ${assignError.message}`);
+
+      toast({ title: "Éxito", description: "Factura creada y asignada correctamente." });
+      
+      // 4. Recalcular totales y refrescar
+      await recalculateAndSaveShipmentTotals(shipment.id_despacho);
+      fetchData();
+      setIsAddInvoiceDialogOpen(false);
+      addInvoiceForm.reset();
+
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -935,6 +1033,41 @@ export default function ShipmentDetailPage() {
       setCapturedImage(dataUrl);
     }
   };
+
+  const searchCustomers = useCallback(async (query: string) => {
+    if (!query) return [];
+    const { data, error } = await supabase
+      .from('customer')
+      .select('code_customer, customer_name, ruta')
+      .or(`code_customer.ilike.%${query}%,customer_name.ilike.%${query}%`)
+      .limit(10);
+    
+    if (error) return [];
+    return (data || []).map(c => ({
+      value: c.code_customer,
+      label: `${c.code_customer} - ${c.customer_name}`
+    }));
+  }, []);
+
+  const handleCustomerChange = async (code: string) => {
+    if (!code) {
+      addInvoiceForm.setValue('customer_name', '');
+      addInvoiceForm.setValue('ruta', '');
+      return;
+    }
+    const { data: customer } = await supabase
+        .from('customer')
+        .select('customer_name, ruta')
+        .eq('code_customer', code)
+        .single();
+    
+    if (customer) {
+      addInvoiceForm.setValue('code_customer', code);
+      addInvoiceForm.setValue('customer_name', customer.customer_name);
+      addInvoiceForm.setValue('ruta', String(customer.ruta || ''));
+    }
+  };
+
   const getRouteDescription = (routeId: string) => routes.find(route => String(route.id_ruta) === String(routeId))?.ruta_desc || routeId
   const getUserName = (userId: string) => users.find(user => String(user.id_user) === String(userId))?.name || userId
   const formatDate = (dateString: string) => {
@@ -1156,10 +1289,17 @@ export default function ShipmentDetailPage() {
       
       <Card>
         <CardHeader>
-            <CardTitle>Facturas del Despacho</CardTitle>
-            <CardDescription>
-                {isFacturacion ? "Use las flechas para establecer un orden de visita manual." : "Listado de todas las facturas incluidas en este despacho."}
-            </CardDescription>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                <CardTitle>Facturas del Despacho</CardTitle>
+                <CardDescription>
+                    {isFacturacion ? "Use las flechas para establecer un orden de visita manual." : "Listado de todas las facturas incluidas en este despacho."}
+                </CardDescription>
+              </div>
+              <Button onClick={() => setIsAddInvoiceDialogOpen(true)}>
+                <PlusCircle className="mr-2 h-4 w-4" /> Agregar Factura
+              </Button>
+            </div>
             <div className="relative pt-4">
                 <Search className="absolute left-2.5 top-6 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -1420,6 +1560,90 @@ export default function ShipmentDetailPage() {
         </DialogContent>
       </Dialog>
       
+      {/* Diálogo para agregar nueva factura */}
+      <Dialog open={isAddInvoiceDialogOpen} onOpenChange={setIsAddInvoiceDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nueva Facturación para Despacho</DialogTitle>
+            <DialogDescription>
+              Cree una factura y asígnela automáticamente a este despacho.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...addInvoiceForm}>
+            <form onSubmit={addInvoiceForm.handleSubmit(handleCreateAndAssignInvoice)} className="space-y-4">
+              <FormField
+                control={addInvoiceForm.control}
+                name="id_factura"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>No. Factura</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ej: F-12345" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={addInvoiceForm.control}
+                name="code_customer"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Código Cliente</FormLabel>
+                    <AsyncCombobox
+                      value={field.value}
+                      onValueChange={handleCustomerChange}
+                      loadOptions={searchCustomers}
+                      placeholder="Buscar cliente..."
+                    />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={addInvoiceForm.control}
+                name="customer_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nombre Cliente</FormLabel>
+                    <FormControl>
+                      <Input {...field} readOnly className="bg-muted" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={addInvoiceForm.control}
+                name="grand_total"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Total de la Factura</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="0.01" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="flex items-center gap-2 pt-2">
+                 <span className="text-sm font-medium">Estado inicial:</span>
+                 <Badge variant="secondary">Pendiente</Badge>
+              </div>
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button type="button" variant="secondary">Cancelar</Button>
+                </DialogClose>
+                <Button type="submit" disabled={loading}>
+                  {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Crear y Asignar
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
       {/* Diálogo para visualizar la imagen del comprobante */}
       <Dialog open={imageModalOpen} onOpenChange={setImageModalOpen}>
         <DialogContent className="max-w-3xl">
