@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
-import { ArrowLeft, Pencil, Upload, Camera, X, FileText, Loader2, MapPin, Play, Square, ListOrdered, ArrowUp, ArrowDown, Search, PlusCircle } from "lucide-react"
+import { ArrowLeft, Pencil, Upload, Camera, X, FileText, Loader2, MapPin, Play, Square, ListOrdered, ArrowUp, ArrowDown, Search, PlusCircle, Trash2 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
@@ -23,20 +23,27 @@ import { generateShipmentPDF } from "@/lib/generate-shipment-pdf"
 import { PdfPreviewModal } from "@/components/pdf-preview-modal"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { AsyncCombobox } from "@/components/ui/async-combobox"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 /**
  * @file shipments/[id]/page.tsx
- * @description Página de detalle para un despacho. Permite ver toda la información, gestionar el estado
- * del recorrido (iniciar/finalizar) para el seguimiento GPS, editar facturas, subir comprobantes,
- * y restringir acciones por geocerca para los motoristas. También ofrece una lista ordenada de visitas
- * que puede ser definida manualmente por el rol de facturación.
+ * @description Página de detalle para un despacho.
+ * Permite gestionar el estado del recorrido, editar facturas, subir comprobantes.
+ * La creación y eliminación de facturas del despacho está limitada al rol ADMIN.
  */
 
 const BUCKET_NAME = 'comprobante';
 
-/**
- * Esquema de validación para el formulario de edición de la factura del despacho.
- */
 const shipmentInvoiceEditSchema = z.object({
   comprobante: z.string().optional(),
   forma_pago: z.enum(["Efectivo", "Tarjeta", "Transferencia", "Quedan", "Firma", "Credito", "Devolucion"]),
@@ -47,9 +54,6 @@ const shipmentInvoiceEditSchema = z.object({
 
 type ShipmentInvoiceEditValues = z.infer<typeof shipmentInvoiceEditSchema>;
 
-/**
- * Esquema de validación para crear una nueva factura desde el despacho.
- */
 const newInvoiceInShipmentSchema = z.object({
   id_factura: z.string().min(1, "El número de factura es requerido."),
   code_customer: z.string().min(1, "El código de cliente es requerido."),
@@ -60,7 +64,6 @@ const newInvoiceInShipmentSchema = z.object({
 
 type NewInvoiceInShipmentValues = z.infer<typeof newInvoiceInShipmentSchema>;
 
-// Tipos de datos para la página de detalle del despacho.
 type Shipment = {
   id_despacho: string
   id_ruta: string
@@ -88,29 +91,23 @@ export type ShipmentInvoice = {
   monto: number
   state: boolean
   fecha_entrega: string | null;
-  orden_visita: number | null; // Nuevo campo para el orden manual
-  reference_number?: string | number // Opcional, se añade después desde la tabla `facturacion`
+  orden_visita: number | null;
+  reference_number?: string | number
   customer_name?: string
-  tax_type?: string // Opcional, se añade después a través de joins
-  net_to_pay: number // No es opcional para la validación
+  tax_type?: string
+  net_to_pay: number
   geocerca?: any;
 }
 
-// Tipo temporal para guardar la ubicación capturada
 type ShipmentInvoiceWithLocation = ShipmentInvoice & {
   _capturedLocation?: { latitude: number; longitude: number } | null;
 }
 
 type User = { id_user: string; name: string; id_rol: number; }
 type Role = { id_ruta: string; ruta_desc: string }
-type Invoice = { id_factura: string, reference_number: string | number, code_customer: string, customer_name: string, net_to_pay: number }
-type Customer = { code_customer: string; id_impuesto: number; geocerca: any };
-type TaxType = { id_impuesto: number; impt_desc: string };
 const paymentMethods: ShipmentInvoice['forma_pago'][] = ["Efectivo", "Tarjeta", "Transferencia", "Quedan", "Firma", "Credito", "Devolucion"];
 const BODEGA_LOCATION = { lat: 13.725410116705362, lng: -89.21911777270175 };
 
-
-/** Componente reutilizable para mostrar un badge de estado del proceso. */
 const StatusBadge = ({ checked, text }: { checked: boolean, text: string }) => {
     return (
         <div className="flex items-center gap-2">
@@ -120,58 +117,39 @@ const StatusBadge = ({ checked, text }: { checked: boolean, text: string }) => {
     )
 }
 
-/**
- * Componente principal de la página de detalle de despacho.
- */
 export default function ShipmentDetailPage() {
   const params = useParams()
   const router = useRouter()
   const { id } = params
   const { toast } = useToast()
 
-  // --- ESTADOS ---
   const [shipment, setShipment] = useState<Shipment | null>(null)
   const [invoices, setInvoices] = useState<ShipmentInvoice[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [routes, setRoutes] = useState<Role[]>([])
   const [loading, setLoading] = useState(true)
-
-  // Estados para el diálogo de edición de factura.
   const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
   const [editingShipmentInvoice, setEditingShipmentInvoice] = useState<ShipmentInvoiceWithLocation | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  // Estados para el modal de visualización de imagen.
   const [imageModalOpen, setImageModalOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState('');
-
-  // Estados para la funcionalidad de la cámara.
   const [isCameraDialogOpen, setIsCameraDialogOpen] = useState(false);
   const [invoiceForCamera, setInvoiceForCamera] = useState<ShipmentInvoiceWithLocation | null>(null);
   const [hasCameraPermission, setHasCameraPermission] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  
-  // Estados para la previsualización del PDF.
   const [pdfData, setPdfData] = useState<{ dataUri: string; fileName: string } | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-  
   const [currentUser, setCurrentUser] = useState<any | null>(null);
   const [verifyingLocationInvoiceId, setVerifyingLocationInvoiceId] = useState<number | null>(null);
-
-  // Estados para la nueva funcionalidad de orden de visita.
   const [orderedRoute, setOrderedRoute] = useState<ShipmentInvoice[]>([]);
   const [isOrderDialogOpen, setIsOrderDialogOpen] = useState(false);
   const [isOptimizingRoute, setIsOptimizingRoute] = useState(false);
-
   const [searchQuery, setSearchQuery] = useState('');
-
-  // Estado para el diálogo de nueva factura
   const [isAddInvoiceDialogOpen, setIsAddInvoiceDialogOpen] = useState(false);
 
-  // --- FORMULARIOS ---
   const form = useForm<ShipmentInvoiceEditValues>({
     resolver: zodResolver(shipmentInvoiceEditSchema),
     defaultValues: {
@@ -194,17 +172,10 @@ export default function ShipmentDetailPage() {
     },
   });
 
-  // --- LÓGICA DE DATOS Y EFECTOS ---
-
-  /**
-   * Función principal para obtener todos los datos necesarios para la página:
-   * detalles del despacho, usuarios, rutas y facturas asociadas (con datos enriquecidos).
-   */
   const fetchData = async () => {
     if (!id) return;
     setLoading(true)
     
-    // 1. Obtiene los datos principales en paralelo.
     const [
       shipmentRes,
       usersRes,
@@ -226,7 +197,6 @@ export default function ShipmentDetailPage() {
     if (routesRes.error) toast({ title: "Error", description: "No se pudieron cargar las rutas.", variant: "destructive" })
     else setRoutes(routesRes.data as Role[])
     
-    // 2. Si hay facturas asociadas, las enriquece con datos de otras tablas.
     if (shipmentInvoicesRes.error) {
       toast({ title: "Error", description: "No se pudieron cargar las facturas asociadas.", variant: "destructive" })
     } else {
@@ -235,24 +205,20 @@ export default function ShipmentDetailPage() {
       const invoiceIds = shipmentInvoicesData.map(inv => inv.id_factura)
 
       if (invoiceIds.length > 0) {
-          // Obtiene detalles de las facturas.
           const { data: invoicesData, error: invoicesError } = await supabase.from('facturacion').select('id_factura, reference_number, code_customer, customer_name, net_to_pay').in('id_factura', invoiceIds)
           if (invoicesError) {
               toast({ title: "Error", description: "No se pudieron cargar los datos de facturas.", variant: "destructive" });
           } else {
-              // Obtiene detalles de los clientes para saber el tipo de impuesto.
               const customerCodes = (invoicesData || []).map(inv => inv.code_customer)
               const { data: customersData, error: customersError } = await supabase.from('customer').select('code_customer, id_impuesto, geocerca').in('code_customer', customerCodes)
               if (customersError) {
                   toast({ title: "Error", description: "No se pudieron cargar los datos de clientes.", variant: "destructive" });
               } else {
-                  // Obtiene los tipos de impuesto.
                   const taxIds = (customersData || []).map(c => c.id_impuesto)
                   const { data: taxesData, error: taxesError } = await supabase.from('tipo_impuesto').select('id_impuesto, impt_desc').in('id_impuesto', taxIds)
                   if (taxesError) {
                       toast({ title: "Error", description: "No se pudieron cargar los tipos de impuesto.", variant: "destructive" });
                   } else {
-                      // Crea mapas para un acceso rápido y eficiente a los datos.
                       const taxMap = new Map((taxesData || []).map(t => [t.id_impuesto, t.impt_desc]))
                       const customerMap = new Map((customersData || []).map(c => [c.code_customer, { tax: taxMap.get(c.id_impuesto), geofence: c.geocerca }]));
 
@@ -263,13 +229,10 @@ export default function ShipmentDetailPage() {
                         net_to_pay: i.net_to_pay,
                       }]));
 
-                      // Combina todos los datos en un solo array de facturas enriquecidas.
                       const enrichedInvoices = shipmentInvoicesData.map(si => {
                         const invoiceInfo = invoiceInfoMap.get(si.id_factura);
                         const customerInfo = customerMap.get(invoiceInfo?.code_customer || '');
-                        
                         const normalizedState: boolean = si.state === true;
-
                         return {
                           ...si,
                           state: normalizedState,
@@ -288,30 +251,24 @@ export default function ShipmentDetailPage() {
         setInvoices([])
       }
     }
-
     setLoading(false)
   }
   
-    useEffect(() => {
+  useEffect(() => {
     try {
       const userSession = localStorage.getItem('user-session');
-      if (userSession) {
-        setCurrentUser(JSON.parse(userSession));
-      }
+      if (userSession) setCurrentUser(JSON.parse(userSession));
     } catch (error) {
-      console.error("Failed to parse user session from localStorage", error);
+      console.error("Failed to parse user session", error);
     }
   }, []);
 
-  // Efecto para cargar todos los datos cuando el ID del despacho cambia.
   useEffect(() => {
     fetchData()
-  }, [id, toast])
+  }, [id])
   
-  // Efecto para rellenar el formulario de edición cuando se selecciona una factura.
   useEffect(() => {
     if (editingShipmentInvoice) {
-        // Resetea los valores del formulario.
         form.reset({
             comprobante: editingShipmentInvoice.comprobante,
             forma_pago: editingShipmentInvoice.forma_pago,
@@ -323,209 +280,103 @@ export default function ShipmentDetailPage() {
     setSelectedFile(null);
   }, [editingShipmentInvoice, form]);
 
-  // Efecto para manejar el acceso y la limpieza de la cámara.
   useEffect(() => {
     const getCameraPermission = async () => {
       if (!isCameraDialogOpen) return;
-      setHasCameraPermission(false); // Reset on open
+      setHasCameraPermission(false);
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
+        if (videoRef.current) videoRef.current.srcObject = stream;
         setHasCameraPermission(true);
       } catch (error) {
         console.error('Error accessing camera:', error);
-        toast({
-          variant: 'destructive',
-          title: 'Acceso a la cámara denegado',
-          description: 'Por favor, habilite los permisos de la cámara en su navegador.',
-        });
+        toast({ variant: 'destructive', title: 'Acceso a la cámara denegado' });
         closeCameraDialog();
       }
     };
     getCameraPermission();
-
-    return () => { // Cleanup: detiene la cámara al cerrar el diálogo.
+    return () => {
       if (videoRef.current && videoRef.current.srcObject) {
         const stream = videoRef.current.srcObject as MediaStream;
         stream.getTracks().forEach(track => track.stop());
       }
     }
-  }, [isCameraDialogOpen, toast]);
+  }, [isCameraDialogOpen]);
 
-  /**
-   * Sube un archivo de comprobante a Supabase Storage.
-   * @returns La URL pública de la imagen subida.
-   */
   const uploadComprobante = async (): Promise<string | undefined> => {
-    // Si se está editando y hay un archivo nuevo, elimina el antiguo primero.
     if (selectedFile && editingShipmentInvoice?.comprobante) {
         const oldFileName = editingShipmentInvoice.comprobante.split('/').pop();
-        if (oldFileName) {
-            await supabase.storage.from(BUCKET_NAME).remove([oldFileName]);
-        }
+        if (oldFileName) await supabase.storage.from(BUCKET_NAME).remove([oldFileName]);
     }
-
-    if (!selectedFile) {
-      return editingShipmentInvoice?.comprobante; // Mantiene la imagen existente si no se selecciona una nueva.
-    }
+    if (!selectedFile) return editingShipmentInvoice?.comprobante;
     setLoading(true);
     const fileName = `${Date.now()}-${selectedFile.name}`;
-    const { error } = await supabase.storage
-      .from(BUCKET_NAME)
-      .upload(fileName, selectedFile, {
-        cacheControl: '3600',
-        upsert: false,
-      });
-
+    const { error } = await supabase.storage.from(BUCKET_NAME).upload(fileName, selectedFile, { cacheControl: '3600', upsert: false });
     setLoading(false);
     if (error) {
       toast({ title: "Error al subir imagen", description: error.message, variant: "destructive" });
       return undefined;
     }
-    
     const { data: { publicUrl } } = supabase.storage.from(BUCKET_NAME).getPublicUrl(fileName);
     return publicUrl;
   };
 
-  /**
-   * Recalcula y actualiza los totales del despacho en la base de datos.
-   */
   const recalculateAndSaveShipmentTotals = async (shipmentId: string) => {
-    // 1. Obtener todas las facturas asociadas a este despacho
     const { data: shipmentInvoicesData, error: shipmentInvoicesError } = await supabase
       .from('facturacion_x_despacho')
       .select('monto, facturacion(net_to_pay, code_customer, customer(id_impuesto, tipo_impuesto(impt_desc)))')
       .eq('id_despacho', shipmentId);
   
-    if (shipmentInvoicesError) {
-      toast({ title: "Error de cálculo", description: "No se pudieron obtener las facturas para recalcular los totales.", variant: "destructive" });
-      return;
-    }
+    if (shipmentInvoicesError) return;
   
-    // 2. Calcular los totales
     let totalContado = 0;
     let totalCredito = 0;
     let totalGeneral = 0;
   
     shipmentInvoicesData.forEach(inv => {
-      // @ts-ignore - La estructura anidada es correcta
+      // @ts-ignore
       const taxDesc = inv.facturacion?.customer?.tipo_impuesto?.impt_desc;
-      
-      if (taxDesc === 'Consumidor Final') {
-        totalContado += inv.monto || 0;
-      } else if (taxDesc === 'Crédito Fiscal') {
-        totalCredito += inv.monto || 0;
-      }
+      if (taxDesc === 'Consumidor Final') totalContado += inv.monto || 0;
+      else if (taxDesc === 'Crédito Fiscal') totalCredito += inv.monto || 0;
       // @ts-ignore
       totalGeneral += inv.facturacion?.net_to_pay || 0;
     });
   
-    // 3. Actualizar el registro del despacho
-    const { error: updateError } = await supabase
-      .from('despacho')
-      .update({
-        total_contado: totalContado,
-        total_credito: totalCredito,
-        total_general: totalGeneral
-      })
-      .eq('id_despacho', shipmentId);
-  
-    if (updateError) {
-      toast({ title: "Error de sincronización", description: "No se pudieron guardar los nuevos totales del despacho.", variant: "destructive" });
-    }
+    await supabase.from('despacho').update({ total_contado: totalContado, total_credito: totalCredito, total_general: totalGeneral }).eq('id_despacho', shipmentId);
   };
 
-  /**
-   * Actualiza los detalles de una factura asociada al despacho.
-   * @param values Los datos del formulario de edición.
-   */
   const handleUpdateInvoice = async (values: ShipmentInvoiceEditValues) => {
     if (!editingShipmentInvoice) return;
-    
     const imageUrl = await uploadComprobante();
-    if (!imageUrl && selectedFile) { 
-        return; // Detiene si la carga falla.
-    }
-
-    const dataToUpdate: any = {
-        comprobante: imageUrl,
-        forma_pago: values.forma_pago,
-        monto: values.monto,
-        state: values.state,
-    };
-    
-    const hasComprobante = !!selectedFile || !!imageUrl;
-    if (values.forma_pago === 'Efectivo' && hasComprobante && values.monto > 0) {
-        dataToUpdate.state = true;
-    }
-
-    // Si se subió un nuevo archivo, se establece la fecha de entrega.
+    if (!imageUrl && selectedFile) return;
+    const dataToUpdate: any = { comprobante: imageUrl, forma_pago: values.forma_pago, monto: values.monto, state: values.state };
+    if (values.forma_pago === 'Efectivo' && (!!selectedFile || !!imageUrl) && values.monto > 0) dataToUpdate.state = true;
     if (selectedFile) {
         dataToUpdate.fecha_entrega = new Date().toISOString();
-
-        // Y si se capturó una ubicación, se guarda.
         if (editingShipmentInvoice._capturedLocation) {
             const { latitude, longitude } = editingShipmentInvoice._capturedLocation;
-            await supabase
-                .from('customer')
-                .update({ last_known_location: `POINT(${longitude} ${latitude})` })
-                .eq('code_customer', editingShipmentInvoice.code_customer);
-            toast({ title: "Ubicación registrada", description: "Se ha guardado la ubicación actual del cliente." });
+            await supabase.from('customer').update({ last_known_location: `POINT(${longitude} ${latitude})` }).eq('code_customer', editingShipmentInvoice.code_customer);
         }
     }
-
-    const { error } = await supabase
-      .from('facturacion_x_despacho')
-      .update(dataToUpdate)
-      .eq('id_fac_desp', editingShipmentInvoice.id_fac_desp);
-    
-    if (error) {
-      toast({
-        title: "Error al actualizar",
-        description: "No se pudo actualizar la factura del despacho.",
-        variant: "destructive",
-      });
-    } else {
-      toast({
-        title: "Éxito",
-        description: "Factura del despacho actualizada correctamente.",
-      });
-      if (shipment) {
-        await recalculateAndSaveShipmentTotals(shipment.id_despacho);
-      }
-      fetchData(); // Recarga los datos para reflejar los cambios.
+    const { error } = await supabase.from('facturacion_x_despacho').update(dataToUpdate).eq('id_fac_desp', editingShipmentInvoice.id_fac_desp);
+    if (error) toast({ title: "Error al actualizar", variant: "destructive" });
+    else {
+      toast({ title: "Éxito" });
+      if (shipment) await recalculateAndSaveShipmentTotals(shipment.id_despacho);
+      fetchData();
       closeInvoiceDialog();
     }
   };
 
-  /**
-   * Crea una nueva factura y la asigna al despacho.
-   */
   const handleCreateAndAssignInvoice = async (values: NewInvoiceInShipmentValues) => {
     if (!shipment) return;
     setLoading(true);
-
     try {
-      // 1. Obtener detalles adicionales del cliente (término de pago)
-      const { data: customer, error: customerError } = await supabase
-        .from('customer')
-        .select('id_term')
-        .eq('code_customer', values.code_customer)
-        .single();
-
-      if (customerError) throw new Error("No se pudieron obtener detalles del cliente.");
-
-      const { data: term, error: termError } = await supabase
-        .from('terminos_pago')
-        .select('term_desc')
-        .eq('id_term', customer.id_term)
-        .single();
-      
+      const { data: customer, error: customerError } = await supabase.from('customer').select('id_term').eq('code_customer', values.code_customer).single();
+      if (customerError) throw new Error("No se pudo obtener detalles del cliente.");
+      const { data: term } = await supabase.from('terminos_pago').select('term_desc').eq('id_term', customer.id_term).single();
       const termDesc = term?.term_desc || "N/A";
 
-      // 2. Insertar en la tabla 'facturacion'
       const { error: insertInvoiceError } = await supabase.from('facturacion').insert({
         id_factura: values.id_factura,
         reference_number: values.id_factura,
@@ -546,7 +397,6 @@ export default function ShipmentDetailPage() {
 
       if (insertInvoiceError) throw new Error(`Error al crear factura: ${insertInvoiceError.message}`);
 
-      // 3. Asociar al despacho en 'facturacion_x_despacho'
       const { error: assignError } = await supabase.from('facturacion_x_despacho').insert({
         id_despacho: parseInt(shipment.id_despacho, 10),
         id_factura: values.id_factura,
@@ -558,13 +408,10 @@ export default function ShipmentDetailPage() {
       if (assignError) throw new Error(`Error al asignar factura: ${assignError.message}`);
 
       toast({ title: "Éxito", description: "Factura creada y asignada correctamente." });
-      
-      // 4. Recalcular totales y refrescar
       await recalculateAndSaveShipmentTotals(shipment.id_despacho);
       fetchData();
       setIsAddInvoiceDialogOpen(false);
       addInvoiceForm.reset();
-
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
@@ -572,139 +419,82 @@ export default function ShipmentDetailPage() {
     }
   };
 
-  /**
-   * Guarda una foto capturada con la cámara como comprobante.
-   */
+  const handleRemoveInvoiceFromShipment = async (idFacDesp: number) => {
+    setLoading(true);
+    const { error } = await supabase.from('facturacion_x_despacho').delete().eq('id_fac_desp', idFacDesp);
+    if (error) {
+        toast({ title: "Error", description: "No se pudo eliminar la factura del despacho.", variant: "destructive" });
+    } else {
+        toast({ title: "Factura eliminada", description: "La factura ha sido desvinculada de este despacho." });
+        if (shipment) await recalculateAndSaveShipmentTotals(shipment.id_despacho);
+        fetchData();
+    }
+    setLoading(false);
+  };
+
   const saveCapturedPhoto = async () => {
     if (!capturedImage || !invoiceForCamera) return;
-
     setLoading(true);
-    // Si ya existe un comprobante, bórralo primero.
     if (invoiceForCamera.comprobante) {
         const oldFileName = invoiceForCamera.comprobante.split('/').pop();
-        if (oldFileName) {
-            await supabase.storage.from(BUCKET_NAME).remove([oldFileName]);
-        }
+        if (oldFileName) await supabase.storage.from(BUCKET_NAME).remove([oldFileName]);
     }
-    
-    // Convierte la imagen en formato DataURL a un Blob para subirla.
     const response = await fetch(capturedImage);
     const blob = await response.blob();
     const fileName = `${Date.now()}-comprobante.jpg`;
     const file = new File([blob], fileName, { type: 'image/jpeg' });
-
-    // Sube el archivo a Supabase Storage.
-    const { error: uploadError } = await supabase.storage
-      .from(BUCKET_NAME)
-      .upload(fileName, file, { upsert: false });
-
+    const { error: uploadError } = await supabase.storage.from(BUCKET_NAME).upload(fileName, file, { upsert: false });
     if (uploadError) {
       setLoading(false);
       toast({ title: "Error al subir imagen", description: uploadError.message, variant: "destructive" });
       return;
     }
-
     const { data: { publicUrl } } = supabase.storage.from(BUCKET_NAME).getPublicUrl(fileName);
-
-    const dataToUpdate: any = { 
-        comprobante: publicUrl,
-        fecha_entrega: new Date().toISOString(),
-    };
-    
-    // Condición para actualizar el estado si el pago es en efectivo y hay monto.
-    if (invoiceForCamera.forma_pago === 'Efectivo' && invoiceForCamera.monto > 0) {
-      dataToUpdate.state = true;
-    }
-
-    // Actualiza el registro en la base de datos con la nueva URL y la fecha de entrega.
-    const { error: dbError } = await supabase
-      .from('facturacion_x_despacho')
-      .update(dataToUpdate)
-      .eq('id_fac_desp', invoiceForCamera.id_fac_desp);
-    
-    // Si se capturó una ubicación (porque el cliente no tenía geocerca), guárdala ahora en last_known_location.
+    const dataToUpdate: any = { comprobante: publicUrl, fecha_entrega: new Date().toISOString() };
+    if (invoiceForCamera.forma_pago === 'Efectivo' && invoiceForCamera.monto > 0) dataToUpdate.state = true;
+    const { error: dbError } = await supabase.from('facturacion_x_despacho').update(dataToUpdate).eq('id_fac_desp', invoiceForCamera.id_fac_desp);
     if (invoiceForCamera._capturedLocation) {
       const { latitude, longitude } = invoiceForCamera._capturedLocation;
-      await supabase
-        .from('customer')
-        .update({ last_known_location: `POINT(${longitude} ${latitude})` })
-        .eq('code_customer', invoiceForCamera.code_customer);
-      toast({ title: "Ubicación registrada", description: "Se ha guardado la ubicación actual del cliente en 'Última Ubicación'." });
+      await supabase.from('customer').update({ last_known_location: `POINT(${longitude} ${latitude})` }).eq('code_customer', invoiceForCamera.code_customer);
     }
-
     setLoading(false);
-
-    if (dbError) {
-      toast({ title: "Error al guardar", description: "No se pudo actualizar la factura.", variant: "destructive" });
-    } else {
-      toast({ title: "Éxito", description: "Comprobante guardado correctamente." });
-      if (shipment) {
-        await recalculateAndSaveShipmentTotals(shipment.id_despacho);
-      }
+    if (dbError) toast({ title: "Error al guardar", variant: "destructive" });
+    else {
+      toast({ title: "Éxito" });
+      if (shipment) await recalculateAndSaveShipmentTotals(shipment.id_despacho);
       fetchData();
       closeCameraDialog();
     }
   };
   
-  /**
-   * Verifica la geocerca. Si es válida, ejecuta onSuccess.
-   * Si el cliente no tiene geocerca, pasa la ubicación actual a onSuccess.
-   * @param invoice - La factura a verificar.
-   * @param onSuccess - Callback a ejecutar. Recibe la factura y la ubicación opcional.
-   */
-  const handleGeofenceProtectedAction = (
-    invoice: ShipmentInvoice, 
-    onSuccess: (invoice: ShipmentInvoice, location: { latitude: number; longitude: number } | null) => void
-  ) => {
+  const handleGeofenceProtectedAction = (invoice: ShipmentInvoice, onSuccess: (invoice: ShipmentInvoice, location: { latitude: number; longitude: number } | null) => void) => {
     if (currentUser?.role?.toLowerCase() !== 'motorista') {
       onSuccess(invoice, null);
       return;
     }
-  
     setVerifyingLocationInvoiceId(invoice.id_fac_desp);
-  
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
-  
         if (invoice.geocerca) {
-          const { data, error } = await supabase.rpc('is_user_in_client_geofence', {
-            user_latitude: latitude,
-            user_longitude: longitude,
-            p_code_customer: invoice.code_customer,
-          });
-  
+          const { data, error } = await supabase.rpc('is_user_in_client_geofence', { user_latitude: latitude, user_longitude: longitude, p_code_customer: invoice.code_customer });
           setVerifyingLocationInvoiceId(null);
-  
-          if (error) {
-            toast({ title: "Error de verificación", description: "No se pudo comprobar la ubicación.", variant: "destructive" });
-            return;
-          }
-  
-          if (data === true) {
-            onSuccess(invoice, null); // Dentro de geocerca, no necesita pasar ubicación.
-          } else {
-            toast({ title: "Acción no permitida", description: "Debe estar dentro de la geocerca del cliente para realizar esta acción.", variant: "destructive" });
-          }
+          if (error) toast({ title: "Error de verificación", variant: "destructive" });
+          else if (data === true) onSuccess(invoice, null);
+          else toast({ title: "Acción no permitida", description: "Debe estar dentro de la geocerca del cliente.", variant: "destructive" });
         } else {
-          // No hay geocerca, pasa la ubicación actual al callback para ser guardada después.
           setVerifyingLocationInvoiceId(null);
           onSuccess(invoice, { latitude, longitude });
         }
       },
-      (error) => {
+      () => {
         setVerifyingLocationInvoiceId(null);
-        toast({ title: "Error de ubicación", description: "No se pudo obtener su ubicación. Asegúrese de tener los permisos activados.", variant: "destructive" });
+        toast({ title: "Error de ubicación", variant: "destructive" });
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   };
   
-    /**
-   * Parsea una geocerca para obtener su centroide.
-   * Esta función es crucial para convertir las formas geométricas de las geocercas en puntos GPS únicos
-   * que la API de Google Maps puede usar como destinos.
-   */
   const parseGeofenceCentroid = (geofenceData: any): { lat: string; lng: string } | null => {
     if (!geofenceData) return null;
     let allPoints: { lng: number; lat: number }[] = [];
@@ -716,1021 +506,276 @@ export default function ShipmentDetailPage() {
             return { lng, lat };
         }).filter(p => !isNaN(p.lng) && !isNaN(p.lat));
     };
-    if (typeof geofenceData === 'object' && geofenceData.type) {
-        if (geofenceData.type === 'Polygon' && Array.isArray(geofenceData.coordinates)) {
-            const coordinateRing = geofenceData.coordinates[0];
-            if (Array.isArray(coordinateRing)) {
-                allPoints = coordinateRing.map((p: number[]) => ({ lng: p[0], lat: p[1] }))
-                    .filter(p => !isNaN(p.lng) && !isNaN(p.lat));
-            }
-        }
+    if (typeof geofenceData === 'object' && geofenceData.type === 'Polygon') {
+        allPoints = geofenceData.coordinates[0].map((p: number[]) => ({ lng: p[0], lat: p[1] })).filter(p => !isNaN(p.lng) && !isNaN(p.lat));
     } else if (typeof geofenceData === 'string') {
         const wktString = geofenceData.toUpperCase();
         if (wktString.startsWith('GEOMETRYCOLLECTION')) {
             const polygonStrings = geofenceData.match(/POLYGON\s*\(\(.*?\)\)/gi) || [];
-            polygonStrings.forEach(polyStr => {
-                allPoints.push(...getPointsFromPolygonString(polyStr));
-            });
-        } else if (wktString.startsWith('POLYGON')) {
-            allPoints = getPointsFromPolygonString(geofenceData);
-        }
+            polygonStrings.forEach(polyStr => allPoints.push(...getPointsFromPolygonString(polyStr)));
+        } else if (wktString.startsWith('POLYGON')) allPoints = getPointsFromPolygonString(geofenceData);
     }
     if (allPoints.length === 0) return null;
     const centroid = allPoints.reduce((acc, point) => ({ lng: acc.lng + point.lng, lat: acc.lat + point.lat }), { lng: 0, lat: 0 });
-    const numPoints = allPoints.length;
-    return { lng: String(centroid.lng / numPoints), lat: String(centroid.lat / numPoints) };
+    return { lng: String(centroid.lng / allPoints.length), lat: String(centroid.lat / allPoints.length) };
   };
 
-  /**
-   * Obtiene la ruta de visita. Prioriza el orden manual si existe; de lo contrario,
-   * llama a la API de Google Routes para calcular la secuencia de visita más eficiente.
-   * @returns Un array de facturas en el orden de visita, o un array vacío si falla.
-   */
   const getVisitOrder = async (): Promise<ShipmentInvoice[]> => {
-    // 1. Comprobar si existe un orden manual.
-    // Se considera que hay orden manual si al menos una factura tiene un valor en `orden_visita`.
     const hasManualOrder = invoices.some(inv => inv.orden_visita !== null);
-
     if (hasManualOrder) {
-      // Si hay orden manual, simplemente ordena las facturas según ese campo.
-      toast({ title: "Usando Orden Manual", description: "La ruta se ha generado según el orden manual establecido." });
       const manuallyOrderedInvoices = [...invoices].sort((a, b) => (a.orden_visita || Infinity) - (b.orden_visita || Infinity));
-      return [
-          { customer_name: 'Bodega (Punto de Partida)', id_fac_desp: -1 } as ShipmentInvoice,
-          ...manuallyOrderedInvoices,
-      ];
+      return [{ customer_name: 'Bodega (Partida)', id_fac_desp: -1 } as ShipmentInvoice, ...manuallyOrderedInvoices];
     }
-
-    // 2. Si no hay orden manual, proceder con la optimización de Google.
-    // Filtra las facturas para obtener solo aquellas con una geocerca válida y calcula sus centroides.
-    const waypointsWithCentroids = invoices
-      .map(invoice => {
+    const waypointsWithCentroids = invoices.map(invoice => {
         const centroid = parseGeofenceCentroid(invoice.geocerca);
-        if (!centroid) return null;
-        return { invoice, centroid };
-      })
-      .filter((c): c is { invoice: ShipmentInvoice; centroid: { lat: string; lng: string } } => c !== null);
-
-    if (waypointsWithCentroids.length === 0) {
-      toast({
-        title: "Sin Puntos Válidos",
-        description: "Ninguna de las facturas en este despacho tiene una geocerca válida para generar una ruta.",
-        variant: "destructive"
-      });
-      return [];
-    }
-
+        return centroid ? { invoice, centroid } : null;
+    }).filter((c): c is { invoice: ShipmentInvoice; centroid: { lat: string; lng: string } } => c !== null);
+    if (waypointsWithCentroids.length === 0) return [];
     setIsOptimizingRoute(true);
-
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-    if (!apiKey) {
-      toast({ title: "Error de Configuración", description: "La API Key de Google Maps no está configurada.", variant: "destructive" });
-      setIsOptimizingRoute(false);
-      return [];
-    }
-    
-    const toApiLatLng = (latLng: { lat: number | string; lng: number | string }) => ({
-        location: { latLng: { latitude: Number(latLng.lat), longitude: Number(latLng.lng) } }
-    });
-
-    const requestBody: any = {
-      travelMode: "DRIVE",
-      routingPreference: "TRAFFIC_AWARE",
-      origin: toApiLatLng({lat: BODEGA_LOCATION.lat, lng: BODEGA_LOCATION.lng }),
-      destination: toApiLatLng({lat: BODEGA_LOCATION.lat, lng: BODEGA_LOCATION.lng }),
-      intermediates: waypointsWithCentroids.map(w => toApiLatLng({ lat: w.centroid.lat, lng: w.centroid.lng })),
-      optimizeWaypointOrder: true, // Pide a Google que optimice el orden.
-    };
-
-    const headers = {
-      "Content-Type": "application/json",
-      "X-Goog-Api-Key": apiKey,
-      "X-Goog-FieldMask": "routes.optimizedIntermediateWaypointIndex", // Solo pedimos el orden.
-    };
-
+    if (!apiKey) { setIsOptimizingRoute(false); return []; }
+    const toApiLatLng = (latLng: { lat: number | string; lng: number | string }) => ({ location: { latLng: { latitude: Number(latLng.lat), longitude: Number(latLng.lng) } } });
+    const requestBody = { travelMode: "DRIVE", routingPreference: "TRAFFIC_AWARE", origin: toApiLatLng(BODEGA_LOCATION), destination: toApiLatLng(BODEGA_LOCATION), intermediates: waypointsWithCentroids.map(w => toApiLatLng(w.centroid)), optimizeWaypointOrder: true };
     try {
-      const response = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
-        method: "POST",
-        headers,
-        body: JSON.stringify(requestBody),
-      });
-
-      if (!response.ok) throw new Error(`Error en la API de Rutas: ${response.statusText}`);
-      
+      const response = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", { method: "POST", headers: { "Content-Type": "application/json", "X-Goog-Api-Key": apiKey, "X-Goog-FieldMask": "routes.optimizedIntermediateWaypointIndex" }, body: JSON.stringify(requestBody) });
       const data = await response.json();
       const waypointOrder: number[] = data.routes[0].optimizedIntermediateWaypointIndex || [];
-      
       const orderedInvoices = waypointOrder.map(index => waypointsWithCentroids[index].invoice);
-      const finalOrderedList = [
-          { customer_name: 'Bodega (Punto de Partida)', id_fac_desp: -1 } as ShipmentInvoice,
-          ...orderedInvoices,
-      ];
-      return finalOrderedList;
-
-    } catch (error) {
-      console.error("Error al optimizar la ruta:", error);
-      toast({ title: "Error de Red", description: "No se pudo obtener la ruta optimizada.", variant: "destructive" });
-      return [];
-    } finally {
-        setIsOptimizingRoute(false);
-    }
+      return [{ customer_name: 'Bodega (Partida)', id_fac_desp: -1 } as ShipmentInvoice, ...orderedInvoices];
+    } catch { return []; } finally { setIsOptimizingRoute(false); }
   };
 
-  /**
-   * Exporta la ruta del despacho a Google Maps en una nueva pestaña.
-   * Usa el orden de visita (manual o automático).
-   */
   const handleExportRouteToMaps = async () => {
     const orderedInvoices = await getVisitOrder();
     if (orderedInvoices.length <= 1) return;
-
-    const waypoints = orderedInvoices
-        .slice(1) // Omitir la bodega
-        .map(invoice => {
-            const centroid = parseGeofenceCentroid(invoice.geocerca);
-            return centroid ? `${centroid.lat},${centroid.lng}` : null;
-        })
-        .filter(Boolean) as string[];
-
+    const waypoints = orderedInvoices.slice(1).map(invoice => {
+        const centroid = parseGeofenceCentroid(invoice.geocerca);
+        return centroid ? `${centroid.lat},${centroid.lng}` : null;
+    }).filter(Boolean) as string[];
     if (waypoints.length === 0) return;
-    
-    const origin = `${BODEGA_LOCATION.lat},${BODEGA_LOCATION.lng}`;
-    // El destino es el último punto en la secuencia ordenada
-    const destination = waypoints[waypoints.length - 1];
-    // Los puntos intermedios son todos los demás, excepto el último.
-    const intermediateWaypoints = waypoints.slice(0, -1).join('|');
-
-    const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}${intermediateWaypoints ? `&waypoints=${intermediateWaypoints}` : ''}`;
-    
+    const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${BODEGA_LOCATION.lat},${BODEGA_LOCATION.lng}&destination=${waypoints[waypoints.length - 1]}${waypoints.length > 1 ? `&waypoints=${waypoints.slice(0, -1).join('|')}` : ''}`;
     window.open(googleMapsUrl, '_blank');
   };
 
-  /**
-   * Muestra el diálogo con la lista ordenada de clientes a visitar.
-   */
   const handleShowVisitOrder = async () => {
       const orderedInvoices = await getVisitOrder();
-      if (orderedInvoices.length > 0) {
-          setOrderedRoute(orderedInvoices);
-          setIsOrderDialogOpen(true);
-      }
+      if (orderedInvoices.length > 0) { setOrderedRoute(orderedInvoices); setIsOrderDialogOpen(true); }
   };
 
-  
-  /**
-   * Cambia el estado del recorrido (iniciar/finalizar) en la base de datos
-   * y gestiona el almacenamiento local del despacho activo para el rastreo GPS.
-   * Ahora incluye una validación para no iniciar un nuevo recorrido si ya hay uno activo.
-   */
   const toggleShipmentState = async (newState: 'en_curso' | 'finalizado') => {
       if (!shipment) return;
       setLoading(true);
-
-      // Si se intenta iniciar un nuevo recorrido, primero se verifica si ya hay uno activo.
       if (newState === 'en_curso') {
-        const { data: activeShipments, error: checkError } = await supabase
-          .from('despacho')
-          .select('id_despacho')
-          .eq('id_motorista', shipment.id_motorista)
-          .eq('estado_recorrido', 'en_curso')
-          .neq('id_despacho', shipment.id_despacho); // Excluye el despacho actual
-        
-        if (checkError) {
-          setLoading(false);
-          toast({ title: "Error de verificación", description: "No se pudo comprobar si existen otros recorridos activos.", variant: "destructive" });
-          return;
-        }
-
+        const { data: activeShipments } = await supabase.from('despacho').select('id_despacho').eq('id_motorista', shipment.id_motorista).eq('estado_recorrido', 'en_curso').neq('id_despacho', shipment.id_despacho);
         if (activeShipments && activeShipments.length > 0) {
           setLoading(false);
-          toast({
-            title: "Acción no permitida",
-            description: `Ya tiene un recorrido en curso (Despacho #${activeShipments[0].id_despacho}). Por favor, finalícelo antes de iniciar uno nuevo.`,
-            variant: "destructive",
-            duration: 9000,
-          });
+          toast({ title: "Acción no permitida", description: `Ya tiene un recorrido activo (#${activeShipments[0].id_despacho}).`, variant: "destructive" });
           return;
         }
       }
-
-      // Si pasa la validación o se está finalizando un recorrido, se procede a actualizar.
-      const { error } = await supabase
-          .from('despacho')
-          .update({ estado_recorrido: newState })
-          .eq('id_despacho', shipment.id_despacho);
-      
+      const { error } = await supabase.from('despacho').update({ estado_recorrido: newState }).eq('id_despacho', shipment.id_despacho);
       setLoading(false);
-      
-      if (error) {
-          toast({ title: "Error", description: "No se pudo actualizar el estado del recorrido.", variant: "destructive" });
-      } else {
-          if (newState === 'en_curso') {
-              // Guarda el ID del despacho en localStorage para que el rastreador lo use.
-              localStorage.setItem('active_shipment_id', shipment.id_despacho);
-              toast({ title: "Recorrido Iniciado", description: "El seguimiento de ubicación está activo para este despacho." });
-          } else {
-              // Limpia el ID al finalizar.
-              localStorage.removeItem('active_shipment_id');
-              toast({ title: "Recorrido Finalizado", description: "El seguimiento de ubicación ha terminado." });
-          }
-          // Recarga los datos para que la UI se actualice.
+      if (!error) {
+          if (newState === 'en_curso') localStorage.setItem('active_shipment_id', shipment.id_despacho);
+          else localStorage.removeItem('active_shipment_id');
           fetchData(); 
       }
   };
 
-
-  /**
-   * Gestiona el reordenamiento de una factura (arriba/abajo).
-   * @param invoiceId - El ID de la factura (`id_fac_desp`) a mover.
-   * @param direction - 'up' o 'down'.
-   */
-    const handleReorder = async (invoiceId: number, direction: 'up' | 'down') => {
+  const handleReorder = async (invoiceId: number, direction: 'up' | 'down') => {
         const currentIndex = sortedInvoices.findIndex(inv => inv.id_fac_desp === invoiceId);
         if (currentIndex === -1) return;
-
         const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-
         if (targetIndex < 0 || targetIndex >= sortedInvoices.length) return;
-
         const invoiceA = sortedInvoices[currentIndex];
         const invoiceB = sortedInvoices[targetIndex];
-
-        // Asigna el índice como orden si es nulo por primera vez
         const orderA = invoiceA.orden_visita ?? currentIndex;
         const orderB = invoiceB.orden_visita ?? targetIndex;
-
         setLoading(true);
-
-        const { error: errorA } = await supabase
-            .from('facturacion_x_despacho')
-            .update({ orden_visita: orderB })
-            .eq('id_fac_desp', invoiceA.id_fac_desp);
-
-        const { error: errorB } = await supabase
-            .from('facturacion_x_despacho')
-            .update({ orden_visita: orderA })
-            .eq('id_fac_desp', invoiceB.id_fac_desp);
-
+        const { error: errorA } = await supabase.from('facturacion_x_despacho').update({ orden_visita: orderB }).eq('id_fac_desp', invoiceA.id_fac_desp);
+        const { error: errorB } = await supabase.from('facturacion_x_despacho').update({ orden_visita: orderA }).eq('id_fac_desp', invoiceB.id_fac_desp);
         setLoading(false);
-
-        if (errorA || errorB) {
-            toast({ title: "Error al reordenar", description: `Error en RPC: ${errorA?.message || errorB?.message}`, variant: "destructive" });
-        } else {
-            toast({ title: "Éxito", description: "El orden de visita ha sido actualizado." });
-            fetchData();
-        }
+        if (!errorA && !errorB) fetchData();
     };
 
-  // --- FUNCIONES AUXILIARES DE LA UI ---
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) setSelectedFile(file);
-  };
+  const closeInvoiceDialog = () => { setIsInvoiceDialogOpen(false); setEditingShipmentInvoice(null); setSelectedFile(null); form.reset(); };
+  const handleOpenImageModal = (imageUrl: string) => { setSelectedImage(imageUrl); setImageModalOpen(true); }
+  const openCameraDialog = (invoice: ShipmentInvoice) => handleGeofenceProtectedAction(invoice, (inv, location) => { setInvoiceForCamera({ ...inv, _capturedLocation: location }); setIsCameraDialogOpen(true); });
+  const closeCameraDialog = () => { setIsCameraDialogOpen(false); setInvoiceForCamera(null); setCapturedImage(null); if (videoRef.current?.srcObject) (videoRef.current.srcObject as MediaStream).getTracks().forEach(t => t.stop()); };
+  const takePhoto = () => { if (videoRef.current && canvasRef.current) { canvasRef.current.width = videoRef.current.videoWidth; canvasRef.current.height = videoRef.current.videoHeight; canvasRef.current.getContext('2d')?.drawImage(videoRef.current, 0, 0); setCapturedImage(canvasRef.current.toDataURL('image/jpeg', 0.9)); } };
+  const searchCustomers = useCallback(async (q: string) => { if (!q) return []; const { data } = await supabase.from('customer').select('code_customer, customer_name, ruta').or(`code_customer.ilike.%${q}%,customer_name.ilike.%${q}%`).limit(10); return (data || []).map(c => ({ value: c.code_customer, label: `${c.code_customer} - ${c.customer_name}` })); }, []);
+  const handleCustomerChange = async (c: string) => { if (!c) { addInvoiceForm.setValue('customer_name', ''); addInvoiceForm.setValue('ruta', ''); return; } const { data } = await supabase.from('customer').select('customer_name, ruta').eq('code_customer', c).single(); if (data) { addInvoiceForm.setValue('code_customer', c); addInvoiceForm.setValue('customer_name', data.customer_name); addInvoiceForm.setValue('ruta', String(data.ruta || '')); } };
+  const getRouteDescription = (rId: string) => routes.find(r => String(r.id_ruta) === String(rId))?.ruta_desc || rId;
+  const getUserName = (uId: string) => users.find(u => String(u.id_user) === String(uId))?.name || uId;
+  const formatDate = (ds: string) => new Date(`${ds}T00:00:00Z`).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
+  const handleGeneratePdf = () => shipment && setPdfData(generateShipmentPDF(shipment, invoices, routes.find(r => r.id_ruta === shipment.id_ruta) || { ruta_desc: 'N/A' }, users.find(u => u.id_user === shipment.id_motorista) || { name: 'N/A' }, users.find(u => u.id_user === shipment.id_auxiliar) || { name: 'N/A' }));
 
-  const handleEditInvoice = (invoice: ShipmentInvoice) => {
-    handleGeofenceProtectedAction(invoice, (inv, location) => {
-      setEditingShipmentInvoice({ ...inv, _capturedLocation: location });
-      setIsInvoiceDialogOpen(true);
-    });
-  };
-
-  const closeInvoiceDialog = () => {
-    setIsInvoiceDialogOpen(false);
-    setEditingShipmentInvoice(null);
-    setSelectedFile(null);
-    form.reset();
-  };
-  const handleOpenImageModal = (imageUrl: string) => {
-    setSelectedImage(imageUrl);
-    setImageModalOpen(true);
-  }
-  
-  const openCameraDialog = (invoice: ShipmentInvoice) => {
-    handleGeofenceProtectedAction(invoice, (inv, location) => {
-      setInvoiceForCamera({ ...inv, _capturedLocation: location });
-      setIsCameraDialogOpen(true);
-    });
-  };
-
-  const closeCameraDialog = () => {
-    setIsCameraDialogOpen(false);
-    setInvoiceForCamera(null);
-    setCapturedImage(null);
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach(track => track.stop());
-    }
-  };
-  const takePhoto = () => {
-    if (videoRef.current && canvasRef.current) {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const context = canvas.getContext('2d');
-      context?.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-      setCapturedImage(dataUrl);
-    }
-  };
-
-  const searchCustomers = useCallback(async (query: string) => {
-    if (!query) return [];
-    const { data, error } = await supabase
-      .from('customer')
-      .select('code_customer, customer_name, ruta')
-      .or(`code_customer.ilike.%${query}%,customer_name.ilike.%${query}%`)
-      .limit(10);
-    
-    if (error) return [];
-    return (data || []).map(c => ({
-      value: c.code_customer,
-      label: `${c.code_customer} - ${c.customer_name}`
-    }));
-  }, []);
-
-  const handleCustomerChange = async (code: string) => {
-    if (!code) {
-      addInvoiceForm.setValue('customer_name', '');
-      addInvoiceForm.setValue('ruta', '');
-      return;
-    }
-    const { data: customer } = await supabase
-        .from('customer')
-        .select('customer_name, ruta')
-        .eq('code_customer', code)
-        .single();
-    
-    if (customer) {
-      addInvoiceForm.setValue('code_customer', code);
-      addInvoiceForm.setValue('customer_name', customer.customer_name);
-      addInvoiceForm.setValue('ruta', String(customer.ruta || ''));
-    }
-  };
-
-  const getRouteDescription = (routeId: string) => routes.find(route => String(route.id_ruta) === String(routeId))?.ruta_desc || routeId
-  const getUserName = (userId: string) => users.find(user => String(user.id_user) === String(userId))?.name || userId
-  const formatDate = (dateString: string) => {
-    const date = new Date(`${dateString}T00:00:00Z`);
-    return date.toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
-  };
-  const handleGeneratePdf = () => {
-    if (shipment) {
-      const pdfOutput = generateShipmentPDF(
-        shipment,
-        invoices,
-        routes.find(r => r.id_ruta === shipment.id_ruta) || { ruta_desc: 'N/A' },
-        users.find(u => u.id_user === shipment.id_motorista) || { name: 'N/A', id_rol: 0 },
-        users.find(u => u.id_user === shipment.id_auxiliar) || { name: 'N/A', id_rol: 0 }
-      );
-      setPdfData(pdfOutput);
-      setIsPreviewOpen(true);
-    }
-  };
-  
-  const getBadgeVariant = (status: boolean) => {
-    return status ? "default" : "secondary";
-  }
-
-  const formatDateTime = (dateString: string | null) => {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
-  };
-  
-  // Ordena las facturas por `orden_visita`. Las que no tienen orden (null) van al final.
-  const sortedInvoices = useMemo(() => {
-    return [...invoices].sort((a, b) => {
-        const orderA = a.orden_visita === null ? Infinity : a.orden_visita;
-        const orderB = b.orden_visita === null ? Infinity : b.orden_visita;
-        return orderA - orderB;
-    });
-  }, [invoices]);
-
-  const filteredAndSortedInvoices = useMemo(() => {
-      if (!searchQuery) {
-          return sortedInvoices;
-      }
-      return sortedInvoices.filter(invoice => {
-          const query = searchQuery.toLowerCase();
-          const customerName = invoice.customer_name?.toLowerCase() || '';
-          const customerCode = invoice.code_customer?.toLowerCase() || '';
-          const referenceNumber = String(invoice.reference_number || '').toLowerCase();
-          return customerName.includes(query) || customerCode.includes(query) || referenceNumber.includes(query);
-      });
-  }, [sortedInvoices, searchQuery]);
-
-  // Calcula los totales dinámicamente basados en el `monto` de las facturas cargadas.
+  const sortedInvoices = useMemo(() => [...invoices].sort((a, b) => (a.orden_visita ?? Infinity) - (b.orden_visita ?? Infinity)), [invoices]);
+  const filteredAndSortedInvoices = useMemo(() => { if (!searchQuery) return sortedInvoices; const q = searchQuery.toLowerCase(); return sortedInvoices.filter(i => (i.customer_name?.toLowerCase() || '').includes(q) || i.code_customer?.toLowerCase().includes(q) || String(i.reference_number || '').toLowerCase().includes(q)); }, [sortedInvoices, searchQuery]);
   const { totalContadoCalculado, totalCreditoCalculado, totalGeneralCalculado } = useMemo(() => {
-      const totalContadoCalculado = invoices
-        .filter(inv => inv.tax_type === 'Consumidor Final')
-        .reduce((acc, inv) => acc + inv.monto, 0);
-
-      const totalCreditoCalculado = invoices
-        .filter(inv => inv.tax_type === 'Crédito Fiscal')
-        .reduce((acc, inv) => acc + inv.monto, 0);
-
-      const totalGeneralCalculado = totalContadoCalculado + totalCreditoCalculado;
-      return { totalContadoCalculado, totalCreditoCalculado, totalGeneralCalculado };
+      const tc = invoices.filter(i => i.tax_type === 'Consumidor Final').reduce((acc, i) => acc + i.monto, 0);
+      const tcr = invoices.filter(i => i.tax_type === 'Crédito Fiscal').reduce((acc, i) => acc + i.monto, 0);
+      return { totalContadoCalculado: tc, totalCreditoCalculado: tcr, totalGeneralCalculado: tc + tcr };
   }, [invoices]);
   
   const isMotorista = currentUser?.role?.toLowerCase() === 'motorista';
   const isFacturacion = currentUser?.role?.toLowerCase() === 'facturacion';
+  const isAdmin = currentUser?.role?.toLowerCase() === 'admin';
 
-  const paymentOptions = useMemo(() => {
-    return paymentMethods;
-  }, []);
+  if (loading && !shipment) return <p>Cargando detalles...</p>;
+  if (!shipment) return <p>No encontrado.</p>;
 
-
-  if (loading && !shipment) {
-    return <p>Cargando detalles del despacho...</p>
-  }
-  if (!shipment) {
-    return <p>Despacho no encontrado.</p>
-  }
-
-  const renderInvoiceRow = (invoice: ShipmentInvoice, index: number, isFacturacionView: boolean = false) => (
-     <TableRow key={invoice.id_fac_desp}>
-        {isFacturacionView && (
-            <TableCell>
-                <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" className="h-6 w-6" disabled={index === 0 || loading} onClick={() => handleReorder(invoice.id_fac_desp, 'up')}>
-                        <ArrowUp className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-6 w-6" disabled={index === sortedInvoices.length - 1 || loading} onClick={() => handleReorder(invoice.id_fac_desp, 'down')}>
-                        <ArrowDown className="h-4 w-4" />
-                    </Button>
-                </div>
-            </TableCell>
-        )}
-        <TableCell className="font-medium">{String(invoice.reference_number || invoice.id_factura)}</TableCell>
-        <TableCell>{invoice.customer_name || 'N/A'}</TableCell>
-        <TableCell>{invoice.code_customer}</TableCell>
-        <TableCell>
-            <Badge variant={invoice.geocerca ? 'default' : 'outline'}>{invoice.geocerca ? 'Sí' : 'No'}</Badge>
-        </TableCell>
-        <TableCell>
-            {invoice.comprobante ? (
-                <button onClick={() => handleOpenImageModal(invoice.comprobante)}>
-                    <Image src={invoice.comprobante} alt={`Comprobante de ${invoice.id_factura}`} width={60} height={60} className="h-16 w-16 rounded-md object-cover" />
-                </button>
-            ) : (<span className="text-muted-foreground">N/A</span>)}
-        </TableCell>
-        <TableCell>{formatDateTime(invoice.fecha_entrega)}</TableCell>
-        <TableCell>${(invoice.net_to_pay ?? 0).toFixed(2)}</TableCell>
-        <TableCell>{invoice.forma_pago}</TableCell>
-        <TableCell>${invoice.monto.toFixed(2)}</TableCell>
-        <TableCell><Badge variant={getBadgeVariant(invoice.state)}>{invoice.state ? "Completado" : "Pendiente"}</Badge></TableCell>
-        <TableCell className="text-right">
-            <div className="flex justify-end items-center gap-2">
-                <Button variant="ghost" size="icon" onClick={() => handleEditInvoice(invoice)} disabled={verifyingLocationInvoiceId === invoice.id_fac_desp}>
-                    {verifyingLocationInvoiceId === invoice.id_fac_desp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
-                </Button>
-                <Button variant="ghost" size="icon" onClick={() => openCameraDialog(invoice)} disabled={verifyingLocationInvoiceId === invoice.id_fac_desp}>
-                    {verifyingLocationInvoiceId === invoice.id_fac_desp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
-                </Button>
-            </div>
-        </TableCell>
-    </TableRow>
-  );
-  
-  // --- RENDERIZADO DEL COMPONENTE ---
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div>
-              <CardTitle>Detalle del Despacho #{shipment.id_despacho}</CardTitle>
-              <CardDescription>
-                Información detallada del despacho y su estado actual.
-              </CardDescription>
-            </div>
+            <div><CardTitle>Detalle #{shipment.id_despacho}</CardTitle><CardDescription>Información y estado actual.</CardDescription></div>
             <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 w-full md:w-auto">
               {isMotorista && (
                 <>
-                  {shipment.estado_recorrido === 'pendiente' && (
-                    <Button onClick={() => toggleShipmentState('en_curso')} disabled={loading} className="w-full md:w-auto bg-green-600 hover:bg-green-700">
-                      <Play className="mr-2 h-4 w-4" /> Iniciar Recorrido
-                    </Button>
-                  )}
-                  {shipment.estado_recorrido === 'en_curso' && (
-                     <Button onClick={() => toggleShipmentState('finalizado')} disabled={loading} className="w-full md:w-auto bg-red-600 hover:bg-red-700">
-                      <Square className="mr-2 h-4 w-4" /> Finalizar Recorrido
-                    </Button>
-                  )}
-                   <Button onClick={handleShowVisitOrder} variant="outline" disabled={isOptimizingRoute} className="w-full md:w-auto">
-                    {isOptimizingRoute ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ListOrdered className="mr-2 h-4 w-4" />}
-                    Ver Orden de Visita
-                   </Button>
-                  {shipment.estado_recorrido === 'finalizado' && (
-                     <Button disabled className="w-full md:w-auto">Recorrido Finalizado</Button>
-                  )}
+                  {shipment.estado_recorrido === 'pendiente' && <Button onClick={() => toggleShipmentState('en_curso')} className="bg-green-600 hover:bg-green-700"><Play className="mr-2 h-4 w-4" /> Iniciar</Button>}
+                  {shipment.estado_recorrido === 'en_curso' && <Button onClick={() => toggleShipmentState('finalizado')} className="bg-red-600 hover:bg-red-700"><Square className="mr-2 h-4 w-4" /> Finalizar</Button>}
+                   <Button onClick={handleShowVisitOrder} variant="outline"><ListOrdered className="mr-2 h-4 w-4" /> Orden de Visita</Button>
                 </>
               )}
-              <Button variant="outline" onClick={handleExportRouteToMaps} className="w-full md:w-auto" disabled={isOptimizingRoute}>
-                 {isOptimizingRoute ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MapPin className="mr-2 h-4 w-4" />}
-                 {isOptimizingRoute ? "Optimizando..." : "Exportar Ruta a Maps"}
-              </Button>
-              <Button variant="outline" onClick={handleGeneratePdf} className="w-full md:w-auto">
-                <FileText className="mr-2 h-4 w-4" /> Ver Informe
-              </Button>
-              <Button variant="outline" onClick={() => router.back()} className="w-full md:w-auto">
-                <ArrowLeft className="mr-2 h-4 w-4" /> Volver a Despachos
-              </Button>
+              <Button variant="outline" onClick={handleExportRouteToMaps}><MapPin className="mr-2 h-4 w-4" /> Exportar a Maps</Button>
+              <Button variant="outline" onClick={() => { handleGeneratePdf(); setIsPreviewOpen(true); }}><FileText className="mr-2 h-4 w-4" /> PDF</Button>
+              <Button variant="outline" onClick={() => router.back()}><ArrowLeft className="mr-2 h-4 w-4" /> Volver</Button>
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-muted-foreground">Ruta</p>
-              <p>{getRouteDescription(shipment.id_ruta)}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-muted-foreground">Motorista</p>
-              <p>{getUserName(shipment.id_motorista)}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-muted-foreground">Auxiliar</p>
-              <p>{getUserName(shipment.id_auxiliar)}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-muted-foreground">Fecha de Despacho</p>
-              <p>{formatDate(shipment.fecha_despacho)}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-muted-foreground">Total Contado</p>
-              <p>${totalContadoCalculado.toFixed(2)}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-muted-foreground">Total Crédito</p>
-              <p>${totalCreditoCalculado.toFixed(2)}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-muted-foreground">Total General</p>
-              <p className="font-bold">${totalGeneralCalculado.toFixed(2)}</p>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div><p className="text-xs text-muted-foreground">Ruta</p><p>{getRouteDescription(shipment.id_ruta)}</p></div>
+            <div><p className="text-xs text-muted-foreground">Motorista</p><p>{getUserName(shipment.id_motorista)}</p></div>
+            <div><p className="text-xs text-muted-foreground">Auxiliar</p><p>{getUserName(shipment.id_auxiliar)}</p></div>
+            <div><p className="text-xs text-muted-foreground">Fecha</p><p>{formatDate(shipment.fecha_despacho)}</p></div>
+            <div><p className="text-xs text-muted-foreground">T. Contado</p><p>${totalContadoCalculado.toFixed(2)}</p></div>
+            <div><p className="text-xs text-muted-foreground">T. Crédito</p><p>${totalCreditoCalculado.toFixed(2)}</p></div>
+            <div><p className="text-xs text-muted-foreground">Total General</p><p className="font-bold">${totalGeneralCalculado.toFixed(2)}</p></div>
           </div>
         </CardContent>
       </Card>
 
-      <Card className="mt-6">
+      <Card>
          <CardHeader><CardTitle>Estado del Proceso</CardTitle></CardHeader>
-         <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            <StatusBadge checked={shipment.facturacion} text="Facturación"/>
-            <StatusBadge checked={shipment.bodega} text="Bodega"/>
-            <StatusBadge checked={shipment.reparto} text="Reparto"/>
-            <StatusBadge checked={shipment.asist_admon} text="Asist. Admon."/>
-            <StatusBadge checked={shipment.gerente_admon} text="Gerente Admon."/>
-            <StatusBadge checked={shipment.cobros} text="Cobros"/>
+         <CardContent className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <StatusBadge checked={shipment.facturacion} text="Fact."/><StatusBadge checked={shipment.bodega} text="Bodega"/><StatusBadge checked={shipment.reparto} text="Reparto"/><StatusBadge checked={shipment.asist_admon} text="Asist."/><StatusBadge checked={shipment.gerente_admon} text="Gerente"/><StatusBadge checked={shipment.cobros} text="Cobros"/>
          </CardContent>
       </Card>
       
       <Card>
         <CardHeader>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-              <div>
-                <CardTitle>Facturas del Despacho</CardTitle>
-                <CardDescription>
-                    {isFacturacion ? "Use las flechas para establecer un orden de visita manual." : "Listado de todas las facturas incluidas en este despacho."}
-                </CardDescription>
-              </div>
-              <Button onClick={() => setIsAddInvoiceDialogOpen(true)}>
-                <PlusCircle className="mr-2 h-4 w-4" /> Agregar Factura
-              </Button>
+              <div><CardTitle>Facturas</CardTitle><CardDescription>{isAdmin ? "Gestión de facturas del despacho." : "Listado de facturas asociadas."}</CardDescription></div>
+              {isAdmin && <Button onClick={() => setIsAddInvoiceDialogOpen(true)}><PlusCircle className="mr-2 h-4 w-4" /> Agregar Factura</Button>}
             </div>
-            <div className="relative pt-4">
-                <Search className="absolute left-2.5 top-6 h-4 w-4 text-muted-foreground" />
-                <Input
-                    type="search"
-                    placeholder="Buscar por cliente, código o No. factura..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-8 w-full sm:w-[350px]"
-                />
-            </div>
+            <div className="relative pt-4"><Search className="absolute left-2.5 top-6 h-4 w-4 text-muted-foreground" /><Input type="search" placeholder="Buscar..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-8 w-full sm:w-[350px]" /></div>
         </CardHeader>
         <CardContent>
-            {/* Desktop view */}
             <div className="hidden md:block">
               <Table>
                   <TableHeader>
                       <TableRow>
                           {isFacturacion && <TableHead className="w-20">Orden</TableHead>}
-                          <TableHead>No. Factura</TableHead>
-                          <TableHead>Nombre del Cliente</TableHead>
-                          <TableHead>Código Cliente</TableHead>
-                          <TableHead>Geocerca</TableHead>
-                          <TableHead>Comprobante</TableHead>
-                          <TableHead>Fecha Entrega</TableHead>
-                          <TableHead>Total Factura</TableHead>
-                          <TableHead>Forma de Pago</TableHead>
-                          <TableHead>Monto Pagado</TableHead>
-                          <TableHead>Estado</TableHead>
-                          <TableHead className="text-right">Acciones</TableHead>
+                          <TableHead>Factura</TableHead><TableHead>Cliente</TableHead><TableHead>Geocerca</TableHead><TableHead>Foto</TableHead><TableHead>Entrega</TableHead><TableHead>Total</TableHead><TableHead>Pago</TableHead><TableHead>Monto</TableHead><TableHead>Estado</TableHead><TableHead className="text-right">Acciones</TableHead>
                       </TableRow>
                   </TableHeader>
                   <TableBody>
-                      {filteredAndSortedInvoices.length > 0 ? filteredAndSortedInvoices.map((invoice, index) => renderInvoiceRow(invoice, index, isFacturacion)) : (
-                          <TableRow>
-                              <TableCell colSpan={isFacturacion ? 12 : 11} className="text-center">No hay facturas que coincidan con la búsqueda.</TableCell>
+                      {filteredAndSortedInvoices.map((inv, idx) => (
+                          <TableRow key={inv.id_fac_desp}>
+                              {isFacturacion && <TableCell><div className="flex gap-1"><Button variant="ghost" size="icon" className="h-6 w-6" disabled={idx === 0} onClick={() => handleReorder(inv.id_fac_desp, 'up')}><ArrowUp /></Button><Button variant="ghost" size="icon" className="h-6 w-6" disabled={idx === invoices.length - 1} onClick={() => handleReorder(inv.id_fac_desp, 'down')}><ArrowDown /></Button></div></TableCell>}
+                              <TableCell className="font-medium">{String(inv.reference_number || inv.id_factura)}</TableCell>
+                              <TableCell>{inv.customer_name}<br/><span className="text-xs text-muted-foreground">{inv.code_customer}</span></TableCell>
+                              <TableCell><Badge variant={inv.geocerca ? 'default' : 'outline'}>{inv.geocerca ? 'Sí' : 'No'}</Badge></TableCell>
+                              <TableCell>{inv.comprobante ? <button onClick={() => handleOpenImageModal(inv.comprobante)}><Image src={inv.comprobante} alt="Foto" width={40} height={40} className="rounded object-cover" /></button> : 'N/A'}</TableCell>
+                              <TableCell>{inv.fecha_entrega ? new Date(inv.fecha_entrega).toLocaleTimeString() : 'N/A'}</TableCell>
+                              <TableCell>${(inv.net_to_pay ?? 0).toFixed(2)}</TableCell>
+                              <TableCell>{inv.forma_pago}</TableCell>
+                              <TableCell>${inv.monto.toFixed(2)}</TableCell>
+                              <TableCell><Badge variant={inv.state ? 'default' : 'secondary'}>{inv.state ? "Pagado" : "Pendiente"}</Badge></TableCell>
+                              <TableCell className="text-right">
+                                  <div className="flex justify-end gap-1">
+                                      <Button variant="ghost" size="icon" onClick={() => handleEditInvoice(inv)}><Pencil /></Button>
+                                      <Button variant="ghost" size="icon" onClick={() => openCameraDialog(inv)}><Camera /></Button>
+                                      {isAdmin && (
+                                          <AlertDialog>
+                                              <AlertDialogTrigger asChild><Button variant="ghost" size="icon"><Trash2 className="text-destructive" /></Button></AlertDialogTrigger>
+                                              <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>¿Eliminar del despacho?</AlertDialogTitle><AlertDialogDescription>La factura no se borrará del sistema, solo de este despacho.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={() => handleRemoveInvoiceFromShipment(inv.id_fac_desp)}>Eliminar</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+                                          </AlertDialog>
+                                      )}
+                                  </div>
+                              </TableCell>
                           </TableRow>
-                      )}
+                      ))}
                   </TableBody>
               </Table>
             </div>
-            {/* Mobile view */}
             <div className="md:hidden">
               <Accordion type="single" collapsible className="w-full">
-                  {filteredAndSortedInvoices.length > 0 ? filteredAndSortedInvoices.map((invoice, index) => (
-                      <AccordionItem value={`item-${invoice.id_fac_desp}`} key={invoice.id_fac_desp} className="border-b">
-                          <AccordionTrigger className="w-full p-4 text-left hover:no-underline [&[data-state=open]>svg]:text-primary">
-                              <div className="flex w-full justify-between items-center">
-                                  <div className="flex-1 text-left">
-                                      <div className="flex items-center gap-2">
-                                          <p className="font-semibold text-primary">{String(invoice.reference_number || invoice.id_factura)}</p>
-                                          <Badge variant={invoice.state ? 'default' : 'secondary'} className="text-xs">
-                                              {invoice.state ? "Completado" : "Pendiente"}
-                                          </Badge>
-                                      </div>
-                                      <p className="text-sm text-muted-foreground truncate font-normal mt-1">{invoice.code_customer} - {invoice.customer_name || 'N/A'}</p>
-                                  </div>
+                  {filteredAndSortedInvoices.map(inv => (
+                      <AccordionItem value={`item-${inv.id_fac_desp}`} key={inv.id_fac_desp}>
+                          <AccordionTrigger className="p-4 hover:no-underline"><div className="text-left"><p className="font-semibold">{String(inv.reference_number || inv.id_factura)}</p><p className="text-xs text-muted-foreground">{inv.customer_name}</p></div></AccordionTrigger>
+                          <AccordionContent className="p-4 space-y-4">
+                              <div className="grid grid-cols-2 gap-4 text-xs">
+                                  <div><p className="text-muted-foreground">GEOCERCA</p><Badge variant={inv.geocerca ? 'default' : 'outline'}>{inv.geocerca ? 'Sí' : 'No'}</Badge></div>
+                                  <div><p className="text-muted-foreground">TOTAL</p><p className="font-bold">${(inv.net_to_pay ?? 0).toFixed(2)}</p></div>
+                                  <div><p className="text-muted-foreground">PAGO</p><p>{inv.forma_pago}</p></div>
+                                  <div><p className="text-muted-foreground">MONTO</p><p>${inv.monto.toFixed(2)}</p></div>
                               </div>
-                          </AccordionTrigger>
-                          <AccordionContent className="p-4 pt-0">
-                              <div className="grid grid-cols-2 gap-y-4 gap-x-2 mb-4 text-sm">
-                              <div className="space-y-1">
-                                  <p className="text-xs font-medium text-muted-foreground">GEOCERCA</p>
-                                  <Badge variant={invoice.geocerca ? 'default' : 'outline'} className="text-xs">{invoice.geocerca ? 'Sí' : 'No'}</Badge>
-                              </div>
-                              <div className="space-y-1">
-                                  <p className="text-xs font-medium text-muted-foreground">COMPROBANTE</p>
-                                  {invoice.comprobante ? (
-                                  <button onClick={() => handleOpenImageModal(invoice.comprobante)}>
-                                      <Image src={invoice.comprobante} alt={`Comprobante de ${invoice.id_factura}`} width={40} height={40} className="h-10 w-10 rounded-md object-cover" />
-                                  </button>
-                                  ) : (<p className="text-sm font-normal">N/A</p>)}
-                              </div>
-                              <div className="space-y-1">
-                                  <p className="text-xs font-medium text-muted-foreground">FECHA ENTREGA</p>
-                                  <p className="font-normal">{formatDateTime(invoice.fecha_entrega)}</p>
-                              </div>
-                              <div className="space-y-1">
-                                  <p className="text-xs font-medium text-muted-foreground">TOTAL FACTURA</p>
-                                  <p className="font-semibold">${(invoice.net_to_pay ?? 0).toFixed(2)}</p>
-                              </div>
-                              <div className="space-y-1">
-                                  <p className="text-xs font-medium text-muted-foreground">FORMA DE PAGO</p>
-                                  <p className="font-normal">{invoice.forma_pago}</p>
-                              </div>
-                              <div className="space-y-1">
-                                  <p className="text-xs font-medium text-muted-foreground">MONTO PAGADO</p>
-                                  <p className="font-semibold">${invoice.monto.toFixed(2)}</p>
-                              </div>
-                              </div>
-                              <div className="flex gap-2 mt-4">
-                              <Button variant="outline" className="flex-1" onClick={() => handleEditInvoice(invoice)} disabled={verifyingLocationInvoiceId === invoice.id_fac_desp}>
-                                  {verifyingLocationInvoiceId === invoice.id_fac_desp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
-                                  <span className="ml-2">Editar</span>
-                              </Button>
-                              <Button className="flex-1" onClick={() => openCameraDialog(invoice)} disabled={verifyingLocationInvoiceId === invoice.id_fac_desp}>
-                                  {verifyingLocationInvoiceId === invoice.id_fac_desp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
-                                  <span className="ml-2">Foto</span>
-                              </Button>
+                              <div className="flex gap-2">
+                                  <Button variant="outline" className="flex-1" onClick={() => handleEditInvoice(inv)}><Pencil className="mr-2"/>Editar</Button>
+                                  <Button className="flex-1" onClick={() => openCameraDialog(inv)}><Camera className="mr-2"/>Foto</Button>
+                                  {isAdmin && <Button variant="destructive" size="icon" onClick={() => handleRemoveInvoiceFromShipment(inv.id_fac_desp)}><Trash2/></Button>}
                               </div>
                           </AccordionContent>
                       </AccordionItem>
-                  )) : (
-                      <p className="text-center text-muted-foreground py-8">No hay facturas que coincidan con la búsqueda.</p>
-                  )}
+                  ))}
               </Accordion>
             </div>
         </CardContent>
       </Card>
 
-
-       {/* Diálogo para ver el orden de visita */}
       <Dialog open={isOrderDialogOpen} onOpenChange={setIsOrderDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <ListOrdered /> Orden de Visita Sugerido
-            </DialogTitle>
-            <DialogDescription>
-              Esta es la secuencia de entrega recomendada para optimizar su ruta.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="max-h-[60vh] overflow-y-auto pr-2">
-            <ol className="list-decimal list-inside space-y-3">
-              {orderedRoute.map((invoice, index) => (
-                <li key={invoice.id_fac_desp} className="font-medium">
-                  {invoice.customer_name}
-                  {invoice.id_fac_desp > -1 && (
-                     <p className="text-sm font-normal text-muted-foreground">
-                        Factura: {String(invoice.reference_number)}
-                     </p>
-                  )}
-                </li>
-              ))}
-            </ol>
-          </div>
-          <DialogFooter>
-            <Button onClick={() => setIsOrderDialogOpen(false)}>Cerrar</Button>
-          </DialogFooter>
+        <DialogContent><DialogHeader><DialogTitle>Orden de Visita</DialogTitle></DialogHeader>
+          <ol className="list-decimal list-inside space-y-2">{orderedRoute.map(inv => <li key={inv.id_fac_desp}>{inv.customer_name} {inv.id_fac_desp > -1 && <span className="text-xs text-muted-foreground">(Fact: {String(inv.reference_number)})</span>}</li>)}</ol>
         </DialogContent>
       </Dialog>
 
-      {/* Diálogo para editar una factura del despacho */}
       <Dialog open={isInvoiceDialogOpen} onOpenChange={setIsInvoiceDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Editar Factura del Despacho</DialogTitle>
-            <DialogDescription>
-              Modifique los detalles de la factura o cargue un nuevo comprobante.
-            </DialogDescription>
-          </DialogHeader>
-          <Form {...form}>
-            <form className="space-y-4" onSubmit={form.handleSubmit(handleUpdateInvoice)}>
-              <FormItem>
-                  <FormLabel>Comprobante</FormLabel>
-                   <FormControl>
-                     <Input
-                        type="file"
-                        ref={fileInputRef}
-                        onChange={handleFileChange}
-                        accept="image/*"
-                      />
-                  </FormControl>
-                  <FormMessage />
-                  {selectedFile && <p className="text-sm text-muted-foreground mt-2">Nuevo archivo: {selectedFile.name}</p>}
-                  {editingShipmentInvoice?.comprobante && !selectedFile && (
-                      <div className="mt-2">
-                          <p className="text-sm text-muted-foreground">Comprobante actual:</p>
-                          <button type="button" onClick={() => handleOpenImageModal(editingShipmentInvoice.comprobante)}>
-                            <Image src={editingShipmentInvoice.comprobante} alt="Comprobante actual" width={80} height={80} className="rounded-md object-cover mt-1" />
-                          </button>
-                      </div>
-                  )}
-              </FormItem>
-              
-               <FormField
-                control={form.control}
-                name="fecha_entrega"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Fecha de Entrega</FormLabel>
-                    <FormControl>
-                      <Input value={field.value ? new Date(field.value).toLocaleString() : 'N/A'} disabled />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="forma_pago"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Forma de Pago</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccione una forma de pago" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {paymentOptions.map((method) => (
-                          <SelectItem key={method} value={method}>
-                            {method}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="monto"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Monto</FormLabel>
-                    <FormControl>
-                      <Input type="number" step="0.01" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="state"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Estado</FormLabel>
-                    <Select
-                      onValueChange={(value) => field.onChange(value === 'true')}
-                      value={String(field.value)}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccione un estado" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                         <SelectItem value="true">Completado</SelectItem>
-                         <SelectItem value="false">Pendiente</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button type="button" variant="secondary" onClick={closeInvoiceDialog}>Cancelar</Button>
-                </DialogClose>
-                <Button type="submit" disabled={loading}>{loading ? 'Guardando...' : 'Guardar Cambios'}</Button>
-              </DialogFooter>
-            </form>
-          </Form>
+        <DialogContent><DialogHeader><DialogTitle>Editar Factura</DialogTitle></DialogHeader>
+          <Form {...form}><form className="space-y-4" onSubmit={form.handleSubmit(handleUpdateInvoice)}>
+              <FormItem><FormLabel>Comprobante</FormLabel><FormControl><Input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" /></FormControl></FormItem>
+              <FormField control={form.control} name="forma_pago" render={({ field }) => (
+                <FormItem><FormLabel>Forma de Pago</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{paymentMethods.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select></FormItem>
+              )}/>
+              <FormField control={form.control} name="monto" render={({ field }) => (<FormItem><FormLabel>Monto</FormLabel><FormControl><Input type="number" step="0.01" {...field}/></FormControl></FormItem>)}/>
+              <FormField control={form.control} name="state" render={({ field }) => (<FormItem><FormLabel>Estado</FormLabel><Select onValueChange={v => field.onChange(v === 'true')} value={String(field.value)}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent><SelectItem value="true">Completado</SelectItem><SelectItem value="false">Pendiente</SelectItem></SelectContent></Select></FormItem>)}/>
+              <DialogFooter><Button type="submit" disabled={loading}>Guardar</Button></DialogFooter>
+            </form></Form>
         </DialogContent>
       </Dialog>
       
-      {/* Diálogo para agregar nueva factura */}
       <Dialog open={isAddInvoiceDialogOpen} onOpenChange={setIsAddInvoiceDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Nueva Facturación para Despacho</DialogTitle>
-            <DialogDescription>
-              Cree una factura y asígnela automáticamente a este despacho.
-            </DialogDescription>
-          </DialogHeader>
-          <Form {...addInvoiceForm}>
-            <form onSubmit={addInvoiceForm.handleSubmit(handleCreateAndAssignInvoice)} className="space-y-4">
-              <FormField
-                control={addInvoiceForm.control}
-                name="id_factura"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>No. Factura</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Ej: F-12345" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={addInvoiceForm.control}
-                name="code_customer"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>Código Cliente</FormLabel>
-                    <AsyncCombobox
-                      value={field.value}
-                      onValueChange={handleCustomerChange}
-                      loadOptions={searchCustomers}
-                      placeholder="Buscar cliente..."
-                    />
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={addInvoiceForm.control}
-                name="customer_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nombre Cliente</FormLabel>
-                    <FormControl>
-                      <Input {...field} readOnly className="bg-muted" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={addInvoiceForm.control}
-                name="grand_total"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Total de la Factura</FormLabel>
-                    <FormControl>
-                      <Input type="number" step="0.01" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="flex items-center gap-2 pt-2">
-                 <span className="text-sm font-medium">Estado inicial:</span>
-                 <Badge variant="secondary">Pendiente</Badge>
-              </div>
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button type="button" variant="secondary">Cancelar</Button>
-                </DialogClose>
-                <Button type="submit" disabled={loading}>
-                  {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Crear y Asignar
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
+        <DialogContent><DialogHeader><DialogTitle>Nueva Facturación</DialogTitle></DialogHeader>
+          <Form {...addInvoiceForm}><form onSubmit={addInvoiceForm.handleSubmit(handleCreateAndAssignInvoice)} className="space-y-4">
+              <FormField control={addInvoiceForm.control} name="id_factura" render={({ field }) => (<FormItem><FormLabel>No. Factura</FormLabel><FormControl><Input {...field}/></FormControl></FormItem>)}/>
+              <FormField control={addInvoiceForm.control} name="code_customer" render={({ field }) => (<FormItem><FormLabel>Cliente</FormLabel><AsyncCombobox value={field.value} onValueChange={handleCustomerChange} loadOptions={searchCustomers}/></FormItem>)}/>
+              <FormField control={addInvoiceForm.control} name="grand_total" render={({ field }) => (<FormItem><FormLabel>Total</FormLabel><FormControl><Input type="number" step="0.01" {...field}/></FormControl></FormItem>)}/>
+              <DialogFooter><Button type="submit" disabled={loading}>Crear y Asignar</Button></DialogFooter>
+            </form></Form>
         </DialogContent>
       </Dialog>
 
-      {/* Diálogo para visualizar la imagen del comprobante */}
-      <Dialog open={imageModalOpen} onOpenChange={setImageModalOpen}>
-        <DialogContent className="max-w-3xl">
-            <DialogHeader>
-                <DialogTitle>Vista Previa del Comprobante</DialogTitle>
-            </DialogHeader>
-            <Image
-                src={selectedImage}
-                alt="Comprobante"
-                width={800}
-                height={600}
-                className="w-full h-auto rounded-md object-contain"
-            />
-        </DialogContent>
-      </Dialog>
-
-      {/* Diálogo para capturar una foto con la cámara */}
-      <Dialog open={isCameraDialogOpen} onOpenChange={closeCameraDialog}>
-        <DialogContent className="p-0 border-0 bg-black max-w-full h-full sm:h-auto sm:max-w-3xl flex flex-col">
-          <DialogHeader className="sr-only">
-            <DialogTitle>Capturar Comprobante</DialogTitle>
-            <DialogDescription>Use su cámara para tomar una foto del comprobante.</DialogDescription>
-          </DialogHeader>
-           <div className="relative flex-1 w-full h-full">
-            {capturedImage ? (
-                <Image src={capturedImage} alt="Comprobante capturado" layout="fill" className="object-contain" />
-            ) : (
-              <>
-                <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
-                {!hasCameraPermission && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-75">
-                        <Alert variant="destructive" className="w-4/5 max-w-md">
-                            <AlertTitle>Se requiere acceso a la cámara</AlertTitle>
-                            <AlertDescription>
-                            Por favor, permite el acceso a la cámara para usar esta función.
-                            </AlertDescription>
-                        </Alert>
-                    </div>
-                )}
-              </>
-            )}
-            <canvas ref={canvasRef} className="hidden" />
-
-            {/* Controles de la cámara */}
-            <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
-                <div className="flex justify-center items-center gap-4">
-                     {capturedImage ? (
-                        <>
-                           <Button variant="outline" onClick={() => setCapturedImage(null)} className="bg-white/20 backdrop-blur-sm border-white/30 text-white hover:bg-white/30">
-                                Tomar de nuevo
-                           </Button>
-                           <Button onClick={saveCapturedPhoto} disabled={loading} className="bg-primary/80 backdrop-blur-sm text-primary-foreground hover:bg-primary">
-                               {loading ? "Guardando..." : "Guardar Foto"}
-                           </Button>
-                        </>
-                    ) : (
-                        <button 
-                            onClick={takePhoto} 
-                            disabled={!hasCameraPermission}
-                            className="h-20 w-20 rounded-full border-4 border-white bg-white/30 backdrop-blur-sm ring-4 ring-black/30 transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                            aria-label="Tomar Foto"
-                        />
-                    )}
-                </div>
-            </div>
-            
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={closeCameraDialog}
-              className="absolute top-4 right-4 text-white bg-black/30 hover:bg-black/50 h-10 w-10 rounded-full"
-            >
-              <X className="h-6 w-6" />
-            </Button>
+      <Dialog open={imageModalOpen} onOpenChange={setImageModalOpen}><DialogContent className="max-w-3xl"><Image src={selectedImage} alt="C" width={800} height={600} className="w-full h-auto rounded"/></DialogContent></Dialog>
+      <Dialog open={isCameraDialogOpen} onOpenChange={closeCameraDialog}><DialogContent className="p-0 border-0 bg-black max-w-full h-full sm:h-auto sm:max-w-3xl flex flex-col">
+          <div className="relative flex-1">{capturedImage ? <Image src={capturedImage} alt="C" layout="fill" className="object-contain" /> : <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />}
+            <canvas ref={canvasRef} className="hidden" /><div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4">{capturedImage ? (<><Button onClick={() => setCapturedImage(null)}>Reintentar</Button><Button onClick={saveCapturedPhoto}>Guardar</Button></>) : <button onClick={takePhoto} className="h-16 w-16 rounded-full border-4 border-white bg-white/30" />}</div>
+            <Button variant="ghost" size="icon" onClick={closeCameraDialog} className="absolute top-4 right-4 text-white"><X/></Button>
           </div>
-        </DialogContent>
-      </Dialog>
-      
-      {/* Modal para la previsualización del PDF */}
-      {pdfData && (
-        <PdfPreviewModal
-          isOpen={isPreviewOpen}
-          setIsOpen={setIsPreviewOpen}
-          pdfDataUri={pdfData.dataUri}
-          fileName={pdfData.fileName}
-        />
-      )}
+        </DialogContent></Dialog>
+      {pdfData && <PdfPreviewModal isOpen={isPreviewOpen} setIsOpen={setIsPreviewOpen} pdfDataUri={pdfData.dataUri} fileName={pdfData.fileName} />}
     </div>
   )
 }
