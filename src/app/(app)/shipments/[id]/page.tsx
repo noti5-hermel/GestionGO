@@ -303,6 +303,20 @@ export default function ShipmentDetailPage() {
     }
   }, [isCameraDialogOpen]);
 
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+    }
+  };
+
+  const handleEditInvoice = (invoice: ShipmentInvoice) => {
+    handleGeofenceProtectedAction(invoice, (inv, location) => {
+        setEditingShipmentInvoice({ ...inv, _capturedLocation: location });
+        setIsInvoiceDialogOpen(true);
+    });
+  };
+
   const uploadComprobante = async (): Promise<string | undefined> => {
     if (selectedFile && editingShipmentInvoice?.comprobante) {
         const oldFileName = editingShipmentInvoice.comprobante.split('/').pop();
