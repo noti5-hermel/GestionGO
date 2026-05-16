@@ -416,10 +416,14 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
         return; // Detiene la ejecución si la carga de una nueva imagen falla.
     }
 
+    // Lógica de auto-completado: si hay imagen y monto > 0, es completado.
+    const isCompleted = values.state || (!!imageUrl && values.monto > 0);
+
     const dataToSubmit: any = {
       ...values,
       id_despacho: parseInt(String(values.id_despacho), 10),
       comprobante: imageUrl,
+      state: isCompleted
     };
 
     // Si se subió un nuevo archivo, se establece la fecha de entrega.
@@ -1029,5 +1033,3 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
     </Card>
   )
 }
-
-    

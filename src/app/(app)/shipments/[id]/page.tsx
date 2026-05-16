@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react"
@@ -237,6 +236,7 @@ export default function ShipmentDetailPage() {
                           ...si,
                           state: normalizedState,
                           reference_number: invoiceInfo?.reference_number,
+                          code_customer: invoiceInfo?.code_customer,
                           customer_name: invoiceInfo?.customer_name,
                           net_to_pay: invoiceInfo?.net_to_pay ?? 0,
                           tax_type: customerInfo?.tax,
@@ -363,8 +363,19 @@ export default function ShipmentDetailPage() {
     if (!editingShipmentInvoice) return;
     const imageUrl = await uploadComprobante();
     if (!imageUrl && selectedFile) return;
-    const dataToUpdate: any = { comprobante: imageUrl, forma_pago: values.forma_pago, monto: values.monto, state: values.state };
-    if (values.forma_pago === 'Efectivo' && (!!selectedFile || !!imageUrl) && values.monto > 0) dataToUpdate.state = true;
+
+    // Lógica de auto-completado mejorada:
+    // Si hay una imagen (nueva o vieja) y el monto es mayor a 0, se marca como pagado automáticamente.
+    // También respetamos la selección manual del usuario en el formulario.
+    const isCompleted = values.state || (!!imageUrl && values.monto > 0);
+
+    const dataToUpdate: any = { 
+        comprobante: imageUrl, 
+        forma_pago: values.forma_pago, 
+        monto: values.monto, 
+        state: isCompleted 
+    };
+
     if (selectedFile) {
         dataToUpdate.fecha_entrega = new Date().toISOString();
         if (editingShipmentInvoice._capturedLocation) {
@@ -464,8 +475,16 @@ export default function ShipmentDetailPage() {
       return;
     }
     const { data: { publicUrl } } = supabase.storage.from(BUCKET_NAME).getPublicUrl(fileName);
-    const dataToUpdate: any = { comprobante: publicUrl, fecha_entrega: new Date().toISOString() };
-    if (invoiceForCamera.forma_pago === 'Efectivo' && invoiceForCamera.monto > 0) dataToUpdate.state = true;
+    
+    // Si se toma una foto y ya hay un monto asignado, marcar como pagado.
+    const isCompleted = invoiceForCamera.state || (!!publicUrl && invoiceForCamera.monto > 0);
+
+    const dataToUpdate: any = { 
+        comprobante: publicUrl, 
+        fecha_entrega: new Date().toISOString(),
+        state: isCompleted
+    };
+
     const { error: dbError } = await supabase.from('facturacion_x_despacho').update(dataToUpdate).eq('id_fac_desp', invoiceForCamera.id_fac_desp);
     if (invoiceForCamera._capturedLocation) {
       const { latitude, longitude } = invoiceForCamera._capturedLocation;
