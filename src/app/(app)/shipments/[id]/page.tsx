@@ -45,7 +45,7 @@ const BUCKET_NAME = 'comprobante';
 
 const shipmentInvoiceEditSchema = z.object({
   comprobante: z.string().optional(),
-  forma_pago: z.enum(["Efectivo", "Tarjeta", "Transferencia", "Quedan", "Firma", "Credito", "Devolucion"]),
+  forma_pago: z.enum(["Efectivo", "Tarjeta", "Transferencia", "Cheque", "Quedan", "Firma", "Credito", "Devolucion"]),
   monto: z.coerce.number().min(0, "El monto debe ser un número positivo."),
   state: z.boolean(),
   fecha_entrega: z.string().optional().nullable(),
@@ -86,7 +86,7 @@ export type ShipmentInvoice = {
   id_factura: string
   code_customer: string
   comprobante: string
-  forma_pago: "Efectivo" | "Tarjeta" | "Transferencia" | "Quedan" | "Firma" | "Credito" | "Devolucion"
+  forma_pago: "Efectivo" | "Tarjeta" | "Transferencia" | "Cheque" | "Quedan" | "Firma" | "Credito" | "Devolucion"
   monto: number
   state: boolean
   fecha_entrega: string | null;
@@ -104,7 +104,7 @@ type ShipmentInvoiceWithLocation = ShipmentInvoice & {
 
 type User = { id_user: string; name: string; id_rol: number; }
 type Role = { id_ruta: string; ruta_desc: string }
-const paymentMethods: ShipmentInvoice['forma_pago'][] = ["Efectivo", "Tarjeta", "Transferencia", "Quedan", "Firma", "Credito", "Devolucion"];
+const paymentMethods: ShipmentInvoice['forma_pago'][] = ["Efectivo", "Tarjeta", "Transferencia", "Cheque", "Quedan", "Firma", "Credito", "Devolucion"];
 const BODEGA_LOCATION = { lat: 13.725410116705362, lng: -89.21911777270175 };
 
 const StatusBadge = ({ checked, text }: { checked: boolean, text: string }) => {
@@ -366,7 +366,6 @@ export default function ShipmentDetailPage() {
 
     // Lógica de auto-completado mejorada:
     // Si hay una imagen (nueva o vieja) y el monto es mayor a 0, se marca como pagado automáticamente.
-    // También respetamos la selección manual del usuario en el formulario.
     const isCompleted = values.state || (!!imageUrl && values.monto > 0);
 
     const dataToUpdate: any = { 

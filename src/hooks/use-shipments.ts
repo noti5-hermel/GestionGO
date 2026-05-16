@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useState, useEffect } from "react"
@@ -59,7 +58,7 @@ export type ShipmentInvoice = {
   id_fac_desp: number
   id_factura: string
   comprobante: string
-  forma_pago: "Efectivo" | "Tarjeta" | "Transferencia" | "Quedan" | "Firma" | "Credito";
+  forma_pago: "Efectivo" | "Tarjeta" | "Transferencia" | "Cheque" | "Quedan" | "Firma" | "Credito" | "Devolucion";
   monto: number
   state: boolean
   reference_number?: string | number
