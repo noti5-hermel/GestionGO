@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react"
@@ -17,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import Image from "image/next"
+import Image from "next/image"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 import { generateShipmentPDF } from "@/lib/generate-shipment-pdf"
 import { PdfPreviewModal } from "@/components/pdf-preview-modal"
@@ -853,7 +852,7 @@ export default function ShipmentDetailPage() {
 
       <Dialog open={imageModalOpen} onOpenChange={setImageModalOpen}><DialogContent className="max-w-3xl"><Image src={selectedImage} alt="C" width={800} height={600} className="w-full h-auto rounded"/></DialogContent></Dialog>
       <Dialog open={isCameraDialogOpen} onOpenChange={closeCameraDialog}><DialogContent className="p-0 border-0 bg-black max-w-full h-full sm:h-auto sm:max-w-3xl flex flex-col">
-          <div className="relative flex-1">{capturedImage ? <Image src={capturedImage} alt="C" layout="fill" className="object-contain" /> : <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />}
+          <div className="relative flex-1">{capturedImage ? <Image src={capturedImage} alt="C" fill className="object-contain" /> : <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />}
             <canvas ref={canvasRef} className="hidden" /><div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4">{capturedImage ? (<><Button onClick={() => setCapturedImage(null)}>Reintentar</Button><Button onClick={saveCapturedPhoto}>Guardar</Button></>) : <button onClick={takePhoto} className="h-16 w-16 rounded-full border-4 border-white bg-white/30" />}</div>
             <Button variant="ghost" size="icon" onClick={closeCameraDialog} className="absolute top-4 right-4 text-white"><X/></Button>
           </div>
