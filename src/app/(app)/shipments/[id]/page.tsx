@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react"
@@ -16,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import Image from "next/image"
+import Image from "image/next"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 import { generateShipmentPDF } from "@/lib/generate-shipment-pdf"
 import { PdfPreviewModal } from "@/components/pdf-preview-modal"
@@ -36,9 +37,7 @@ import {
 
 /**
  * @file shipments/[id]/page.tsx
- * @description Página de detalle para un despacho.
- * Permite gestionar el estado del recorrido, editar facturas, subir comprobantes.
- * La creación y eliminación de facturas del despacho está limitada al rol ADMIN.
+ * @description Página de detalle para un despacho con lógica de geocerca mejorada.
  */
 
 const BUCKET_NAME = 'comprobante';
@@ -325,7 +324,7 @@ export default function ShipmentDetailPage() {
     if (!selectedFile) return editingShipmentInvoice?.comprobante;
     setLoading(true);
     const fileName = `${Date.now()}-${selectedFile.name}`;
-    const { error } = await supabase.storage.from(BUCKET_NAME).upload(fileName, selectedFile, { cacheControl: '3600', upsert: false });
+    const { error } = await supabase.storage.from(BUCKET_NAME).upload(fileName, fileInputRef.current?.files?.[0]!, { cacheControl: '3600', upsert: false });
     setLoading(false);
     if (error) {
       toast({ title: "Error al subir imagen", description: error.message, variant: "destructive" });
@@ -364,8 +363,6 @@ export default function ShipmentDetailPage() {
     const imageUrl = await uploadComprobante();
     if (!imageUrl && selectedFile) return;
 
-    // Lógica de auto-completado mejorada:
-    // Si hay una imagen (nueva o vieja) y el monto es mayor a 0, se marca como pagado automáticamente.
     const isCompleted = values.state || (!!imageUrl && values.monto > 0);
 
     const dataToUpdate: any = { 
@@ -475,7 +472,6 @@ export default function ShipmentDetailPage() {
     }
     const { data: { publicUrl } } = supabase.storage.from(BUCKET_NAME).getPublicUrl(fileName);
     
-    // Si se toma una foto y ya hay un monto asignado, marcar como pagado.
     const isCompleted = invoiceForCamera.state || (!!publicUrl && invoiceForCamera.monto > 0);
 
     const dataToUpdate: any = { 
@@ -501,12 +497,9 @@ export default function ShipmentDetailPage() {
   
   const handleGeofenceProtectedAction = (invoice: ShipmentInvoice, onSuccess: (invoice: ShipmentInvoice, location: { latitude: number; longitude: number } | null) => void) => {
     const role = currentUser?.role?.toLowerCase() || '';
-    // Roles restringidos por ubicación geográfica
     const isRestrictedRole = role.includes('motorista') || role.includes('auxiliar') || role.includes('reparto');
     const isAdmin = role.includes('admin');
 
-    // Los administradores y roles de oficina (como Facturación) NO están restringidos por geocerca
-    // para permitir correcciones desde la oficina.
     if (!isRestrictedRole || isAdmin) {
       onSuccess(invoice, null);
       return;
@@ -514,17 +507,25 @@ export default function ShipmentDetailPage() {
 
     setVerifyingLocationInvoiceId(invoice.id_fac_desp);
     
-    // Configuración optimizada de Geolocation para mayor precisión
     const geoOptions = { 
         enableHighAccuracy: true, 
-        timeout: 15000, // Aumentado a 15s para dar tiempo al sensor
-        maximumAge: 0   // Forzar una lectura fresca, no caché
+        timeout: 15000,
+        maximumAge: 0   // Ignorar ubicación en caché para máxima frescura
     };
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude, accuracy } = position.coords;
         console.log(`GPS Accuracy: ${accuracy} meters`);
+
+        // Si la precisión es muy mala (ej. > 100m), avisamos al usuario que podría fallar
+        if (accuracy > 150) {
+            toast({ 
+                title: "Señal GPS débil", 
+                description: `Precisión baja (${Math.round(accuracy)}m). Intente moverse a un lugar más despejado.`, 
+                variant: "destructive" 
+            });
+        }
 
         if (invoice.geocerca) {
           const { data, error } = await supabase.rpc('is_user_in_client_geofence', { 
@@ -536,18 +537,17 @@ export default function ShipmentDetailPage() {
           setVerifyingLocationInvoiceId(null);
           
           if (error) {
-              toast({ title: "Error de servidor", description: "No se pudo verificar la ubicación contra la base de datos.", variant: "destructive" });
+              toast({ title: "Error de servidor", description: "No se pudo verificar la ubicación.", variant: "destructive" });
           } else if (data === true) {
               onSuccess(invoice, null);
           } else {
               toast({ 
-                  title: "Acción no permitida", 
-                  description: "Debe estar físicamente dentro de la geocerca del cliente para realizar esta acción.", 
+                  title: "Fuera de rango", 
+                  description: `Ubicación no coincide con el cliente. (Precisión actual: ${Math.round(accuracy)}m)`, 
                   variant: "destructive" 
               });
           }
         } else {
-          // Si el cliente no tiene geocerca, permitimos pero guardamos la ubicación actual.
           setVerifyingLocationInvoiceId(null);
           onSuccess(invoice, { latitude, longitude });
         }
@@ -555,11 +555,11 @@ export default function ShipmentDetailPage() {
       (error) => {
         setVerifyingLocationInvoiceId(null);
         let msg = "No se pudo obtener la ubicación.";
-        if (error.code === 1) msg = "Por favor, active el permiso de GPS en su navegador.";
-        if (error.code === 2) msg = "Señal de GPS no disponible. Intente en un lugar abierto.";
-        if (error.code === 3) msg = "Tiempo de espera agotado al obtener ubicación.";
+        if (error.code === 1) msg = "Active el GPS y permita el acceso en el navegador.";
+        else if (error.code === 2) msg = "Señal de GPS no disponible. Salga a un lugar abierto.";
+        else if (error.code === 3) msg = "Tiempo de espera agotado al obtener GPS.";
         
-        toast({ title: "Error de ubicación", description: msg, variant: "destructive" });
+        toast({ title: "Error de GPS", description: msg, variant: "destructive" });
       },
       geoOptions
     );
