@@ -500,30 +500,68 @@ export default function ShipmentDetailPage() {
   };
   
   const handleGeofenceProtectedAction = (invoice: ShipmentInvoice, onSuccess: (invoice: ShipmentInvoice, location: { latitude: number; longitude: number } | null) => void) => {
-    if (currentUser?.role?.toLowerCase() !== 'motorista') {
+    const role = currentUser?.role?.toLowerCase() || '';
+    // Roles restringidos por ubicación geográfica
+    const isRestrictedRole = role.includes('motorista') || role.includes('auxiliar') || role.includes('reparto');
+    const isAdmin = role.includes('admin');
+
+    // Los administradores y roles de oficina (como Facturación) NO están restringidos por geocerca
+    // para permitir correcciones desde la oficina.
+    if (!isRestrictedRole || isAdmin) {
       onSuccess(invoice, null);
       return;
     }
+
     setVerifyingLocationInvoiceId(invoice.id_fac_desp);
+    
+    // Configuración optimizada de Geolocation para mayor precisión
+    const geoOptions = { 
+        enableHighAccuracy: true, 
+        timeout: 15000, // Aumentado a 15s para dar tiempo al sensor
+        maximumAge: 0   // Forzar una lectura fresca, no caché
+    };
+
     navigator.geolocation.getCurrentPosition(
       async (position) => {
-        const { latitude, longitude } = position.coords;
+        const { latitude, longitude, accuracy } = position.coords;
+        console.log(`GPS Accuracy: ${accuracy} meters`);
+
         if (invoice.geocerca) {
-          const { data, error } = await supabase.rpc('is_user_in_client_geofence', { user_latitude: latitude, user_longitude: longitude, p_code_customer: invoice.code_customer });
+          const { data, error } = await supabase.rpc('is_user_in_client_geofence', { 
+            user_latitude: latitude, 
+            user_longitude: longitude, 
+            p_code_customer: invoice.code_customer 
+          });
+          
           setVerifyingLocationInvoiceId(null);
-          if (error) toast({ title: "Error de verificación", variant: "destructive" });
-          else if (data === true) onSuccess(invoice, null);
-          else toast({ title: "Acción no permitida", description: "Debe estar dentro de la geocerca del cliente.", variant: "destructive" });
+          
+          if (error) {
+              toast({ title: "Error de servidor", description: "No se pudo verificar la ubicación contra la base de datos.", variant: "destructive" });
+          } else if (data === true) {
+              onSuccess(invoice, null);
+          } else {
+              toast({ 
+                  title: "Acción no permitida", 
+                  description: "Debe estar físicamente dentro de la geocerca del cliente para realizar esta acción.", 
+                  variant: "destructive" 
+              });
+          }
         } else {
+          // Si el cliente no tiene geocerca, permitimos pero guardamos la ubicación actual.
           setVerifyingLocationInvoiceId(null);
           onSuccess(invoice, { latitude, longitude });
         }
       },
-      () => {
+      (error) => {
         setVerifyingLocationInvoiceId(null);
-        toast({ title: "Error de ubicación", variant: "destructive" });
+        let msg = "No se pudo obtener la ubicación.";
+        if (error.code === 1) msg = "Por favor, active el permiso de GPS en su navegador.";
+        if (error.code === 2) msg = "Señal de GPS no disponible. Intente en un lugar abierto.";
+        if (error.code === 3) msg = "Tiempo de espera agotado al obtener ubicación.";
+        
+        toast({ title: "Error de ubicación", description: msg, variant: "destructive" });
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      geoOptions
     );
   };
   
@@ -650,9 +688,10 @@ export default function ShipmentDetailPage() {
       return { totalContadoCalculado: tc, totalCreditoCalculado: tcr, totalGeneralCalculado: tc + tcr };
   }, [invoices]);
   
-  const isMotorista = currentUser?.role?.toLowerCase() === 'motorista';
-  const isFacturacion = currentUser?.role?.toLowerCase() === 'facturacion';
-  const isAdmin = currentUser?.role?.toLowerCase() === 'admin';
+  const isMotorista = currentUser?.role?.toLowerCase()?.includes('motorista');
+  const isAuxiliar = currentUser?.role?.toLowerCase()?.includes('auxiliar');
+  const isFacturacion = currentUser?.role?.toLowerCase()?.includes('facturacion');
+  const isAdmin = currentUser?.role?.toLowerCase()?.includes('admin');
 
   if (loading && !shipment) return <p>Cargando detalles...</p>;
   if (!shipment) return <p>No encontrado.</p>;
@@ -664,7 +703,7 @@ export default function ShipmentDetailPage() {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div><CardTitle>Detalle #{shipment.id_despacho}</CardTitle><CardDescription>Información y estado actual.</CardDescription></div>
             <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 w-full md:w-auto">
-              {isMotorista && (
+              {(isMotorista || isAuxiliar) && (
                 <>
                   {shipment.estado_recorrido === 'pendiente' && <Button onClick={() => toggleShipmentState('en_curso')} className="bg-green-600 hover:bg-green-700"><Play className="mr-2 h-4 w-4" /> Iniciar</Button>}
                   {shipment.estado_recorrido === 'en_curso' && <Button onClick={() => toggleShipmentState('finalizado')} className="bg-red-600 hover:bg-red-700"><Square className="mr-2 h-4 w-4" /> Finalizar</Button>}
@@ -729,8 +768,14 @@ export default function ShipmentDetailPage() {
                               <TableCell><Badge variant={inv.state ? 'default' : 'secondary'}>{inv.state ? "Pagado" : "Pendiente"}</Badge></TableCell>
                               <TableCell className="text-right">
                                   <div className="flex justify-end gap-1">
-                                      <Button variant="ghost" size="icon" onClick={() => handleEditInvoice(inv)}><Pencil /></Button>
-                                      <Button variant="ghost" size="icon" onClick={() => openCameraDialog(inv)}><Camera /></Button>
+                                      {verifyingLocationInvoiceId === inv.id_fac_desp ? (
+                                          <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                          <>
+                                            <Button variant="ghost" size="icon" onClick={() => handleEditInvoice(inv)}><Pencil /></Button>
+                                            <Button variant="ghost" size="icon" onClick={() => openCameraDialog(inv)}><Camera /></Button>
+                                          </>
+                                      )}
                                       {isAdmin && (
                                           <AlertDialog>
                                               <AlertDialogTrigger asChild><Button variant="ghost" size="icon"><Trash2 className="text-destructive" /></Button></AlertDialogTrigger>
@@ -757,8 +802,14 @@ export default function ShipmentDetailPage() {
                                   <div><p className="text-muted-foreground">MONTO</p><p>${inv.monto.toFixed(2)}</p></div>
                               </div>
                               <div className="flex gap-2">
-                                  <Button variant="outline" className="flex-1" onClick={() => handleEditInvoice(inv)}><Pencil className="mr-2"/>Editar</Button>
-                                  <Button className="flex-1" onClick={() => openCameraDialog(inv)}><Camera className="mr-2"/>Foto</Button>
+                                  {verifyingLocationInvoiceId === inv.id_fac_desp ? (
+                                      <div className="flex-1 flex justify-center py-2"><Loader2 className="h-6 w-6 animate-spin" /></div>
+                                  ) : (
+                                      <>
+                                          <Button variant="outline" className="flex-1" onClick={() => handleEditInvoice(inv)}><Pencil className="mr-2"/>Editar</Button>
+                                          <Button className="flex-1" onClick={() => openCameraDialog(inv)}><Camera className="mr-2"/>Foto</Button>
+                                      </>
+                                  )}
                                   {isAdmin && <Button variant="destructive" size="icon" onClick={() => handleRemoveInvoiceFromShipment(inv.id_fac_desp)}><Trash2/></Button>}
                               </div>
                           </AccordionContent>
