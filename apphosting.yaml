@@ -6,3 +6,13 @@ runConfig:
   maxInstances: 2
   timeoutSeconds: 60
   concurrency: 80
+
+env:
+  - variable: NEXT_PUBLIC_HMAC_SECRET_KEY
+    value: "0ZRTW5u6s4&oeSph+<g8u"
+  - variable: NEXT_PUBLIC_SUPABASE_URL
+    value: "https://bbtmzceokkzduozgzhna.supabase.co"
+  - variable: NEXT_PUBLIC_SUPABASE_ANON_KEY
+    value: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJidG16Y2Vva2t6ZHVvemd6aG5hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwOTg1NDAsImV4cCI6MjA3MDY3NDU0MH0.PVr3cVN6xdSS9AzTJhbfAlGE-cVv98zdxsQMKhaM1tA"
+  - variable: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+    value: "AIzaSyBAvEMINNFUzJMElAxgo0W7FeNIfdHiRG8"
