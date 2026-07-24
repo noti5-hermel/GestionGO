@@ -679,7 +679,17 @@ export default function ShipmentDetailPage() {
   const formatDate = (ds: string) => new Date(`${ds}T00:00:00Z`).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
   const handleGeneratePdf = () => shipment && setPdfData(generateShipmentPDF(shipment, invoices, routes.find(r => r.id_ruta === shipment.id_ruta) || { ruta_desc: 'N/A' }, users.find(u => u.id_user === shipment.id_motorista) || { name: 'N/A' }, users.find(u => u.id_user === shipment.id_auxiliar) || { name: 'N/A' }));
 
-  const sortedInvoices = useMemo(() => [...invoices].sort((a, b) => (a.orden_visita ?? Infinity) - (b.orden_visita ?? Infinity)), [invoices]);
+  const sortedInvoices = useMemo(() => {
+    const hasAnyManualOrder = invoices.some(inv => inv.orden_visita !== null);
+    if (hasAnyManualOrder) {
+      return [...invoices].sort((a, b) => (a.orden_visita ?? Infinity) - (b.orden_visita ?? Infinity));
+    }
+    return [...invoices].sort((a, b) => {
+      if (a.geocerca && !b.geocerca) return -1;
+      if (!a.geocerca && b.geocerca) return 1;
+      return 0;
+    });
+  }, [invoices]);
   const filteredAndSortedInvoices = useMemo(() => { if (!searchQuery) return sortedInvoices; const q = searchQuery.toLowerCase(); return sortedInvoices.filter(i => (i.customer_name?.toLowerCase() || '').includes(q) || i.code_customer?.toLowerCase().includes(q) || String(i.reference_number || '').toLowerCase().includes(q)); }, [sortedInvoices, searchQuery]);
   const { totalContadoCalculado, totalCreditoCalculado, totalGeneralCalculado } = useMemo(() => {
       const tc = invoices.filter(i => i.tax_type === 'Consumidor Final').reduce((acc, i) => acc + i.monto, 0);
@@ -791,7 +801,7 @@ export default function ShipmentDetailPage() {
             <div className="md:hidden">
               <Accordion type="single" collapsible className="w-full">
                   {filteredAndSortedInvoices.map(inv => (
-                      <AccordionItem value={`item-${inv.id_fac_desp}`} key={inv.id_fac_desp}>
+                      <AccordionItem value={`item-${inv.id_fac_desp}`} key={inv.id_fac_desp} className={`rounded-lg border ${!inv.geocerca ? 'bg-amber-50 dark:bg-amber-950 border-amber-300 dark:border-amber-700' : ''}`}>
                           <AccordionTrigger className="p-4 hover:no-underline"><div className="text-left"><p className="font-semibold">{String(inv.reference_number || inv.id_factura)}</p><p className="text-xs text-muted-foreground">{inv.customer_name}</p></div></AccordionTrigger>
                           <AccordionContent className="p-4 space-y-4">
                               <div className="grid grid-cols-2 gap-4 text-xs">
