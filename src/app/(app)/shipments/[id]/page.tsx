@@ -248,6 +248,7 @@ export default function ShipmentDetailPage() {
                         }
                       });
                       setInvoices(enrichedInvoices);
+                      saveOptimizedRouteOrder(enrichedInvoices);
                   }
               }
           }
@@ -663,6 +664,38 @@ export default function ShipmentDetailPage() {
     } catch { return []; } finally { setIsOptimizingRoute(false); }
   };
 
+  const saveOptimizedRouteOrder = async (invoiceList: ShipmentInvoice[]) => {
+    if (invoiceList.length < 2) return;
+    const hasExistingOrder = invoiceList.some(inv => inv.orden_visita !== null);
+    if (hasExistingOrder) return;
+    const waypointsWithCentroids = invoiceList.map(invoice => {
+      const centroid = parseGeofenceCentroid(invoice.geocerca);
+      return centroid ? { invoice, centroid } : null;
+    }).filter((c): c is { invoice: ShipmentInvoice; centroid: { lat: string; lng: string } } => c !== null);
+    if (waypointsWithCentroids.length < 2) return;
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    if (!apiKey) return;
+    const toApiLatLng = (latLng: { lat: number | string; lng: number | string }) => ({ location: { latLng: { latitude: Number(latLng.lat), longitude: Number(latLng.lng) } } });
+    const requestBody = { travelMode: "DRIVE", routingPreference: "TRAFFIC_AWARE", origin: toApiLatLng(BODEGA_LOCATION), destination: toApiLatLng(BODEGA_LOCATION), intermediates: waypointsWithCentroids.map(w => toApiLatLng(w.centroid)), optimizeWaypointOrder: true };
+    try {
+      const response = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", { method: "POST", headers: { "Content-Type": "application/json", "X-Goog-Api-Key": apiKey, "X-Goog-FieldMask": "routes.optimizedIntermediateWaypointIndex" }, body: JSON.stringify(requestBody) });
+      const data = await response.json();
+      const waypointOrder: number[] = data.routes[0]?.optimizedIntermediateWaypointIndex || [];
+      if (waypointOrder.length === 0) return;
+      for (let i = 0; i < waypointOrder.length; i++) {
+        const inv = waypointsWithCentroids[waypointOrder[i]].invoice;
+        await supabase.from('facturacion_x_despacho').update({ orden_visita: i + 1 }).eq('id_fac_desp', inv.id_fac_desp);
+      }
+      const ordered = waypointOrder.map(idx => waypointsWithCentroids[idx].invoice);
+      const geocercaIds = new Set(ordered.map(i => i.id_fac_desp));
+      const noGeocerca = invoiceList.filter(i => !geocercaIds.has(i.id_fac_desp));
+      for (let i = 0; i < noGeocerca.length; i++) {
+        await supabase.from('facturacion_x_despacho').update({ orden_visita: ordered.length + i + 1 }).eq('id_fac_desp', noGeocerca[i].id_fac_desp);
+      }
+      fetchData();
+    } catch { return; }
+  };
+
   const handleExportRouteToMaps = async () => {
     const orderedInvoices = await getVisitOrder();
     if (orderedInvoices.length <= 1) return;
@@ -879,6 +912,16 @@ export default function ShipmentDetailPage() {
                                     <button onClick={() => handleOpenImageModal(inv.foto_ubicacion!)}><Image src={inv.foto_ubicacion!} alt="Foto Sucursal" width={60} height={60} className="rounded object-cover" /></button>
                                   ) : null}
                                   <Button variant="outline" size="sm" onClick={() => openCameraDialog(inv, 'ubicacion')}><Camera className="mr-2 h-4 w-4" />{inv.foto_ubicacion ? 'Cambiar' : 'Agregar'}</Button>
+                                </div>
+                              </div>
+                              <div className="border-t pt-3">
+                                <p className="text-xs text-muted-foreground mb-1">COMPROBANTE</p>
+                                <div className="flex items-center gap-2">
+                                  {inv.comprobante ? (
+                                    <button onClick={() => handleOpenImageModal(inv.comprobante)}><Image src={inv.comprobante} alt="Comprobante" width={60} height={60} className="rounded object-cover" /></button>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">N/A</span>
+                                  )}
                                 </div>
                               </div>
                               <div className="flex gap-2">
