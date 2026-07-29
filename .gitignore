@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+.agents/
 
 # next.js
 /.next/
@@ -20,9 +21,18 @@
 # production
 /build
 
+# env files
+.env
+.env.*
+!.env.example
+
 # misc
 .DS_Store
 *.pem
+
+# IDE / tools
+.claude/
+.idx/
 
 # debug
 npm-debug.log*

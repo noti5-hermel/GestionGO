@@ -8,6 +8,7 @@ import { PlusCircle, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } fr
 import { Label } from "@/components/ui/label"
 import { useShipments } from "@/hooks/use-shipments"
 import { ShipmentsTable } from "./_components/shipments-table"
+import { ShipmentsCards } from "./_components/shipments-cards"
 import { ShipmentForm } from "./_components/shipment-form"
 
 /**
@@ -133,6 +134,19 @@ export default function ShipmentsPage() {
           routes={routes}
           users={users}
         />
+        <div>
+          <ShipmentsCards 
+            shipments={paginatedShipments}
+            handleEdit={handleEdit}
+            handleDelete={handleDelete}
+            getRouteDescription={getRouteDescription}
+            getUserName={getUserName}
+            isMotoristaOrAuxiliar={isMotoristaOrAuxiliar}
+            reviewRole={reviewRole}
+            routes={routes}
+            users={users}
+          />
+        </div>
       </CardContent>
       <CardFooter className="pt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
         <div className="text-xs text-muted-foreground">

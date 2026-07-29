@@ -141,7 +141,7 @@ export function ShipmentsTable({
 
   return (
     <>
-      <div className="w-full overflow-x-auto">
+      <div className="w-full overflow-x-auto hidden">
         <Table className="min-w-max">
           <TableHeader>
             <TableRow>
