@@ -40,6 +40,7 @@ import {
  */
 
 const BUCKET_NAME = 'comprobante';
+const BUCKET_UBICACION = 'sucursales';
 
 const shipmentInvoiceEditSchema = z.object({
   comprobante: z.string().optional(),
@@ -94,6 +95,7 @@ export type ShipmentInvoice = {
   tax_type?: string
   net_to_pay: number
   geocerca?: any;
+  foto_ubicacion?: string;
 }
 
 type ShipmentInvoiceWithLocation = ShipmentInvoice & {
@@ -129,6 +131,9 @@ export default function ShipmentDetailPage() {
   const [editingShipmentInvoice, setEditingShipmentInvoice] = useState<ShipmentInvoiceWithLocation | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedFileUbicacion, setSelectedFileUbicacion] = useState<File | null>(null);
+  const fileInputUbicacionRef = useRef<HTMLInputElement>(null);
+  const [photoType, setPhotoType] = useState<'comprobante' | 'ubicacion'>('comprobante');
   const [imageModalOpen, setImageModalOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState('');
   const [isCameraDialogOpen, setIsCameraDialogOpen] = useState(false);
@@ -207,7 +212,7 @@ export default function ShipmentDetailPage() {
               toast({ title: "Error", description: "No se pudieron cargar los datos de facturas.", variant: "destructive" });
           } else {
               const customerCodes = (invoicesData || []).map(inv => inv.code_customer)
-              const { data: customersData, error: customersError } = await supabase.from('customer').select('code_customer, id_impuesto, geocerca').in('code_customer', customerCodes)
+              const { data: customersData, error: customersError } = await supabase.from('customer').select('code_customer, id_impuesto, geocerca, foto_ubicacion').in('code_customer', customerCodes)
               if (customersError) {
                   toast({ title: "Error", description: "No se pudieron cargar los datos de clientes.", variant: "destructive" });
               } else {
@@ -217,7 +222,7 @@ export default function ShipmentDetailPage() {
                       toast({ title: "Error", description: "No se pudieron cargar los tipos de impuesto.", variant: "destructive" });
                   } else {
                       const taxMap = new Map((taxesData || []).map(t => [t.id_impuesto, t.impt_desc]))
-                      const customerMap = new Map((customersData || []).map(c => [c.code_customer, { tax: taxMap.get(c.id_impuesto), geofence: c.geocerca }]));
+                      const customerMap = new Map((customersData || []).map(c => [c.code_customer, { tax: taxMap.get(c.id_impuesto), geofence: c.geocerca, foto_ubicacion: c.foto_ubicacion }]));
 
                       const invoiceInfoMap = new Map((invoicesData || []).map(i => [i.id_factura, {
                         reference_number: i.reference_number,
@@ -239,6 +244,7 @@ export default function ShipmentDetailPage() {
                           net_to_pay: invoiceInfo?.net_to_pay ?? 0,
                           tax_type: customerInfo?.tax,
                           geocerca: customerInfo?.geofence,
+                          foto_ubicacion: customerInfo?.foto_ubicacion,
                         }
                       });
                       setInvoices(enrichedInvoices);
@@ -276,6 +282,7 @@ export default function ShipmentDetailPage() {
         });
     }
     setSelectedFile(null);
+    setSelectedFileUbicacion(null);
   }, [editingShipmentInvoice, form]);
 
   useEffect(() => {
@@ -308,6 +315,13 @@ export default function ShipmentDetailPage() {
     }
   };
 
+  const handleFileChangeUbicacion = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedFileUbicacion(file);
+    }
+  };
+
   const handleEditInvoice = (invoice: ShipmentInvoice) => {
     handleGeofenceProtectedAction(invoice, (inv, location) => {
         setEditingShipmentInvoice({ ...inv, _capturedLocation: location });
@@ -330,6 +344,24 @@ export default function ShipmentDetailPage() {
       return undefined;
     }
     const { data: { publicUrl } } = supabase.storage.from(BUCKET_NAME).getPublicUrl(fileName);
+    return publicUrl;
+  };
+
+  const uploadFotoUbicacion = async (): Promise<string | undefined> => {
+    if (selectedFileUbicacion && editingShipmentInvoice?.foto_ubicacion) {
+        const oldFileName = editingShipmentInvoice.foto_ubicacion.split('/').pop();
+        if (oldFileName) await supabase.storage.from(BUCKET_UBICACION).remove([oldFileName]);
+    }
+    if (!selectedFileUbicacion) return editingShipmentInvoice?.foto_ubicacion;
+    setLoading(true);
+    const fileName = `UBIC-${editingShipmentInvoice?.id_factura}-${Date.now()}.jpg`;
+    const { error } = await supabase.storage.from(BUCKET_UBICACION).upload(fileName, selectedFileUbicacion, { cacheControl: '3600', upsert: false });
+    setLoading(false);
+    if (error) {
+      toast({ title: "Error al subir foto de ubicación", description: error.message, variant: "destructive" });
+      return undefined;
+    }
+    const { data: { publicUrl } } = supabase.storage.from(BUCKET_UBICACION).getPublicUrl(fileName);
     return publicUrl;
   };
 
@@ -361,6 +393,8 @@ export default function ShipmentDetailPage() {
     if (!editingShipmentInvoice) return;
     const imageUrl = await uploadComprobante();
     if (!imageUrl && selectedFile) return;
+    const ubicacionUrl = await uploadFotoUbicacion();
+    if (!ubicacionUrl && selectedFileUbicacion) return;
 
     const isCompleted = values.state || (!!imageUrl && values.monto > 0);
 
@@ -377,6 +411,9 @@ export default function ShipmentDetailPage() {
             const { latitude, longitude } = editingShipmentInvoice._capturedLocation;
             await supabase.from('customer').update({ last_known_location: `POINT(${longitude} ${latitude})` }).eq('code_customer', editingShipmentInvoice.code_customer);
         }
+    }
+    if (ubicacionUrl) {
+        await supabase.from('customer').update({ foto_ubicacion: ubicacionUrl }).eq('code_customer', editingShipmentInvoice.code_customer);
     }
     const { error } = await supabase.from('facturacion_x_despacho').update(dataToUpdate).eq('id_fac_desp', editingShipmentInvoice.id_fac_desp);
     if (error) toast({ title: "Error al actualizar", variant: "destructive" });
@@ -455,34 +492,46 @@ export default function ShipmentDetailPage() {
   const saveCapturedPhoto = async () => {
     if (!capturedImage || !invoiceForCamera) return;
     setLoading(true);
-    if (invoiceForCamera.comprobante) {
-        const oldFileName = invoiceForCamera.comprobante.split('/').pop();
-        if (oldFileName) await supabase.storage.from(BUCKET_NAME).remove([oldFileName]);
+
+    const bucketName = photoType === 'comprobante' ? BUCKET_NAME : BUCKET_UBICACION;
+    const fieldName = photoType === 'comprobante' ? 'comprobante' : 'foto_ubicacion';
+    const prefix = photoType === 'comprobante' ? 'PAGO' : 'UBIC';
+    const oldUrl = photoType === 'comprobante' ? invoiceForCamera.comprobante : invoiceForCamera.foto_ubicacion;
+
+    if (oldUrl) {
+        const oldFileName = oldUrl.split('/').pop();
+        if (oldFileName) await supabase.storage.from(bucketName).remove([oldFileName]);
     }
     const response = await fetch(capturedImage);
     const blob = await response.blob();
-    const fileName = `${Date.now()}-comprobante.jpg`;
+    const fileName = `${prefix}-${invoiceForCamera.id_factura}-${Date.now()}.jpg`;
     const file = new File([blob], fileName, { type: 'image/jpeg' });
-    const { error: uploadError } = await supabase.storage.from(BUCKET_NAME).upload(fileName, file, { upsert: false });
+    const { error: uploadError } = await supabase.storage.from(bucketName).upload(fileName, file, { upsert: false });
     if (uploadError) {
       setLoading(false);
       toast({ title: "Error al subir imagen", description: uploadError.message, variant: "destructive" });
       return;
     }
-    const { data: { publicUrl } } = supabase.storage.from(BUCKET_NAME).getPublicUrl(fileName);
+    const { data: { publicUrl } } = supabase.storage.from(bucketName).getPublicUrl(fileName);
     
     const isCompleted = invoiceForCamera.state || (!!publicUrl && invoiceForCamera.monto > 0);
 
-    const dataToUpdate: any = { 
-        comprobante: publicUrl, 
-        fecha_entrega: new Date().toISOString(),
-        state: isCompleted
-    };
-
-    const { error: dbError } = await supabase.from('facturacion_x_despacho').update(dataToUpdate).eq('id_fac_desp', invoiceForCamera.id_fac_desp);
-    if (invoiceForCamera._capturedLocation) {
-      const { latitude, longitude } = invoiceForCamera._capturedLocation;
-      await supabase.from('customer').update({ last_known_location: `POINT(${longitude} ${latitude})` }).eq('code_customer', invoiceForCamera.code_customer);
+    let dbError = null;
+    if (photoType === 'comprobante') {
+      const dataToUpdate: any = { 
+          comprobante: publicUrl,
+          state: isCompleted,
+          fecha_entrega: new Date().toISOString()
+      };
+      const { error } = await supabase.from('facturacion_x_despacho').update(dataToUpdate).eq('id_fac_desp', invoiceForCamera.id_fac_desp);
+      dbError = error;
+      if (invoiceForCamera._capturedLocation) {
+        const { latitude, longitude } = invoiceForCamera._capturedLocation;
+        await supabase.from('customer').update({ last_known_location: `POINT(${longitude} ${latitude})` }).eq('code_customer', invoiceForCamera.code_customer);
+      }
+    } else {
+      const { error } = await supabase.from('customer').update({ foto_ubicacion: publicUrl }).eq('code_customer', invoiceForCamera.code_customer);
+      dbError = error;
     }
     setLoading(false);
     if (dbError) toast({ title: "Error al guardar", variant: "destructive" });
@@ -667,10 +716,10 @@ export default function ShipmentDetailPage() {
         if (!errorA && !errorB) fetchData();
     };
 
-  const closeInvoiceDialog = () => { setIsInvoiceDialogOpen(false); setEditingShipmentInvoice(null); setSelectedFile(null); form.reset(); };
+  const closeInvoiceDialog = () => { setIsInvoiceDialogOpen(false); setEditingShipmentInvoice(null); setSelectedFile(null); setSelectedFileUbicacion(null); form.reset(); };
   const handleOpenImageModal = (imageUrl: string) => { setSelectedImage(imageUrl); setImageModalOpen(true); }
-  const openCameraDialog = (invoice: ShipmentInvoice) => handleGeofenceProtectedAction(invoice, (inv, location) => { setInvoiceForCamera({ ...inv, _capturedLocation: location }); setIsCameraDialogOpen(true); });
-  const closeCameraDialog = () => { setIsCameraDialogOpen(false); setInvoiceForCamera(null); setCapturedImage(null); if (videoRef.current?.srcObject) (videoRef.current.srcObject as MediaStream).getTracks().forEach(t => t.stop()); };
+  const openCameraDialog = (invoice: ShipmentInvoice, type: 'comprobante' | 'ubicacion' = 'comprobante') => handleGeofenceProtectedAction(invoice, (inv, location) => { setInvoiceForCamera({ ...inv, _capturedLocation: location }); setPhotoType(type); setIsCameraDialogOpen(true); });
+  const closeCameraDialog = () => { setIsCameraDialogOpen(false); setInvoiceForCamera(null); setCapturedImage(null); setPhotoType('comprobante'); if (videoRef.current?.srcObject) (videoRef.current.srcObject as MediaStream).getTracks().forEach(t => t.stop()); };
   const takePhoto = () => { if (videoRef.current && canvasRef.current) { canvasRef.current.width = videoRef.current.videoWidth; canvasRef.current.height = videoRef.current.videoHeight; canvasRef.current.getContext('2d')?.drawImage(videoRef.current, 0, 0); setCapturedImage(canvasRef.current.toDataURL('image/jpeg', 0.9)); } };
   const searchCustomers = useCallback(async (q: string) => { if (!q) return []; const { data } = await supabase.from('customer').select('code_customer, customer_name, ruta').or(`code_customer.ilike.%${q}%,customer_name.ilike.%${q}%`).limit(10); return (data || []).map(c => ({ value: c.code_customer, label: `${c.code_customer} - ${c.customer_name}` })); }, []);
   const handleCustomerChange = async (c: string) => { if (!c) { addInvoiceForm.setValue('customer_name', ''); addInvoiceForm.setValue('ruta', ''); return; } const { data } = await supabase.from('customer').select('customer_name, ruta').eq('code_customer', c).single(); if (data) { addInvoiceForm.setValue('code_customer', c); addInvoiceForm.setValue('customer_name', data.customer_name); addInvoiceForm.setValue('ruta', String(data.ruta || '')); } };
@@ -759,7 +808,7 @@ export default function ShipmentDetailPage() {
                   <TableHeader>
                       <TableRow>
                           {isFacturacion && <TableHead className="w-20">Orden</TableHead>}
-                          <TableHead>Factura</TableHead><TableHead>Cliente</TableHead><TableHead>Geocerca</TableHead><TableHead>Foto</TableHead><TableHead>Entrega</TableHead><TableHead>Total</TableHead><TableHead>Pago</TableHead><TableHead>Monto</TableHead><TableHead>Estado</TableHead><TableHead className="text-right">Acciones</TableHead>
+                          <TableHead>Factura</TableHead><TableHead>Cliente</TableHead><TableHead>Geocerca</TableHead><TableHead>Foto Sucursal</TableHead><TableHead>Foto</TableHead><TableHead>Entrega</TableHead><TableHead>Total</TableHead><TableHead>Pago</TableHead><TableHead>Monto</TableHead><TableHead>Estado</TableHead><TableHead className="text-right">Acciones</TableHead>
                       </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -769,6 +818,19 @@ export default function ShipmentDetailPage() {
                               <TableCell className="font-medium">{String(inv.reference_number || inv.id_factura)}</TableCell>
                               <TableCell>{inv.customer_name}<br/><span className="text-xs text-muted-foreground">{inv.code_customer}</span></TableCell>
                               <TableCell><Badge variant={inv.geocerca ? 'default' : 'outline'}>{inv.geocerca ? 'Sí' : 'No'}</Badge></TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-1">
+                                  {inv.foto_ubicacion ? (
+                                    <>
+                                      <button onClick={() => handleOpenImageModal(inv.foto_ubicacion!)}><Image src={inv.foto_ubicacion!} alt="Foto Sucursal" width={40} height={40} className="rounded object-cover" /></button>
+                                      <Button variant="ghost" size="sm" onClick={() => handleOpenImageModal(inv.foto_ubicacion!)} className="text-xs">Ver</Button>
+                                    </>
+                                  ) : null}
+                                  <Button variant="ghost" size="icon" onClick={() => openCameraDialog(inv, 'ubicacion')} title="Tomar foto de ubicación">
+                                    <Camera className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
                               <TableCell>{inv.comprobante ? <button onClick={() => handleOpenImageModal(inv.comprobante)}><Image src={inv.comprobante} alt="Foto" width={40} height={40} className="rounded object-cover" /></button> : 'N/A'}</TableCell>
                               <TableCell>{inv.fecha_entrega ? new Date(inv.fecha_entrega).toLocaleTimeString() : 'N/A'}</TableCell>
                               <TableCell>${(inv.net_to_pay ?? 0).toFixed(2)}</TableCell>
@@ -810,6 +872,15 @@ export default function ShipmentDetailPage() {
                                   <div><p className="text-muted-foreground">PAGO</p><p>{inv.forma_pago}</p></div>
                                   <div><p className="text-muted-foreground">MONTO</p><p>${inv.monto.toFixed(2)}</p></div>
                               </div>
+                              <div className="border-t pt-3">
+                                <p className="text-xs text-muted-foreground mb-1">FOTO SUCURSAL</p>
+                                <div className="flex items-center gap-2">
+                                  {inv.foto_ubicacion ? (
+                                    <button onClick={() => handleOpenImageModal(inv.foto_ubicacion!)}><Image src={inv.foto_ubicacion!} alt="Foto Sucursal" width={60} height={60} className="rounded object-cover" /></button>
+                                  ) : null}
+                                  <Button variant="outline" size="sm" onClick={() => openCameraDialog(inv, 'ubicacion')}><Camera className="mr-2 h-4 w-4" />{inv.foto_ubicacion ? 'Cambiar' : 'Agregar'}</Button>
+                                </div>
+                              </div>
                               <div className="flex gap-2">
                                   {verifyingLocationInvoiceId === inv.id_fac_desp ? (
                                       <div className="flex-1 flex justify-center py-2"><Loader2 className="h-6 w-6 animate-spin" /></div>
@@ -839,6 +910,7 @@ export default function ShipmentDetailPage() {
         <DialogContent><DialogHeader><DialogTitle>Editar Factura</DialogTitle></DialogHeader>
           <Form {...form}><form className="space-y-4" onSubmit={form.handleSubmit(handleUpdateInvoice)}>
               <FormItem><FormLabel>Comprobante</FormLabel><FormControl><Input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" /></FormControl></FormItem>
+              <FormItem><FormLabel>Foto de Ubicación</FormLabel><FormControl><Input type="file" ref={fileInputUbicacionRef} onChange={handleFileChangeUbicacion} accept="image/*" /></FormControl></FormItem>
               <FormField control={form.control} name="forma_pago" render={({ field }) => (
                 <FormItem><FormLabel>Forma de Pago</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{paymentMethods.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select></FormItem>
               )}/>
@@ -860,9 +932,10 @@ export default function ShipmentDetailPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={imageModalOpen} onOpenChange={setImageModalOpen}><DialogContent className="max-w-3xl"><Image src={selectedImage} alt="C" width={800} height={600} className="w-full h-auto rounded"/></DialogContent></Dialog>
-      <Dialog open={isCameraDialogOpen} onOpenChange={closeCameraDialog}><DialogContent className="p-0 border-0 bg-black max-w-full h-full sm:h-auto sm:max-w-3xl flex flex-col">
-          <div className="relative flex-1">{capturedImage ? <Image src={capturedImage} alt="C" fill className="object-contain" /> : <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />}
+      <Dialog open={imageModalOpen} onOpenChange={setImageModalOpen}><DialogContent className="max-w-3xl"><DialogHeader className="sr-only"><DialogTitle>Vista previa</DialogTitle></DialogHeader><Image src={selectedImage} alt="C" width={800} height={600} className="w-full h-auto rounded"/></DialogContent></Dialog>
+      <Dialog open={isCameraDialogOpen} onOpenChange={closeCameraDialog}><DialogContent className="p-0 border-0 bg-black max-w-full h-dvh flex flex-col">
+          <DialogHeader className="sr-only"><DialogTitle>Tomar foto</DialogTitle></DialogHeader>
+          <div className="flex-1">{capturedImage ? <Image src={capturedImage} alt="C" fill className="object-contain" /> : <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />}
             <canvas ref={canvasRef} className="hidden" /><div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4">{capturedImage ? (<><Button onClick={() => setCapturedImage(null)}>Reintentar</Button><Button onClick={saveCapturedPhoto}>Guardar</Button></>) : <button onClick={takePhoto} className="h-16 w-16 rounded-full border-4 border-white bg-white/30" />}</div>
             <Button variant="ghost" size="icon" onClick={closeCameraDialog} className="absolute top-4 right-4 text-white"><X/></Button>
           </div>
