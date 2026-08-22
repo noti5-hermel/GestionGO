@@ -348,7 +348,7 @@ export default function GeofencesPage() {
                                 />
                             </FormControl>
                             <FormDescription>
-                                Pegue las coordenadas para generar una geocerca circular de 100m. Esto tendrá prioridad.
+                                Pegue las coordenadas para generar una geocerca circular de 300m. Esto tendrá prioridad.
                             </FormDescription>
                             <FormMessage />
                             </FormItem>
