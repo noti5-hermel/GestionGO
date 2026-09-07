@@ -515,7 +515,7 @@ export default function ShipmentDetailPage() {
     }
     const { data: { publicUrl } } = supabase.storage.from(bucketName).getPublicUrl(fileName);
     
-    const isCompleted = invoiceForCamera.state || (!!publicUrl && invoiceForCamera.monto > 0);
+    const isCompleted = photoType === 'comprobante' || invoiceForCamera.state || (!!publicUrl && invoiceForCamera.monto > 0);
 
     let dbError = null;
     if (photoType === 'comprobante') {
@@ -764,11 +764,18 @@ export default function ShipmentDetailPage() {
   const sortedInvoices = useMemo(() => {
     const hasAnyManualOrder = invoices.some(inv => inv.orden_visita !== null);
     if (hasAnyManualOrder) {
-      return [...invoices].sort((a, b) => (a.orden_visita ?? Infinity) - (b.orden_visita ?? Infinity));
+      const sorted = [...invoices].sort((a, b) => (a.orden_visita ?? Infinity) - (b.orden_visita ?? Infinity));
+      const unpaidWithGeo = sorted.filter(i => !i.state && i.geocerca);
+      const paidWithGeo = sorted.filter(i => i.state && i.geocerca);
+      const unpaidNoGeo = sorted.filter(i => !i.state && !i.geocerca);
+      const paidNoGeo = sorted.filter(i => i.state && !i.geocerca);
+      return [...unpaidWithGeo, ...paidWithGeo, ...unpaidNoGeo, ...paidNoGeo];
     }
     return [...invoices].sort((a, b) => {
       if (a.geocerca && !b.geocerca) return -1;
       if (!a.geocerca && b.geocerca) return 1;
+      if (a.state && !b.state) return 1;
+      if (!a.state && b.state) return -1;
       return 0;
     });
   }, [invoices]);
@@ -869,7 +876,7 @@ export default function ShipmentDetailPage() {
                               <TableCell>${(inv.net_to_pay ?? 0).toFixed(2)}</TableCell>
                               <TableCell>{inv.forma_pago}</TableCell>
                               <TableCell>${inv.monto.toFixed(2)}</TableCell>
-                              <TableCell><Badge variant={inv.state ? 'default' : 'secondary'}>{inv.state ? "Pagado" : "Pendiente"}</Badge></TableCell>
+                              <TableCell><Badge variant="default" className={inv.state ? '!bg-black !text-white font-bold' : ''}>{inv.state ? "Pagado" : "Pendiente"}</Badge></TableCell>
                               <TableCell className="text-right">
                                   <div className="flex justify-end gap-1">
                                       {verifyingLocationInvoiceId === inv.id_fac_desp ? (
@@ -896,7 +903,7 @@ export default function ShipmentDetailPage() {
             <div className="md:hidden">
               <Accordion type="single" collapsible className="w-full">
                   {filteredAndSortedInvoices.map(inv => (
-                      <AccordionItem value={`item-${inv.id_fac_desp}`} key={inv.id_fac_desp} className={`rounded-lg border ${!inv.geocerca ? 'bg-amber-50 dark:bg-amber-950 border-amber-300 dark:border-amber-700' : ''}`}>
+                      <AccordionItem value={`item-${inv.id_fac_desp}`} key={inv.id_fac_desp} className={`rounded-lg border ${inv.state ? 'bg-gray-800 text-gray-100 border-gray-700' : !inv.geocerca ? 'bg-amber-50 dark:bg-amber-950 border-amber-300 dark:border-amber-700' : ''}`}>
                           <AccordionTrigger className="p-4 hover:no-underline"><div className="text-left"><p className="font-semibold">{String(inv.reference_number || inv.id_factura)}</p><p className="text-xs text-muted-foreground">{inv.customer_name}</p></div></AccordionTrigger>
                           <AccordionContent className="p-4 space-y-4">
                               <div className="grid grid-cols-2 gap-4 text-xs">
