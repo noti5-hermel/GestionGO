@@ -14,7 +14,7 @@ export type MapCustomer = {
   customer_name: string;
   geocerca: any;
   state?: boolean;
-  reference_number?: string | number;
+  reference_number?: string | number | null;
   orden_visita?: number | null;
 };
 
@@ -24,6 +24,8 @@ interface RouteMapViewProps {
   despachoLabel?: string;
   showBodega?: boolean;
   showGeofences?: boolean;
+  motoristaPath?: { lat: number; lng: number }[];
+  motoristaLocation?: { lat: number; lng: number } | null;
 }
 
 interface BoundsFitterProps {
@@ -116,7 +118,7 @@ const buildNumberIcon = (number: number, color: string): L.DivIcon =>
     iconAnchor: [12, 12],
   });
 
-const RouteMapView: React.FC<RouteMapViewProps> = ({ customers, bodegaLocation, despachoLabel, showBodega = true, showGeofences = true }) => {
+const RouteMapView: React.FC<RouteMapViewProps> = ({ customers, bodegaLocation, despachoLabel, showBodega = true, showGeofences = true, motoristaPath = [], motoristaLocation = null }) => {
   const [routePath, setRoutePath] = useState<[number, number][]>([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -141,23 +143,34 @@ const RouteMapView: React.FC<RouteMapViewProps> = ({ customers, bodegaLocation, 
       const toApiLatLng = (latLng: [number, number]) => ({
         location: { latLng: { latitude: latLng[0], longitude: latLng[1] } },
       });
-      const originPoint = showBodega
-        ? ([bodegaLocation.lat, bodegaLocation.lng] as [number, number])
-        : waypoints[0].centroid;
-      const destinationPoint = showBodega
-        ? originPoint
-        : waypoints[waypoints.length - 1].centroid;
       const requestBody: any = {
         travelMode: 'DRIVE',
         routingPreference: 'TRAFFIC_AWARE',
-        origin: toApiLatLng(originPoint),
-        destination: toApiLatLng(destinationPoint),
       };
-      const intermediates = showBodega ? waypoints : waypoints.slice(1, -1);
-      if (intermediates.length > 0) {
-        requestBody.intermediates = intermediates.map(w => toApiLatLng(w.centroid));
+      let fieldMask = 'routes.polyline.encodedPolyline';
+
+      if (showBodega && waypoints.length > 1) {
+        // Ruta más óptima: origen y destino la bodega, clientes como paradas intermedias.
+        const bodegaPoint: [number, number] = [bodegaLocation.lat, bodegaLocation.lng];
+        requestBody.origin = toApiLatLng(bodegaPoint);
+        requestBody.destination = toApiLatLng(bodegaPoint);
+        requestBody.intermediates = waypoints.map(w => toApiLatLng(w.centroid));
+        requestBody.optimizeWaypointOrder = true;
+        fieldMask += ',routes.optimizedIntermediateWaypointIndex';
+      } else {
+        const originPoint = showBodega
+          ? ([bodegaLocation.lat, bodegaLocation.lng] as [number, number])
+          : waypoints[0].centroid;
+        const destinationPoint = showBodega
+          ? originPoint
+          : waypoints[waypoints.length - 1].centroid;
+        requestBody.origin = toApiLatLng(originPoint);
+        requestBody.destination = toApiLatLng(destinationPoint);
+        const intermediates = showBodega ? waypoints : waypoints.slice(1, -1);
+        if (intermediates.length > 0) {
+          requestBody.intermediates = intermediates.map(w => toApiLatLng(w.centroid));
+        }
       }
-      const fieldMask = 'routes.polyline.encodedPolyline';
       try {
         const response = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
           method: 'POST',
@@ -230,6 +243,25 @@ const RouteMapView: React.FC<RouteMapViewProps> = ({ customers, bodegaLocation, 
             pathOptions={{ color: '#7c3aed', weight: 4, opacity: 0.95 }}
           />
         </>
+      )}
+
+      {motoristaPath.length > 1 && (
+        <Polyline
+          positions={motoristaPath.map(p => [p.lat, p.lng])}
+          pathOptions={{ color: '#FF6F00', weight: 3, opacity: 0.9 }}
+        />
+      )}
+
+      {motoristaLocation && (
+        <Marker
+          position={[motoristaLocation.lat, motoristaLocation.lng]}
+          icon={buildNumberIcon(0, '#FF6F00')}
+          zIndexOffset={1000}
+        >
+          <Tooltip permanent direction="top" offset={[0, -14]}>
+            <span className="text-xs font-semibold">Motorista</span>
+          </Tooltip>
+        </Marker>
       )}
 
       {waypoints.map((w, idx) => {
