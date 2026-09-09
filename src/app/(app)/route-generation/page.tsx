@@ -138,6 +138,46 @@ export default function RouteGenerationPage() {
   const selectedCodes = useMemo(() => new Set(selectedCustomers.map(c => c.code_customer)), [selectedCustomers]);
 
   /**
+   * Si llega un parámetro `?customer=<código>` en la URL, carga automáticamente
+   * a ese cliente y genera su ruta para ver su ubicación en el mapa.
+   */
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const customerParam = params.get('customer');
+    if (!customerParam) return;
+
+    let cancelled = false;
+    supabase
+      .from('customer')
+      .select('code_customer, customer_name, geocerca')
+      .eq('code_customer', customerParam)
+      .not('geocerca', 'is', null)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (!error && data) {
+          const customer = data as CustomerWithGeofence;
+          setSelectedCustomers(prev =>
+            prev.some(c => c.code_customer === customer.code_customer) ? prev : [...prev, customer]
+          );
+          setGeneratedRoute([customer]);
+          toast({
+            title: "Ruta generada",
+            description: `${customer.customer_name} agregado al mapa.`,
+          });
+        } else {
+          toast({
+            title: "Cliente no encontrado",
+            description: "El cliente no tiene una ubicación registrada.",
+            variant: "destructive",
+          });
+        }
+        window.history.replaceState(null, '', '/route-generation');
+      });
+    return () => { cancelled = true; };
+  }, [toast]);
+
+  /**
    * Busca clientes con geocerca por código o nombre mientras se escribe.
    */
   useEffect(() => {

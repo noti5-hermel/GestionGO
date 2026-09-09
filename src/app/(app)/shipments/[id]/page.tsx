@@ -883,6 +883,7 @@ export default function ShipmentDetailPage() {
                                           <Loader2 className="h-4 w-4 animate-spin" />
                                       ) : (
                                           <>
+                                            <Button variant="outline" size="sm" title="Ver la ubicación de este cliente en el mapa" onClick={() => router.push(`/route-generation?customer=${encodeURIComponent(inv.code_customer)}`)}><MapPin className="mr-1 h-3.5 w-3.5" /> Generar Ruta</Button>
                                             <Button variant="ghost" size="icon" onClick={() => handleEditInvoice(inv)}><Pencil /></Button>
                                             <Button variant="ghost" size="icon" onClick={() => openCameraDialog(inv)}><Camera /></Button>
                                           </>
@@ -931,6 +932,7 @@ export default function ShipmentDetailPage() {
                                   )}
                                 </div>
                               </div>
+                              <Button variant="outline" className="w-full" onClick={() => router.push(`/route-generation?customer=${encodeURIComponent(inv.code_customer)}`)}><MapPin className="mr-2"/>Generar Ruta</Button>
                               <div className="flex gap-2">
                                   {verifyingLocationInvoiceId === inv.id_fac_desp ? (
                                       <div className="flex-1 flex justify-center py-2"><Loader2 className="h-6 w-6 animate-spin" /></div>
