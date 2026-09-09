@@ -76,6 +76,7 @@ export function MainNav({ session }: MainNavProps) {
   ];
 
   const isRestrictedRole = restrictedRoles.some(role => userRole.includes(role));
+  const isMobileRole = userRole.includes('motorista') || userRole.includes('auxiliar');
   const isFacturacionRole = userRole.includes('facturacion');
   const isAdmin = userRole.includes('admin');
   const isVerificador = userRole.includes('verificador');
@@ -87,6 +88,9 @@ export function MainNav({ session }: MainNavProps) {
     // Rol de verificador solo ve generación de ruta y geocercas.
     const allowedHrefs = ['/route-generation', '/geofences'];
     menuItemsToRender = allMenuItems.filter(item => allowedHrefs.includes(item.href));
+  } else if (isMobileRole) {
+    // Motoristas y auxiliares ven despachos y generación de ruta.
+    menuItemsToRender = allMenuItems.filter(item => item.href === '/shipments' || item.href === '/route-generation');
   } else if (isRestrictedRole) {
     // Roles operativos solo ven despachos.
     menuItemsToRender = allMenuItems.filter(item => item.href === '/shipments');
