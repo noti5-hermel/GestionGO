@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/sidebar'
 
 interface UserSession {
-  id: string;
+  id: number;
   name: string;
   role: string;
 }
@@ -77,6 +77,7 @@ export function MainNav({ session }: MainNavProps) {
 
   const isRestrictedRole = restrictedRoles.some(role => userRole.includes(role));
   const isMobileRole = userRole.includes('motorista') || userRole.includes('auxiliar');
+  const isAsistAdmon = userRole.includes('asist.admon');
   const isFacturacionRole = userRole.includes('facturacion');
   const isAdmin = userRole.includes('admin');
   const isVerificador = userRole.includes('verificador');
@@ -92,8 +93,10 @@ export function MainNav({ session }: MainNavProps) {
     // Motoristas y auxiliares ven despachos y generación de ruta.
     menuItemsToRender = allMenuItems.filter(item => item.href === '/shipments' || item.href === '/route-generation');
   } else if (isRestrictedRole) {
-    // Roles operativos solo ven despachos.
-    menuItemsToRender = allMenuItems.filter(item => item.href === '/shipments');
+    // Roles operativos solo ven despachos; Asist.Admon también gestiona clientes.
+    menuItemsToRender = allMenuItems.filter(item =>
+      item.href === '/shipments' || (isAsistAdmon && item.href === '/customers')
+    );
   } else if (isFacturacionRole) {
     // Rol de facturación no ve el dashboard.
     menuItemsToRender = allMenuItems.filter(item => item.href !== '/');

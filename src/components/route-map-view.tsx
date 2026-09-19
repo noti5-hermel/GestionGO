@@ -16,6 +16,7 @@ export type MapCustomer = {
   state?: boolean;
   reference_number?: string | number | null;
   orden_visita?: number | null;
+  foto_ubicacion?: string | null;
 };
 
 interface RouteMapViewProps {
@@ -121,6 +122,7 @@ const buildNumberIcon = (number: number, color: string): L.DivIcon =>
 const RouteMapView: React.FC<RouteMapViewProps> = ({ customers, bodegaLocation, despachoLabel, showBodega = true, showGeofences = true, motoristaPath = [], motoristaLocation = null }) => {
   const [routePath, setRoutePath] = useState<[number, number][]>([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   const orderedCustomers = useMemo(() => {
     return [...customers].sort((a, b) => (a.orden_visita ?? Infinity) - (b.orden_visita ?? Infinity));
@@ -290,6 +292,21 @@ const RouteMapView: React.FC<RouteMapViewProps> = ({ customers, bodegaLocation, 
               </Tooltip>
               <Popup>
                 <div className="text-sm">
+                  {customer.foto_ubicacion && (
+                    <button
+                      type="button"
+                      className="block mb-2 cursor-zoom-in p-0 border-0 bg-transparent"
+                      onClick={() => setSelectedImage(customer.foto_ubicacion!)}
+                    >
+                      <img
+                        src={customer.foto_ubicacion}
+                        alt={`Foto sucursal ${customer.customer_name}`}
+                        width={160}
+                        height={120}
+                        className="rounded border object-cover w-[160px] h-[120px]"
+                      />
+                    </button>
+                  )}
                   <strong>{customer.customer_name}</strong><br />
                   <span>Código cliente: {customer.code_customer}</span><br />
                   <span>Factura: {String(customer.reference_number || customer.code_customer)}</span><br />
@@ -314,6 +331,19 @@ const RouteMapView: React.FC<RouteMapViewProps> = ({ customers, bodegaLocation, 
         </CircleMarker>
       )}
     </MapContainer>
+
+    {selectedImage && (
+      <div
+        className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/80 p-4 cursor-zoom-out"
+        onClick={() => setSelectedImage(null)}
+      >
+        <img
+          src={selectedImage}
+          alt="Foto de sucursal"
+          className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
+        />
+      </div>
+    )}
     </div>
   );
 };
