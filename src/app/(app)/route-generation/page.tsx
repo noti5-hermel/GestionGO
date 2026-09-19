@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, useCallback, useMemo } from "react"
 import dynamic from "next/dynamic"
@@ -14,10 +14,10 @@ import { cn } from "@/lib/utils"
 
 /**
  * @file route-generation/page.tsx
- * @description Página para generar una ruta de Google Maps basada en la selección de clientes con geocercas.
+ * @description PÃ¡gina para generar una ruta de Google Maps basada en la selecciÃ³n de clientes con geocercas.
  */
 
-// Carga dinámica del componente de mapa para evitar problemas con SSR.
+// Carga dinÃ¡mica del componente de mapa para evitar problemas con SSR.
 const RouteMap = dynamic(() => import("@/components/route-map-view"), {
   ssr: false,
   loading: () => <p className="text-center p-10 text-muted-foreground">Cargando mapa...</p>,
@@ -30,6 +30,7 @@ type CustomerWithGeofence = {
   code_customer: string;
   customer_name: string;
   geocerca: any; // Se usa 'any' para manejar tanto strings como objetos GeoJSON.
+  foto_ubicacion?: string | null;
 }
 
 // Hook para "rebotar" la entrada del usuario y no sobrecargar las consultas.
@@ -46,7 +47,7 @@ function useDebounce(value: string, delay: number) {
  * Parsea una geocerca para obtener su centroide.
  * Admite formatos WKT (string) para POLYGON y GEOMETRYCOLLECTION, y objetos GeoJSON.
  * @param geofenceData - La geocerca en formato WKT o como objeto GeoJSON.
- * @returns Un objeto con lat y lon del centroide, o null si el formato es inválido.
+ * @returns Un objeto con lat y lon del centroide, o null si el formato es invÃ¡lido.
  */
 const parseGeofenceCentroid = (geofenceData: any): { lat: string; lon: string } | null => {
     if (!geofenceData) return null;
@@ -72,7 +73,7 @@ const parseGeofenceCentroid = (geofenceData: any): { lat: string; lon: string } 
                     .filter(p => !isNaN(p.lon) && !isNaN(p.lat));
             }
         }
-        // Soporte para GEOMETRYCOLLECTION en GeoJSON (aunque menos común para este caso)
+        // Soporte para GEOMETRYCOLLECTION en GeoJSON (aunque menos comÃºn para este caso)
         else if (geofenceData.type === 'GeometryCollection' && Array.isArray(geofenceData.geometries)) {
              geofenceData.geometries.forEach((geom: any) => {
                 if (geom.type === 'Polygon' && Array.isArray(geom.coordinates)) {
@@ -103,7 +104,7 @@ const parseGeofenceCentroid = (geofenceData: any): { lat: string; lon: string } 
         return null;
     }
 
-    // Calcula el centroide (el promedio de todos los puntos de todos los polígonos)
+    // Calcula el centroide (el promedio de todos los puntos de todos los polÃ­gonos)
     const centroid = allPoints.reduce(
         (acc, point) => {
             acc.lon += point.lon;
@@ -122,7 +123,7 @@ const parseGeofenceCentroid = (geofenceData: any): { lat: string; lon: string } 
 
 
 /**
- * Componente principal de la página de Generación de Ruta.
+ * Componente principal de la pÃ¡gina de GeneraciÃ³n de Ruta.
  */
 export default function RouteGenerationPage() {
   const [selectedCustomers, setSelectedCustomers] = useState<CustomerWithGeofence[]>([]);
@@ -138,8 +139,8 @@ export default function RouteGenerationPage() {
   const selectedCodes = useMemo(() => new Set(selectedCustomers.map(c => c.code_customer)), [selectedCustomers]);
 
   /**
-   * Si llega un parámetro `?customer=<código>` en la URL, carga automáticamente
-   * a ese cliente y genera su ruta para ver su ubicación en el mapa.
+   * Si llega un parÃ¡metro `?customer=<cÃ³digo>` en la URL, carga automÃ¡ticamente
+   * a ese cliente y genera su ruta para ver su ubicaciÃ³n en el mapa.
    */
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -149,7 +150,7 @@ export default function RouteGenerationPage() {
     let cancelled = false;
     supabase
       .from('customer')
-      .select('code_customer, customer_name, geocerca')
+      .select('code_customer, customer_name, geocerca, foto_ubicacion')
       .eq('code_customer', customerParam)
       .not('geocerca', 'is', null)
       .maybeSingle()
@@ -168,7 +169,7 @@ export default function RouteGenerationPage() {
         } else {
           toast({
             title: "Cliente no encontrado",
-            description: "El cliente no tiene una ubicación registrada.",
+            description: "El cliente no tiene una ubicaciÃ³n registrada.",
             variant: "destructive",
           });
         }
@@ -178,7 +179,7 @@ export default function RouteGenerationPage() {
   }, [toast]);
 
   /**
-   * Busca clientes con geocerca por código o nombre mientras se escribe.
+   * Busca clientes con geocerca por cÃ³digo o nombre mientras se escribe.
    */
   useEffect(() => {
     const query = debouncedQuery.trim();
@@ -193,7 +194,7 @@ export default function RouteGenerationPage() {
     const pattern = `%${query}%`;
     supabase
       .from('customer')
-      .select('code_customer, customer_name, geocerca')
+      .select('code_customer, customer_name, geocerca, foto_ubicacion')
       .not('geocerca', 'is', null)
       .or(`code_customer.ilike.${pattern},customer_name.ilike.${pattern}`)
       .limit(10)
@@ -227,12 +228,12 @@ export default function RouteGenerationPage() {
   };
 
   /**
-   * Calcula los waypoints válidos de la selección actual. Retorna null si no hay selección válida.
+   * Calcula los waypoints vÃ¡lidos de la selecciÃ³n actual. Retorna null si no hay selecciÃ³n vÃ¡lida.
    */
   const getWaypointsData = () => {
     if (selectedCustomers.length === 0) {
         toast({
-            title: "Sin selección",
+            title: "Sin selecciÃ³n",
             description: "Por favor, seleccione al menos un cliente para generar la ruta.",
             variant: "destructive"
         });
@@ -247,7 +248,7 @@ export default function RouteGenerationPage() {
     if (waypointsData.length === 0) {
         toast({
             title: "Error de Coordenadas",
-            description: "Ninguno de los clientes seleccionados tiene coordenadas válidas.",
+            description: "Ninguno de los clientes seleccionados tiene coordenadas vÃ¡lidas.",
             variant: "destructive"
         });
         return null;
@@ -266,13 +267,13 @@ export default function RouteGenerationPage() {
   };
 
   /**
-   * Abre la ruta en Google Maps en una pestaña nueva.
+   * Abre la ruta en Google Maps en una pestaÃ±a nueva.
    */
   const handleExportToMaps = () => {
     const waypointsData = getWaypointsData();
     if (!waypointsData) return;
 
-    // El primer cliente seleccionado es el origen, el último el destino.
+    // El primer cliente seleccionado es el origen, el Ãºltimo el destino.
     const origin = `${waypointsData[0].coords.lat},${waypointsData[0].coords.lon}`;
     const destination = `${waypointsData[waypointsData.length - 1].coords.lat},${waypointsData[waypointsData.length - 1].coords.lon}`;
     
@@ -298,13 +299,13 @@ export default function RouteGenerationPage() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
-      {/* Columna de Selección de Clientes */}
+      {/* Columna de SelecciÃ³n de Clientes */}
       <Card className="lg:col-span-1 flex flex-col">
         <CardHeader>
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <div>
-                  <CardTitle>Selección de Clientes</CardTitle>
-                  <CardDescription>Escriba el código o nombre del cliente para buscarlo.</CardDescription>
+                  <CardTitle>SelecciÃ³n de Clientes</CardTitle>
+                  <CardDescription>Escriba el cÃ³digo o nombre del cliente para buscarlo.</CardDescription>
               </div>
               <div className="flex flex-col sm:flex-row gap-2">
                 <Button onClick={handleGenerateRoute} className="w-full sm:w-auto">
@@ -323,7 +324,7 @@ export default function RouteGenerationPage() {
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="Buscar por código o nombre..."
+              placeholder="Buscar por cÃ³digo o nombre..."
               value={searchQuery}
               onChange={(e) => { setSearchQuery(e.target.value); setSearchOpen(true); }}
               onFocus={() => setSearchOpen(true)}
@@ -394,10 +395,11 @@ export default function RouteGenerationPage() {
             <>
               <div className="h-[300px] md:h-[500px] w-full rounded-lg overflow-hidden border">
                 <RouteMap
-                  customers={generatedRoute.map(c => ({
+customers={generatedRoute.map(c => ({
                     code_customer: c.code_customer,
                     customer_name: c.customer_name,
                     geocerca: c.geocerca,
+                    foto_ubicacion: c.foto_ubicacion,
                   }))}
                   bodegaLocation={BODEGA_LOCATION}
                   showBodega={false}

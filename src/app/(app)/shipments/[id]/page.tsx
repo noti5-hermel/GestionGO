@@ -626,7 +626,7 @@ export default function ShipmentDetailPage() {
         }).filter(p => !isNaN(p.lng) && !isNaN(p.lat));
     };
     if (typeof geofenceData === 'object' && geofenceData.type === 'Polygon') {
-        allPoints = geofenceData.coordinates[0].map((p: number[]) => ({ lng: p[0], lat: p[1] })).filter(p => !isNaN(p.lng) && !isNaN(p.lat));
+        allPoints = geofenceData.coordinates[0].map((p: number[]) => ({ lng: p[0], lat: p[1] })).filter((p: { lng: number; lat: number }) => !isNaN(p.lng) && !isNaN(p.lat));
     } else if (typeof geofenceData === 'string') {
         const wktString = geofenceData.toUpperCase();
         if (wktString.startsWith('GEOMETRYCOLLECTION')) {

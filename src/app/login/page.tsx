@@ -65,16 +65,18 @@ export default function LoginPage() {
   // Maneja el proceso de inicio de sesión.
   const handleLogin = async () => {
     // Busca al usuario por su correo electrónico y une con la tabla de roles.
-    const { data, error } = await supabase
+    type LoginRow = {
+      id_user: number;
+      name: string;
+      contraseña: string;
+      rol: { rol_desc: string }[] | { rol_desc: string };
+    };
+
+    const { data, error } = (await (supabase as any)
       .from('usuario')
-      .select(`
-        id_user,
-        name,
-        contraseña,
-        rol ( rol_desc )
-      `)
+      .select('id_user, name, contraseña, rol ( rol_desc )')
       .eq('correo', email)
-      .single();
+      .single()) as { data: LoginRow | null; error: { code?: string } | null };
 
     // Manejo de errores de la consulta.
     if (error && error.code !== 'PGRST116') { // PGRST116: No se encontraron filas.

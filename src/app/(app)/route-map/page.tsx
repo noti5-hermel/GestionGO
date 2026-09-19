@@ -103,20 +103,22 @@ export default function RouteMapPage() {
 
     const { data: customersData, error: custError } = await supabase
       .from('customer')
-      .select('code_customer, customer_name, geocerca')
+      .select('code_customer, customer_name, geocerca, foto_ubicacion')
       .in('code_customer', customerCodes);
 
     if (custError) { setCustomers([]); setLoading(false); return; }
 
-    const customerMap = new Map((customersData || []).map(c => [c.code_customer, c.geocerca]));
+    const customerMap = new Map((customersData || []).map(c => [c.code_customer, { geocerca: c.geocerca, foto_ubicacion: c.foto_ubicacion }]));
 
     const enriched = (facturacionData || []).map(f => {
       const details = invoiceStateMap.get(f.id_factura) || { state: false, orden_visita: null };
+      const customer = customerMap.get(f.code_customer);
       return {
         code_customer: f.code_customer,
         customer_name: f.customer_name,
         reference_number: f.reference_number,
-        geocerca: customerMap.get(f.code_customer) ?? null,
+        geocerca: customer?.geocerca ?? null,
+        foto_ubicacion: customer?.foto_ubicacion ?? null,
         state: details.state === true,
         orden_visita: details.orden_visita,
       } as MapCustomer;

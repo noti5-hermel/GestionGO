@@ -751,7 +751,7 @@ export default function CustomersPage() {
                         <FormItem>
                           <FormLabel>Ruta</FormLabel>
                           <FormControl>
-                            <Input type="number" placeholder="Ej: 15" {...field} onChange={e => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))} />
+                            <Input type="number" placeholder="Ej: 15" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>

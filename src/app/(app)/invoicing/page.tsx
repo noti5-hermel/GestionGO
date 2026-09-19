@@ -425,7 +425,7 @@ export default function InvoicingPage() {
                 const newDespachoId = newDespacho.id_despacho;
 
                 const invoicesToCreate: any[] = [];
-                validRows.forEach(row => {
+                validRows.forEach((row: any[]) => {
                     const code_customer = String(row[colIndices.code_customer]).trim();
                     const taxIdValue = String(row[colIndices.tax_id_number] || '').trim();
                     const termDescExcel = String(row[colIndices.term_description_excel] || '').trim();

@@ -26,6 +26,7 @@ type Customer = {
   state: boolean;
   comprobante: string | null;
   reference_number?: string | number | null;
+  foto_ubicacion?: string | null;
 };
 
 type Despacho = {
@@ -135,7 +136,7 @@ export default function LiveMapPage() {
           if (facturacionData) {
             const customerCodes = [...new Set(facturacionData.map(item => item.code_customer))];
 
-            const { data: customersData, error: customersError } = await supabase.from('customer').select('code_customer, customer_name, geocerca').in('code_customer', customerCodes).not('geocerca', 'is', null);
+            const { data: customersData, error: customersError } = await supabase.from('customer').select('code_customer, customer_name, geocerca, foto_ubicacion').in('code_customer', customerCodes).not('geocerca', 'is', null);
             
             if (customersData) {
               const enrichedCustomers = customersData.map(customer => {

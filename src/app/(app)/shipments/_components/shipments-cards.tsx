@@ -24,7 +24,7 @@ import type { Shipment, User, Route, ShipmentInvoice } from "@/hooks/use-shipmen
 import { useState } from "react"
 import { PdfPreviewModal } from "@/components/pdf-preview-modal"
 
-const StatusBadge = ({ checked }: { checked: boolean }) => {
+const StatusBadge = ({ checked }: { checked: boolean | null }) => {
   return <Badge variant={checked ? "default" : "outline"}>{checked ? "OK" : "Pend."}</Badge>
 }
 
@@ -35,7 +35,7 @@ interface ShipmentsCardsProps {
   handleEdit: (shipment: Shipment) => void;
   handleDelete: (shipmentId: string) => void;
   getRouteDescription: (routeId: string) => string;
-  getUserName: (userId: string) => string;
+  getUserName: (userId: string | number) => string;
   isMotoristaOrAuxiliar?: boolean;
   reviewRole: ReviewRole | null;
   routes: Route[];
