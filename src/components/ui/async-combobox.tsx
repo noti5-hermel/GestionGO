@@ -69,9 +69,10 @@ export function AsyncCombobox({
   // Efecto para obtener la etiqueta del valor seleccionado si no está en las opciones actuales
   React.useEffect(() => {
     if (value && !options.some(opt => opt.value === value)) {
+      const currentValue = value;
       async function fetchSelectedOption() {
-        const loadedOptions = await loadOptions(value);
-        const selected = loadedOptions.find(opt => opt.value === value);
+        const loadedOptions = await loadOptions(currentValue);
+        const selected = loadedOptions.find(opt => opt.value === currentValue);
         if (selected) {
           setSelectedLabel(selected.label);
         }

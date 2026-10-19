@@ -21,13 +21,14 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { PlusCircle, Trash2, Pencil, Upload, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, FilterX, Search, Download } from "lucide-react"
+import { PlusCircle, Trash2, Pencil, Upload, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, FilterX, Search, Download, X } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 import { Textarea } from "@/components/ui/textarea"
+import Image from "next/image"
 
 /**
  * @file customers/page.tsx
@@ -54,6 +55,8 @@ const customerSchema = z.object({
   ),
   geocerca: z.string().optional().nullable(),
   last_known_location: z.string().optional().nullable(),
+  coordinates: z.string().optional(),
+  foto_ubicacion: z.string().optional().nullable(),
 })
 
 // Tipos de datos para la gestión de clientes.
@@ -65,12 +68,16 @@ type Customer = {
   ruta: number | null;
   geocerca?: any;
   last_known_location?: any;
+  foto_ubicacion?: string | null;
 }
 type PaymentTerm = { id_term: string | number; term_desc: string }
 type Tax = { id_impuesto: string | number; impt_desc: string }
 type RouteNumber = { ruta: number };
 
 const ITEMS_PER_PAGE = 10;
+
+// Bucket de Supabase Storage donde se guardan las fotos de sucursal.
+const BUCKET_UBICACION = 'sucursales';
 
 /**
  * Convierte un objeto de geometría (como GeoJSON) a un string WKT legible.
@@ -132,6 +139,14 @@ export default function CustomersPage() {
   const { toast } = useToast()
   // Referencia al input de archivo para la importación desde Excel.
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Referencia al input de archivo para la foto de sucursal.
+  const fotoInputRef = useRef<HTMLInputElement>(null);
+  // Archivo de foto de sucursal seleccionado para subir.
+  const [fotoFile, setFotoFile] = useState<File | null>(null);
+  // URL de previsualización de la foto de sucursal.
+  const [fotoPreview, setFotoPreview] = useState<string>('');
+  // Indica si se debe eliminar la foto de sucursal existente.
+  const [fotoRemoved, setFotoRemoved] = useState(false);
   
   // --- ESTADOS DE FILTRADO Y PAGINACIÓN ---
   const [currentPage, setCurrentPage] = useState(1);
@@ -153,6 +168,7 @@ export default function CustomersPage() {
       ruta: undefined,
       geocerca: "",
       last_known_location: "",
+      coordinates: "",
     },
   })
 
@@ -169,7 +185,7 @@ export default function CustomersPage() {
     // Construye la consulta a Supabase de forma dinámica.
     let query = supabase
       .from('customer')
-      .select('code_customer,customer_name,id_impuesto,id_term,ruta,geocerca,last_known_location', { count: 'exact' });
+      .select('code_customer,customer_name,id_impuesto,id_term,ruta,geocerca,last_known_location,foto_ubicacion', { count: 'exact' });
 
     // Aplica el filtro de búsqueda si existe.
     if (searchQuery) {
@@ -262,7 +278,11 @@ export default function CustomersPage() {
         ruta: editingCustomer.ruta !== null ? Number(editingCustomer.ruta) : undefined,
         geocerca: formatGeometryToString(editingCustomer.geocerca),
         last_known_location: formatGeometryToString(editingCustomer.last_known_location),
+        coordinates: "",
       });
+      setFotoFile(null);
+      setFotoRemoved(false);
+      setFotoPreview(editingCustomer.foto_ubicacion || '');
     } else {
       form.reset({
         code_customer: "",
@@ -272,7 +292,11 @@ export default function CustomersPage() {
         ruta: undefined,
         geocerca: "",
         last_known_location: "",
+        coordinates: "",
       });
+      setFotoFile(null);
+      setFotoRemoved(false);
+      setFotoPreview('');
     }
   }, [editingCustomer, form]);
 
@@ -284,13 +308,58 @@ export default function CustomersPage() {
     let error;
 
     // Solo se envían los campos que no son de la geocerca
-    const { geocerca, last_known_location, ...customerData } = values;
+    const { geocerca, last_known_location, coordinates, ...customerData } = values;
+
+    // Lógica de coordenadas: genera last_known_location y limpia geocerca (prioridad).
+    let coordinatesData: { last_known_location: string; geocerca: null } | null = null;
+    const coordsRaw = (coordinates || '').trim();
+    if (coordsRaw) {
+      const coords = coordsRaw.split(',').map(c => c.trim());
+      if (coords.length !== 2 || isNaN(parseFloat(coords[0])) || isNaN(parseFloat(coords[1]))) {
+        toast({
+          title: "Formato de coordenadas inválido",
+          description: "Use el formato 'latitud, longitud'. Ej: 13.711, -89.223",
+          variant: "destructive",
+        });
+        return;
+      }
+      const [lat, lon] = coords.map(parseFloat);
+      coordinatesData = { last_known_location: `POINT(${lon} ${lat})`, geocerca: null };
+    }
+
+    // Maneja la foto de sucursal: subir nueva, conservar o eliminar.
+    if (fotoFile) {
+      const fileName = `UBIC-${values.code_customer}-${Date.now()}.jpg`;
+      const oldUrl = editingCustomer?.foto_ubicacion;
+      if (oldUrl) {
+        const oldFileName = oldUrl.split('/').pop();
+        if (oldFileName) await supabase.storage.from(BUCKET_UBICACION).remove([oldFileName]);
+      }
+      const { error: uploadError } = await supabase.storage.from(BUCKET_UBICACION).upload(fileName, fotoFile, { cacheControl: '3600', upsert: false });
+      if (uploadError) {
+        toast({
+          title: "Error al subir foto",
+          description: uploadError.message,
+          variant: "destructive",
+        });
+        return;
+      }
+      const { data: { publicUrl } } = supabase.storage.from(BUCKET_UBICACION).getPublicUrl(fileName);
+      customerData.foto_ubicacion = publicUrl;
+    } else if (fotoRemoved) {
+      const oldUrl = editingCustomer?.foto_ubicacion;
+      if (oldUrl) {
+        const oldFileName = oldUrl.split('/').pop();
+        if (oldFileName) await supabase.storage.from(BUCKET_UBICACION).remove([oldFileName]);
+      }
+      customerData.foto_ubicacion = null;
+    }
 
     if (editingCustomer) {
       // Actualiza un cliente existente.
       const { error: updateError } = await supabase
         .from('customer')
-        .update(customerData)
+        .update({ ...customerData, ...coordinatesData })
         .eq('code_customer', editingCustomer.code_customer)
         .select()
       error = updateError;
@@ -298,7 +367,7 @@ export default function CustomersPage() {
       // Inserta un nuevo cliente.
       const { error: insertError } = await supabase
         .from('customer')
-        .insert([customerData])
+        .insert([{ ...customerData, ...coordinatesData }])
         .select()
       error = insertError;
     }
@@ -310,6 +379,12 @@ export default function CustomersPage() {
         variant: "destructive",
       })
     } else {
+      if (coordinatesData) {
+        const { error: rpcError } = await supabase.rpc('generate_geofences_from_last_location');
+        if (rpcError) {
+          toast({ title: "Coordenadas guardadas", description: "No se pudo regenerar la geocerca automáticamente. Regenere desde Geocercas.", variant: "destructive" });
+        }
+      }
       toast({
         title: "Éxito",
         description: `Cliente ${editingCustomer ? 'actualizado' : 'guardado'} correctamente.`,
@@ -519,6 +594,34 @@ export default function CustomersPage() {
     fileInputRef.current?.click();
   };
 
+  /** Maneja la selección de un archivo de foto de sucursal. */
+  const handleFotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setFotoFile(file);
+    setFotoRemoved(false);
+    if (fotoPreview) URL.revokeObjectURL(fotoPreview);
+    setFotoPreview(URL.createObjectURL(file));
+  };
+
+  /** Limpia la foto seleccionada y marca la existente para eliminar. */
+  const clearFoto = () => {
+    setFotoFile(null);
+    setFotoRemoved(true);
+    if (fotoPreview) URL.revokeObjectURL(fotoPreview);
+    setFotoPreview('');
+    if (fotoInputRef.current) fotoInputRef.current.value = '';
+  };
+
+  /** Restablece el estado de la foto al abrir/cerrar el diálogo. */
+  const resetFotoState = () => {
+    setFotoFile(null);
+    setFotoRemoved(false);
+    if (fotoPreview) URL.revokeObjectURL(fotoPreview);
+    setFotoPreview('');
+    if (fotoInputRef.current) fotoInputRef.current.value = '';
+  };
+
   /** Prepara el formulario para editar un cliente. */
   const handleEdit = (customer: Customer) => {
     setEditingCustomer(customer);
@@ -529,6 +632,7 @@ export default function CustomersPage() {
   const handleOpenDialog = (open: boolean) => {
     setIsDialogOpen(open);
     if (!open) {
+      resetFotoState();
       setEditingCustomer(null);
     }
   };
@@ -601,7 +705,7 @@ export default function CustomersPage() {
             />
             <Dialog open={isDialogOpen} onOpenChange={handleOpenDialog}>
               <DialogTrigger asChild>
-                <Button onClick={() => { setEditingCustomer(null); form.reset(); setIsDialogOpen(true); }}>
+                <Button onClick={() => { setEditingCustomer(null); form.reset(); resetFotoState(); setIsDialogOpen(true); }}>
                   <PlusCircle className="mr-2 h-4 w-4" /> Añadir Cliente
                 </Button>
               </DialogTrigger>
@@ -647,7 +751,7 @@ export default function CustomersPage() {
                         <FormItem>
                           <FormLabel>Ruta</FormLabel>
                           <FormControl>
-                            <Input type="number" placeholder="Ej: 15" {...field} onChange={e => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))} />
+                            <Input type="number" placeholder="Ej: 15" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -705,6 +809,27 @@ export default function CustomersPage() {
                         </FormItem>
                       )}
                     />
+                     <FormField
+                       control={form.control}
+                       name="coordinates"
+                       render={({ field }) => (
+                         <FormItem>
+                           <FormLabel>Actualizar desde Coordenadas (lat, lon)</FormLabel>
+                           <FormControl>
+                             <Textarea
+                               placeholder="Ej: 13.7115, -89.2238"
+                               className="resize-y"
+                               rows={2}
+                               {...field}
+                             />
+                           </FormControl>
+                           <FormDescription>
+                             Pegue las coordenadas para generar una geocerca circular de 300m. Esto tendrá prioridad y reemplazará la geocerca existente.
+                           </FormDescription>
+                           <FormMessage />
+                         </FormItem>
+                       )}
+                     />
                      {editingCustomer && (
                        <>
                         <FormField
@@ -749,6 +874,40 @@ export default function CustomersPage() {
                         />
                        </>
                      )}
+                     <FormItem>
+                       <FormLabel>Foto de Sucursal</FormLabel>
+                       {fotoPreview && (
+                         <Image src={fotoPreview} alt="Foto de Sucursal" width={80} height={80} className="rounded border object-cover" />
+                       )}
+                       <div className="flex items-center gap-2">
+                         <input
+                           type="file"
+                           accept="image/*"
+                           onChange={handleFotoChange}
+                           className="hidden"
+                           ref={fotoInputRef}
+                         />
+                         <Button
+                           type="button"
+                           variant="outline"
+                           size="sm"
+                           onClick={() => fotoInputRef.current?.click()}
+                         >
+                           <Upload className="mr-2 h-4 w-4" />
+                           {fotoPreview ? 'Cambiar Foto' : 'Subir Foto'}
+                         </Button>
+                         {fotoPreview && (
+                           <Button
+                             type="button"
+                             variant="ghost"
+                             size="sm"
+                             onClick={clearFoto}
+                           >
+                             <X className="mr-1 h-3 w-3" /> Eliminar
+                           </Button>
+                         )}
+                       </div>
+                     </FormItem>
                     <DialogFooter className="gap-2 pt-4">
                       <DialogClose asChild>
                         <Button type="button" variant="secondary" className="w-full sm:w-auto">Cancelar</Button>
@@ -768,11 +927,11 @@ export default function CustomersPage() {
                     type="search"
                     placeholder="Buscar por código o nombre..."
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => { setCurrentPage(1); setSearchQuery(e.target.value); }}
                     className="pl-8 w-full sm:w-[250px]"
                 />
             </div>
-            <Select value={filterRuta} onValueChange={setFilterRuta}>
+            <Select value={filterRuta} onValueChange={(v) => { setCurrentPage(1); setFilterRuta(v); }}>
                 <SelectTrigger className="w-full sm:w-auto min-w-[160px]">
                     <SelectValue placeholder="Filtrar por Ruta" />
                 </SelectTrigger>
@@ -782,7 +941,7 @@ export default function CustomersPage() {
                     ))}
                 </SelectContent>
             </Select>
-            <Select value={filterTerm} onValueChange={setFilterTerm}>
+            <Select value={filterTerm} onValueChange={(v) => { setCurrentPage(1); setFilterTerm(v); }}>
                 <SelectTrigger className="w-full sm:w-auto min-w-[160px]">
                     <SelectValue placeholder="Filtrar por Término" />
                 </SelectTrigger>
@@ -792,7 +951,7 @@ export default function CustomersPage() {
                     ))}
                 </SelectContent>
             </Select>
-            <Select value={filterTax} onValueChange={setFilterTax}>
+            <Select value={filterTax} onValueChange={(v) => { setCurrentPage(1); setFilterTax(v); }}>
                 <SelectTrigger className="w-full sm:w-auto min-w-[160px]">
                     <SelectValue placeholder="Filtrar por Impuesto" />
                 </SelectTrigger>
@@ -818,6 +977,7 @@ export default function CustomersPage() {
                 <TableHead>Ruta</TableHead>
                 <TableHead>Impuesto</TableHead>
                 <TableHead>Térm. Pago</TableHead>
+                <TableHead>Foto Sucursal</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -829,6 +989,18 @@ export default function CustomersPage() {
                   <TableCell>{customer.ruta ?? 'N/A'}</TableCell>
                   <TableCell>{getTaxDescription(customer.id_impuesto)}</TableCell>
                   <TableCell>{getTermDescription(customer.id_term)}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      {customer.foto_ubicacion ? (
+                        <>
+                          <Image src={customer.foto_ubicacion} alt="Foto Sucursal" width={32} height={32} className="rounded object-cover" />
+                          <Button variant="ghost" size="sm" className="text-xs" onClick={() => handleEdit(customer)}>Ver</Button>
+                        </>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Sin foto</span>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell>
                     <div className="flex justify-end items-center gap-2">
                       <Button variant="ghost" size="icon" onClick={() => handleEdit(customer)}>

@@ -3,11 +3,23 @@
 
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
-import type { ShipmentInvoice } from '@/app/(app)/shipments/[id]/page'
 
 // Define un tipo extendido para jsPDF si autotable no está en la definición oficial.
 interface jsPDFWithAutoTable extends jsPDF {
   autoTable: (options: any) => jsPDF;
+}
+
+// Tipo estructural con los campos que consume el PDF, compatible con
+// los datos enriquecidos que generan tanto la página de detalle como las tablas/tarjetas.
+type PdfInvoice = {
+  id_factura: string;
+  reference_number?: string | number;
+  customer_name?: string;
+  tax_type?: string;
+  net_to_pay?: number;
+  forma_pago: string;
+  monto: number;
+  state: boolean;
 }
 
 // Define los tipos de datos que la función recibirá.
@@ -34,7 +46,7 @@ type Route = { ruta_desc: string }
  */
 export const generateShipmentPDF = (
   shipment: Shipment,
-  invoices: ShipmentInvoice[],
+  invoices: PdfInvoice[],
   route: Route,
   motorista: User,
   auxiliar: User

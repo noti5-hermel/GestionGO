@@ -26,7 +26,7 @@ import { PdfPreviewModal } from "@/components/pdf-preview-modal"
 
 
 // Componente para mostrar un badge de estado de forma consistente.
-const StatusBadge = ({ checked }: { checked: boolean }) => {
+const StatusBadge = ({ checked }: { checked: boolean | null }) => {
   return <Badge variant={checked ? "default" : "outline"}>{checked ? "OK" : "Pend."}</Badge>
 }
 
@@ -37,7 +37,7 @@ interface ShipmentsTableProps {
   handleEdit: (shipment: Shipment) => void;
   handleDelete: (shipmentId: string) => void;
   getRouteDescription: (routeId: string) => string;
-  getUserName: (userId: string) => string;
+  getUserName: (userId: string | number) => string;
   isMotoristaOrAuxiliar?: boolean;
   reviewRole: ReviewRole | null;
   routes: Route[];

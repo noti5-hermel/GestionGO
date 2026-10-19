@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/sidebar'
 
 interface UserSession {
-  id: string;
+  id: number;
   name: string;
   role: string;
 }
@@ -40,7 +40,8 @@ const allMenuItems = [
   { href: '/customers', label: 'Clientes', icon: Users },
   { href: '/shipments', label: 'Despachos', icon: Truck },
   { href: '/live-map', label: 'Mapa en Vivo', icon: ScanEye },
-  { href: '/route-generation', label: 'Generación de Ruta', icon: Map },
+  { href: '/route-map', label: 'Mapa de Rutas', icon: Map },
+  { href: '/route-generation', label: 'Generación de Ruta', icon: MapIcon },
   { href: '/invoicing', label: 'Facturación', icon: FileText },
   { href: '/shipment-invoicing', label: 'Facturación por Despacho', icon: ClipboardList },
   { href: '/routes', label: 'Rutas', icon: MapIcon },
@@ -75,6 +76,8 @@ export function MainNav({ session }: MainNavProps) {
   ];
 
   const isRestrictedRole = restrictedRoles.some(role => userRole.includes(role));
+  const isMobileRole = userRole.includes('motorista') || userRole.includes('auxiliar');
+  const isAsistAdmon = userRole.includes('asist.admon');
   const isFacturacionRole = userRole.includes('facturacion');
   const isAdmin = userRole.includes('admin');
   const isVerificador = userRole.includes('verificador');
@@ -86,9 +89,14 @@ export function MainNav({ session }: MainNavProps) {
     // Rol de verificador solo ve generación de ruta y geocercas.
     const allowedHrefs = ['/route-generation', '/geofences'];
     menuItemsToRender = allMenuItems.filter(item => allowedHrefs.includes(item.href));
+  } else if (isMobileRole) {
+    // Motoristas y auxiliares ven despachos, mapa de rutas y generación de ruta.
+    menuItemsToRender = allMenuItems.filter(item => item.href === '/shipments' || item.href === '/route-generation' || item.href === '/route-map');
   } else if (isRestrictedRole) {
-    // Roles operativos solo ven despachos.
-    menuItemsToRender = allMenuItems.filter(item => item.href === '/shipments');
+    // Roles operativos solo ven despachos; Asist.Admon también gestiona clientes.
+    menuItemsToRender = allMenuItems.filter(item =>
+      item.href === '/shipments' || (isAsistAdmon && item.href === '/customers')
+    );
   } else if (isFacturacionRole) {
     // Rol de facturación no ve el dashboard.
     menuItemsToRender = allMenuItems.filter(item => item.href !== '/');

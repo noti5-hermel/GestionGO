@@ -24,7 +24,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { PlusCircle, Pencil, Trash2, Upload, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Search, FilterX } from "lucide-react"
+import { PlusCircle, Pencil, Trash2, Upload, Download, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Search, FilterX } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 import { Label } from "@/components/ui/label"
@@ -425,7 +425,7 @@ export default function InvoicingPage() {
                 const newDespachoId = newDespacho.id_despacho;
 
                 const invoicesToCreate: any[] = [];
-                validRows.forEach(row => {
+                validRows.forEach((row: any[]) => {
                     const code_customer = String(row[colIndices.code_customer]).trim();
                     const taxIdValue = String(row[colIndices.tax_id_number] || '').trim();
                     const termDescExcel = String(row[colIndices.term_description_excel] || '').trim();
@@ -564,6 +564,63 @@ export default function InvoicingPage() {
   const getBadgeVariant = (status: string) => status === "Completado" ? "default" : "secondary";
   
   const handleImportClick = () => fileInputRef.current?.click();
+
+  /**
+   * Descarga una plantilla Excel con la estructura exacta que espera el importador.
+   * Cada hoja representa un despacho: fila 1 con ruta y fecha, fila 3 con los
+   * encabezados y a partir de la fila 4 los datos de cada factura.
+   */
+  const handleDownloadTemplate = async () => {
+    // Obtener una ruta real de la base de datos para que la hoja sea válida al importar.
+    const { data: routesData } = await supabase.from('rutas').select('ruta_desc').limit(1);
+    const rutaEjemplo = routesData && routesData.length > 0 ? routesData[0].ruta_desc : 'RUTA EJEMPLO';
+
+    const headers = [
+      'Code',                  // A: Código de cliente
+      'Invoice Number',        // B: Número de factura
+      'Customer Name',         // C: Nombre del cliente
+      'Tax ID Number',         // D: NIF
+      'Your Reference',        // E: Referencia
+      'Transaction ID',        // F: Fecha de la factura
+      'Subtotal',              // G: Subtotal
+      'Total Sales Tax',       // H: Impuesto sobre ventas
+      'Grand Total',           // I: Total general
+      'Payment Total',         // J: Pago
+      'Net To Pay',            // K: Neto a pagar
+      'Terms Description',     // L: Término de pago
+    ];
+
+    const sampleRow = [
+      'CL-001',
+      'FAC-0001',
+      'Cliente de Ejemplo',
+      '00000000000',
+      'REF-001',
+      new Date().toISOString().split('T')[0],
+      1000,
+      180,
+      1180,
+      1180,
+      1180,
+      'Contado',
+    ];
+
+    const aoa = [
+      ['', rutaEjemplo, '', new Date().toISOString().split('T')[0]], // Fila 1: ruta (col B) y fecha de despacho (col D)
+      [],                                                             // Fila 2: separadora (vacía)
+      headers,                                                        // Fila 3: encabezados
+      sampleRow,                                                      // Fila 4: ejemplo
+    ];
+
+    const worksheet = xlsx.utils.aoa_to_sheet(aoa);
+    worksheet['!cols'] = headers.map(() => ({ wch: 18 }));
+
+    const workbook = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(workbook, worksheet, 'Despacho 1');
+    xlsx.writeFile(workbook, 'plantilla_facturacion.xlsx');
+
+    toast({ title: "Plantilla descargada", description: "Complete la plantilla respetando los encabezados y luego impórtela desde 'Importar desde Excel'." });
+  };
   
   const clearFilters = () => {
     setSearchQuery('');
@@ -596,6 +653,9 @@ export default function InvoicingPage() {
             <CardDescription>Cree y visualice facturas.</CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={handleDownloadTemplate} variant="outline">
+                <Download className="mr-2 h-4 w-4" /> Descargar Plantilla
+            </Button>
             <Button onClick={handleImportClick} variant="outline">
                 <Upload className="mr-2 h-4 w-4" /> Importar desde Excel
             </Button>

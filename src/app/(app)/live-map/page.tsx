@@ -25,6 +25,8 @@ type Customer = {
   geocerca: any;
   state: boolean;
   comprobante: string | null;
+  reference_number?: string | number | null;
+  foto_ubicacion?: string | null;
 };
 
 type Despacho = {
@@ -48,7 +50,7 @@ type Route = {
 type LocationPoint = { lat: number; lng: number };
 
 // Carga dinámica del componente de mapa para evitar problemas con SSR.
-const LiveMap = dynamic(() => import('@/components/live-map'), {
+const RouteMap = dynamic(() => import('@/components/route-map-view'), {
   ssr: false,
   loading: () => <p className="text-center p-10">Cargando mapa...</p>,
 });
@@ -129,18 +131,19 @@ export default function LiveMapPage() {
         if (invoiceIds.length > 0) {
           const invoiceDetailsMap = new Map(facDespacho.map(item => [item.id_factura, { state: item.state, comprobante: item.comprobante, orden_visita: item.orden_visita }]));
 
-          const { data: facturacionData, error: facturacionError } = await supabase.from('facturacion').select('id_factura, code_customer').in('id_factura', invoiceIds);
+          const { data: facturacionData, error: facturacionError } = await supabase.from('facturacion').select('id_factura, code_customer, reference_number').in('id_factura', invoiceIds);
           
           if (facturacionData) {
             const customerCodes = [...new Set(facturacionData.map(item => item.code_customer))];
 
-            const { data: customersData, error: customersError } = await supabase.from('customer').select('code_customer, customer_name, geocerca').in('code_customer', customerCodes).not('geocerca', 'is', null);
+            const { data: customersData, error: customersError } = await supabase.from('customer').select('code_customer, customer_name, geocerca, foto_ubicacion').in('code_customer', customerCodes).not('geocerca', 'is', null);
             
             if (customersData) {
               const enrichedCustomers = customersData.map(customer => {
-                  const invoiceId = facturacionData.find(f => f.code_customer === customer.code_customer)?.id_factura;
+                  const factRow = facturacionData.find(f => f.code_customer === customer.code_customer);
+                  const invoiceId = factRow?.id_factura;
                   const details = invoiceId ? invoiceDetailsMap.get(invoiceId) : { state: false, comprobante: null, orden_visita: null };
-                  return { ...customer, ...details };
+                  return { ...customer, ...details, reference_number: factRow?.reference_number ?? null };
               });
               
               // Ordenar clientes por `orden_visita` si existe, sino, mantener el orden de la BD.
@@ -256,9 +259,9 @@ export default function LiveMapPage() {
       <CardHeader>
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
-              <CardTitle>Mapa de Rutas por Despacho</CardTitle>
+              <CardTitle>Mapa en Vivo por Despacho</CardTitle>
               <CardDescription>
-                Visualice la ruta planificada (azul) y el recorrido real del motorista (naranja).
+                Ubicación de los clientes, ruta sugerida más óptima (morada) y recorrido real del motorista (naranja).
               </CardDescription>
             </div>
             <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
@@ -284,15 +287,28 @@ export default function LiveMapPage() {
             </div>
         </div>
       </CardHeader>
-      <CardContent className="flex-1 flex items-center justify-center p-0 md:p-6">
-        <LiveMap
-          customers={customerGeofences}
-          bodegaLocation={BODEGA_LOCATION}
-          motoristaPath={motoristaPath}
-          motoristaLocation={motoristaLocation}
-          loading={loading}
-          viewMode="route"
-        />
+      <CardContent className="flex-1 relative">
+        {!selectedDespachoId ? (
+          <div className="flex items-center justify-center h-full w-full bg-muted text-muted-foreground p-4 text-center rounded-lg">
+            <p>Por favor, seleccione un despacho para ver la ruta.</p>
+          </div>
+        ) : loading ? (
+          <div className="flex items-center justify-center h-full w-full bg-muted text-muted-foreground p-4 text-center rounded-lg">
+            <p>Cargando datos del despacho...</p>
+          </div>
+        ) : customerGeofences.length === 0 ? (
+          <div className="flex items-center justify-center h-full w-full bg-muted text-muted-foreground p-4 text-center rounded-lg">
+            <p>El despacho seleccionado no tiene clientes con ubicación registrada.</p>
+          </div>
+        ) : (
+          <RouteMap
+            customers={customerGeofences}
+            bodegaLocation={BODEGA_LOCATION}
+            motoristaPath={motoristaPath}
+            motoristaLocation={motoristaLocation}
+            despachoLabel={`Despacho ${selectedDespachoId}`}
+          />
+        )}
       </CardContent>
     </Card>
   );

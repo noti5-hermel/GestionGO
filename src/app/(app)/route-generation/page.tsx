@@ -1,33 +1,53 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, useCallback, useMemo } from "react"
+import dynamic from "next/dynamic"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
-import { List, MapPin, Search, Trash2 } from "lucide-react"
+import { List, Loader2, MapPin, Search, Trash2, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
+import { cn } from "@/lib/utils"
 
 /**
  * @file route-generation/page.tsx
- * @description Página para generar una ruta de Google Maps basada en la selección de clientes con geocercas.
+ * @description PÃ¡gina para generar una ruta de Google Maps basada en la selecciÃ³n de clientes con geocercas.
  */
+
+// Carga dinÃ¡mica del componente de mapa para evitar problemas con SSR.
+const RouteMap = dynamic(() => import("@/components/route-map-view"), {
+  ssr: false,
+  loading: () => <p className="text-center p-10 text-muted-foreground">Cargando mapa...</p>,
+});
+
+const BODEGA_LOCATION = { lat: 13.725410116705362, lng: -89.21911777270175 };
 
 // Tipo de dato para un cliente con geocerca.
 type CustomerWithGeofence = {
   code_customer: string;
   customer_name: string;
   geocerca: any; // Se usa 'any' para manejar tanto strings como objetos GeoJSON.
+  foto_ubicacion?: string | null;
+}
+
+// Hook para "rebotar" la entrada del usuario y no sobrecargar las consultas.
+function useDebounce(value: string, delay: number) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(handler);
+  }, [value, delay]);
+  return debouncedValue;
 }
 
 /**
  * Parsea una geocerca para obtener su centroide.
  * Admite formatos WKT (string) para POLYGON y GEOMETRYCOLLECTION, y objetos GeoJSON.
  * @param geofenceData - La geocerca en formato WKT o como objeto GeoJSON.
- * @returns Un objeto con lat y lon del centroide, o null si el formato es inválido.
+ * @returns Un objeto con lat y lon del centroide, o null si el formato es invÃ¡lido.
  */
 const parseGeofenceCentroid = (geofenceData: any): { lat: string; lon: string } | null => {
     if (!geofenceData) return null;
@@ -53,7 +73,7 @@ const parseGeofenceCentroid = (geofenceData: any): { lat: string; lon: string } 
                     .filter(p => !isNaN(p.lon) && !isNaN(p.lat));
             }
         }
-        // Soporte para GEOMETRYCOLLECTION en GeoJSON (aunque menos común para este caso)
+        // Soporte para GEOMETRYCOLLECTION en GeoJSON (aunque menos comÃºn para este caso)
         else if (geofenceData.type === 'GeometryCollection' && Array.isArray(geofenceData.geometries)) {
              geofenceData.geometries.forEach((geom: any) => {
                 if (geom.type === 'Polygon' && Array.isArray(geom.coordinates)) {
@@ -84,7 +104,7 @@ const parseGeofenceCentroid = (geofenceData: any): { lat: string; lon: string } 
         return null;
     }
 
-    // Calcula el centroide (el promedio de todos los puntos de todos los polígonos)
+    // Calcula el centroide (el promedio de todos los puntos de todos los polÃ­gonos)
     const centroid = allPoints.reduce(
         (acc, point) => {
             acc.lon += point.lon;
@@ -103,82 +123,157 @@ const parseGeofenceCentroid = (geofenceData: any): { lat: string; lon: string } 
 
 
 /**
- * Componente principal de la página de Generación de Ruta.
+ * Componente principal de la pÃ¡gina de GeneraciÃ³n de Ruta.
  */
 export default function RouteGenerationPage() {
-  const [customers, setCustomers] = useState<CustomerWithGeofence[]>([]);
-  const [selectedCustomers, setSelectedCustomers] = useState<Record<string, boolean>>({});
+  const [selectedCustomers, setSelectedCustomers] = useState<CustomerWithGeofence[]>([]);
   const [generatedRoute, setGeneratedRoute] = useState<CustomerWithGeofence[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<CustomerWithGeofence[]>([]);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
   const { toast } = useToast();
 
-  /**
-   * Obtiene la lista de clientes que tienen una geocerca definida.
-   */
-  const fetchCustomersWithGeofence = useCallback(async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('customer')
-      .select('code_customer, customer_name, geocerca')
-      .not('geocerca', 'is', null);
+  const debouncedQuery = useDebounce(searchQuery, 300);
 
-    if (error) {
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar los clientes con geocercas.",
-        variant: "destructive",
+  const selectedCodes = useMemo(() => new Set(selectedCustomers.map(c => c.code_customer)), [selectedCustomers]);
+
+  /**
+   * Si llega un parÃ¡metro `?customer=<cÃ³digo>` en la URL, carga automÃ¡ticamente
+   * a ese cliente y genera su ruta para ver su ubicaciÃ³n en el mapa.
+   */
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const customerParam = params.get('customer');
+    if (!customerParam) return;
+
+    let cancelled = false;
+    supabase
+      .from('customer')
+      .select('code_customer, customer_name, geocerca, foto_ubicacion')
+      .eq('code_customer', customerParam)
+      .not('geocerca', 'is', null)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (!error && data) {
+          const customer = data as CustomerWithGeofence;
+          setSelectedCustomers(prev =>
+            prev.some(c => c.code_customer === customer.code_customer) ? prev : [...prev, customer]
+          );
+          setGeneratedRoute([customer]);
+          toast({
+            title: "Ruta generada",
+            description: `${customer.customer_name} agregado al mapa.`,
+          });
+        } else {
+          toast({
+            title: "Cliente no encontrado",
+            description: "El cliente no tiene una ubicaciÃ³n registrada.",
+            variant: "destructive",
+          });
+        }
+        window.history.replaceState(null, '', '/route-generation');
       });
-    } else {
-      setCustomers(data as CustomerWithGeofence[]);
-    }
-    setLoading(false);
+    return () => { cancelled = true; };
   }, [toast]);
 
+  /**
+   * Busca clientes con geocerca por cÃ³digo o nombre mientras se escribe.
+   */
   useEffect(() => {
-    fetchCustomersWithGeofence();
-  }, [fetchCustomersWithGeofence]);
+    const query = debouncedQuery.trim();
+    if (!query) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsSearching(true);
+    const pattern = `%${query}%`;
+    supabase
+      .from('customer')
+      .select('code_customer, customer_name, geocerca, foto_ubicacion')
+      .not('geocerca', 'is', null)
+      .or(`code_customer.ilike.${pattern},customer_name.ilike.${pattern}`)
+      .limit(10)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        setIsSearching(false);
+        if (!error) setSearchResults((data || []) as CustomerWithGeofence[]);
+      });
+    return () => { cancelled = true; };
+  }, [debouncedQuery]);
 
   /**
-   * Maneja el cambio de estado de un checkbox de cliente.
+   * Agrega un cliente a la lista de seleccionados.
    */
-  const handleCustomerSelect = (customerId: string, checked: boolean) => {
-    setSelectedCustomers(prev => ({
-      ...prev,
-      [customerId]: checked,
-    }));
+  const handleAddCustomer = (customer: CustomerWithGeofence) => {
+    setSelectedCustomers(prev =>
+      prev.some(c => c.code_customer === customer.code_customer)
+        ? prev
+        : [...prev, customer]
+    );
+    setSearchQuery("");
+    setSearchResults([]);
+    setSearchOpen(false);
   };
 
   /**
-   * Construye y abre una URL de Google Maps con los clientes seleccionados.
+   * Quita un cliente de la lista de seleccionados.
    */
-  const handleGenerateRoute = () => {
-    const selected = customers.filter(customer => selectedCustomers[customer.code_customer]);
-    if (selected.length === 0) {
+  const handleRemoveCustomer = (customerId: string) => {
+    setSelectedCustomers(prev => prev.filter(c => c.code_customer !== customerId));
+  };
+
+  /**
+   * Calcula los waypoints vÃ¡lidos de la selecciÃ³n actual. Retorna null si no hay selecciÃ³n vÃ¡lida.
+   */
+  const getWaypointsData = () => {
+    if (selectedCustomers.length === 0) {
         toast({
-            title: "Sin selección",
+            title: "Sin selecciÃ³n",
             description: "Por favor, seleccione al menos un cliente para generar la ruta.",
             variant: "destructive"
         });
-        return;
+        return null;
     }
 
-    const waypointsData = selected.map(customer => {
+    const waypointsData = selectedCustomers.map(customer => {
         const coords = parseGeofenceCentroid(customer.geocerca);
         return coords ? { coords, customer } : null;
     }).filter((c): c is { coords: { lat: string; lon: string }; customer: CustomerWithGeofence } => c !== null);
 
-
     if (waypointsData.length === 0) {
         toast({
             title: "Error de Coordenadas",
-            description: "Ninguno de los clientes seleccionados tiene coordenadas válidas.",
+            description: "Ninguno de los clientes seleccionados tiene coordenadas vÃ¡lidas.",
             variant: "destructive"
         });
-        return;
+        return null;
     }
-    
-    // El primer cliente seleccionado es el origen, el último el destino.
+
+    return waypointsData;
+  };
+
+  /**
+   * Genera la vista previa de la ruta en el mapa dentro de la app.
+   */
+  const handleGenerateRoute = () => {
+    const waypointsData = getWaypointsData();
+    if (!waypointsData) return;
+    setGeneratedRoute(waypointsData.map(wp => wp.customer));
+  };
+
+  /**
+   * Abre la ruta en Google Maps en una pestaÃ±a nueva.
+   */
+  const handleExportToMaps = () => {
+    const waypointsData = getWaypointsData();
+    if (!waypointsData) return;
+
+    // El primer cliente seleccionado es el origen, el Ãºltimo el destino.
     const origin = `${waypointsData[0].coords.lat},${waypointsData[0].coords.lon}`;
     const destination = `${waypointsData[waypointsData.length - 1].coords.lat},${waypointsData[waypointsData.length - 1].coords.lon}`;
     
@@ -193,101 +288,98 @@ export default function RouteGenerationPage() {
     }
 
     window.open(googleMapsUrl, '_blank');
-    setGeneratedRoute(waypointsData.map(wp => wp.customer));
   };
-  
-  const filteredCustomers = useMemo(() => {
-      if (!searchQuery) {
-          return customers;
-      }
-      return customers.filter(customer => 
-          customer.customer_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          customer.code_customer.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-  }, [customers, searchQuery]);
-
-  const handleSelectAll = (checked: boolean) => {
-    const newSelection: Record<string, boolean> = { ...selectedCustomers };
-    if (checked) {
-        filteredCustomers.forEach(customer => newSelection[customer.code_customer] = true);
-    } else {
-        filteredCustomers.forEach(customer => delete newSelection[customer.code_customer]);
-    }
-    setSelectedCustomers(newSelection);
-  }
 
   const handleRemoveFromGeneratedRoute = (customerId: string) => {
     // Remove from the visual generated list
     setGeneratedRoute(prev => prev.filter(c => c.code_customer !== customerId));
-    // Uncheck the customer from the selection list
-    setSelectedCustomers(prev => ({
-      ...prev,
-      [customerId]: false,
-    }));
+    // Remove from the selected list
+    handleRemoveCustomer(customerId);
   };
 
-  const allSelected = filteredCustomers.length > 0 && filteredCustomers.every(c => selectedCustomers[c.code_customer]);
-
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
-      {/* Columna de Selección de Clientes */}
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+      {/* Columna de SelecciÃ³n de Clientes */}
       <Card className="lg:col-span-1 flex flex-col">
         <CardHeader>
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <div>
-                  <CardTitle>Selección de Clientes</CardTitle>
-                  <CardDescription>Marque los clientes con geocerca para incluirlos en la ruta.</CardDescription>
+                  <CardTitle>SelecciÃ³n de Clientes</CardTitle>
+                  <CardDescription>Escriba el cÃ³digo o nombre del cliente para buscarlo.</CardDescription>
               </div>
-              <Button onClick={handleGenerateRoute} className="w-full md:w-auto">
-                  <MapPin className="mr-2 h-4 w-4" />
-                  Generar Ruta
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button onClick={handleGenerateRoute} className="w-full sm:w-auto">
+                    <MapPin className="mr-2 h-4 w-4" />
+                    Generar Ruta
+                </Button>
+                <Button onClick={handleExportToMaps} variant="outline" className="w-full sm:w-auto">
+                    <MapPin className="mr-2 h-4 w-4" />
+                    Exportar a Maps
+                </Button>
+            </div>
           </div>
         </CardHeader>
-        <CardContent className="flex-1 flex flex-col gap-4 overflow-hidden">
+        <CardContent className="flex-1 flex flex-col gap-4">
           <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                  type="search"
-                  placeholder="Buscar por código o nombre..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-8 w-full"
-              />
-          </div>
-          
-           <div className="flex items-center space-x-2 border p-2 rounded-md">
-            <Checkbox
-              id="select-all"
-              checked={allSelected}
-              onCheckedChange={(checked) => handleSelectAll(!!checked)}
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder="Buscar por cÃ³digo o nombre..."
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setSearchOpen(true); }}
+              onFocus={() => setSearchOpen(true)}
+              onBlur={() => setTimeout(() => setSearchOpen(false), 150)}
+              className="pl-8 w-full"
             />
-            <Label htmlFor="select-all" className="font-bold">
-              Seleccionar Todos
-            </Label>
+            {searchOpen && searchQuery.trim() !== '' && (
+              <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover text-popover-foreground shadow-lg">
+                <div className="max-h-60 overflow-auto p-1">
+                  {isSearching ? (
+                    <div className="flex items-center justify-center p-4">
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <span className="text-sm">Buscando...</span>
+                    </div>
+                  ) : searchResults.filter(c => !selectedCodes.has(c.code_customer)).length > 0 ? (
+                    searchResults
+                      .filter(c => !selectedCodes.has(c.code_customer))
+                      .map(customer => (
+                        <div
+                          key={customer.code_customer}
+                          onMouseDown={() => handleAddCustomer(customer)}
+                          className="flex cursor-pointer items-center rounded-sm px-2 py-2 text-sm outline-none hover:bg-accent"
+                        >
+                          {customer.customer_name} <span className="ml-auto text-xs text-muted-foreground">{customer.code_customer}</span>
+                        </div>
+                      ))
+                  ) : (
+                    <div className="p-4 text-center text-sm text-muted-foreground">
+                      {searchResults.length > 0 ? 'Cliente ya seleccionado.' : 'No se encontraron resultados.'}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
-          <ScrollArea className="flex-1 pr-4">
-            <div className="space-y-4">
-              {loading ? (
-                <p>Cargando clientes...</p>
-              ) : filteredCustomers.length > 0 ? (
-                filteredCustomers.map(customer => (
-                  <div key={customer.code_customer} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={customer.code_customer}
-                      checked={selectedCustomers[customer.code_customer] || false}
-                      onCheckedChange={(checked) => handleCustomerSelect(customer.code_customer, !!checked)}
-                    />
-                    <Label htmlFor={customer.code_customer} className="w-full">
-                      {customer.customer_name} ({customer.code_customer})
-                    </Label>
+          <Label className="text-xs text-muted-foreground">Seleccionados ({selectedCustomers.length})</Label>
+          <ScrollArea className="max-h-[50vh] lg:max-h-none lg:flex-1 pr-2">
+            {selectedCustomers.length > 0 ? (
+              <div className="space-y-2">
+                {selectedCustomers.map(customer => (
+                  <div key={customer.code_customer} className={cn("flex items-center justify-between rounded-md border p-2 bg-muted/50")}>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{customer.customer_name}</p>
+                      <p className="text-xs text-muted-foreground">{customer.code_customer}</p>
+                    </div>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleRemoveCustomer(customer.code_customer)}>
+                      <X className="h-4 w-4 text-destructive" />
+                    </Button>
                   </div>
-                ))
-              ) : (
-                <p className="text-muted-foreground">No hay clientes que coincidan con la búsqueda.</p>
-              )}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-center text-sm text-muted-foreground py-8">Sin clientes seleccionados.</p>
+            )}
           </ScrollArea>
         </CardContent>
       </Card>
@@ -298,15 +390,29 @@ export default function RouteGenerationPage() {
           <CardTitle>Ruta Generada</CardTitle>
           <CardDescription>Lista de los puntos de entrega incluidos en la ruta.</CardDescription>
         </CardHeader>
-        <CardContent className="flex-1 flex flex-col items-center justify-center gap-4">
+        <CardContent className="flex-1 flex flex-col gap-4">
           {generatedRoute.length > 0 ? (
-            <div className="w-full h-full bg-muted p-4 rounded-lg">
+            <>
+              <div className="h-[300px] md:h-[500px] w-full rounded-lg overflow-hidden border">
+                <RouteMap
+customers={generatedRoute.map(c => ({
+                    code_customer: c.code_customer,
+                    customer_name: c.customer_name,
+                    geocerca: c.geocerca,
+                    foto_ubicacion: c.foto_ubicacion,
+                  }))}
+                  bodegaLocation={BODEGA_LOCATION}
+                  showBodega={false}
+                  showGeofences={false}
+                />
+              </div>
+              <div className="w-full bg-muted p-4 rounded-lg">
                 <h3 className="font-semibold text-lg mb-4 flex items-center"><List className="mr-2 h-5 w-5"/> Puntos de Entrega</h3>
-                <ScrollArea className="h-[calc(100%-40px)]">
+                <ScrollArea className="max-h-[300px]">
                     <ol className="list-decimal list-inside space-y-2">
                     {generatedRoute.map(customer => (
                         <li key={customer.code_customer} className="flex items-center justify-between">
-                            <span>{customer.customer_name}</span>
+                            <span>{customer.customer_name} <span className="text-xs text-muted-foreground">({customer.code_customer})</span></span>
                              <Button variant="ghost" size="icon" onClick={() => handleRemoveFromGeneratedRoute(customer.code_customer)}>
                                 <Trash2 className="h-4 w-4 text-destructive" />
                             </Button>
@@ -315,9 +421,10 @@ export default function RouteGenerationPage() {
                     </ol>
                 </ScrollArea>
               </div>
+            </>
           ) : (
-            <div className="text-center text-muted-foreground">
-              <p>Seleccione clientes y presione "Generar Ruta" para abrir Google Maps.</p>
+            <div className="text-center text-muted-foreground min-h-[200px] flex items-center justify-center">
+              <p>Seleccione clientes y presione "Generar Ruta" para ver el mapa.</p>
             </div>
           )}
         </CardContent>

@@ -1,6 +1,8 @@
 {
   "projects": {
-    "default": "studio-4298287964-b0c97"
+    "default": "studio-4298287964-b0c97",
+    "fire": "studio-4298287964-b0c97",
+    "f": "studio-4298287964-b0c97"
   },
   "targets": {},
   "etags": {}

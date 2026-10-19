@@ -490,8 +490,8 @@ export const useShipments = ({ itemsPerPage }: UseShipmentsProps) => {
   }
   
   /** Obtiene el nombre de un usuario a partir de su ID. */
-  const getUserName = (userId: string) => {
-    return users.find(user => String(user.id_user) === String(userId))?.name || userId;
+  const getUserName = (userId: string | number) => {
+    return users.find(user => String(user.id_user) === String(userId))?.name || String(userId);
   }
   
   // --- VALORES DE RETORNO ---
