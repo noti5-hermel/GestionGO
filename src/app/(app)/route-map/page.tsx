@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -28,6 +28,7 @@ type Despacho = {
   id_despacho: number;
   fecha_despacho: string;
   id_ruta: string;
+  id_motorista: number | null;
 };
 
 type Route = { id_ruta: string; ruta_desc: string };
@@ -42,13 +43,43 @@ export default function RouteMapPage() {
   const [despachoLabel, setDespachoLabel] = useState('Bodega');
   const [loading, setLoading] = useState(false);
 
+  // Despacho solicitado por la URL (por ejemplo, al abrir desde el detalle de un despacho).
+  const pendingDespachoRef = useRef<string>('');
+
+  // Si el usuario es motorista o auxiliar, solo verá los despachos que tiene asignados.
+  const [motoristaId] = useState<number | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = window.localStorage.getItem('user-session');
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      const role = String(parsed?.role || '').toLowerCase();
+      if (role.includes('motorista') || role.includes('auxiliar')) {
+        return Number(parsed?.id) || null;
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  });
+
+  // Lee los parámetros de la URL para preseleccionar la fecha y el despacho.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const fecha = params.get('fecha');
+    const despacho = params.get('despacho');
+    if (fecha) setSelectedDate(fecha);
+    if (despacho) pendingDespachoRef.current = despacho;
+  }, []);
+
   const fetchDespachos = useCallback(async () => {
     setLoading(true);
     setSelectedDespachoId('');
     setCustomers([]);
 
     const [despachosRes, routesRes] = await Promise.all([
-      supabase.from('despacho').select('id_despacho, fecha_despacho, id_ruta').eq('fecha_despacho', selectedDate),
+      supabase.from('despacho').select('id_despacho, fecha_despacho, id_ruta, id_motorista').eq('fecha_despacho', selectedDate),
       supabase.from('rutas').select('id_ruta, ruta_desc'),
     ]);
 
@@ -56,12 +87,23 @@ export default function RouteMapPage() {
       toast({ title: 'Error', description: 'No se pudieron cargar los despachos.', variant: 'destructive' });
       setDespachos([]);
     } else {
-      setDespachos(despachosRes.data as Despacho[]);
+      let lista = (despachosRes.data as Despacho[]) || [];
+      // Los motoristas y auxiliares solo ven los despachos asignados a ellos.
+      if (motoristaId) {
+        lista = lista.filter(d => Number(d.id_motorista) === motoristaId);
+      }
+      setDespachos(lista);
+
+      // Preselecciona el despacho indicado por la URL, si pertenece a la lista visible.
+      if (pendingDespachoRef.current && lista.some(d => String(d.id_despacho) === pendingDespachoRef.current)) {
+        setSelectedDespachoId(pendingDespachoRef.current);
+        pendingDespachoRef.current = '';
+      }
     }
 
     if (!routesRes.error) setRoutes(routesRes.data as Route[]);
     setLoading(false);
-  }, [selectedDate, toast]);
+  }, [selectedDate, motoristaId, toast]);
 
   useEffect(() => { fetchDespachos(); }, [fetchDespachos]);
 
@@ -137,7 +179,7 @@ export default function RouteMapPage() {
       <Card>
         <CardHeader>
           <CardTitle>Mapa de Rutas</CardTitle>
-          <CardDescription>Visualiza las geocercas y rutas de los despachos del día.</CardDescription>
+          <CardDescription>{motoristaId ? 'Selecciona tu despacho para ver la ruta y la ubicación puntual de cada cliente.' : 'Visualiza las geocercas y rutas de los despachos del día.'}</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
@@ -152,7 +194,7 @@ export default function RouteMapPage() {
             <Label>Despacho</Label>
             <Select value={selectedDespachoId} onValueChange={setSelectedDespachoId} disabled={dailyDespachos.length === 0}>
               <SelectTrigger>
-                <SelectValue placeholder={dailyDespachos.length === 0 ? 'No hay despachos en esta fecha' : 'Seleccione un despacho'} />
+                <SelectValue placeholder={dailyDespachos.length === 0 ? (motoristaId ? 'Sin despachos asignados' : 'No hay despachos en esta fecha') : 'Seleccione un despacho'} />
               </SelectTrigger>
               <SelectContent>
                 {dailyDespachos.map(d => {
@@ -180,12 +222,17 @@ export default function RouteMapPage() {
               <div className="flex items-center justify-center h-full bg-muted rounded-lg">
                 <p className="text-muted-foreground">
                   {dailyDespachos.length === 0
-                    ? 'No hay despachos para esta fecha.'
+                    ? (motoristaId ? 'No tienes despachos asignados para esta fecha.' : 'No hay despachos para esta fecha.')
                     : 'Seleccione un despacho para ver el mapa.'}
                 </p>
               </div>
             ) : (
-              <RouteMap customers={customers} bodegaLocation={BODEGA_LOCATION} despachoLabel={despachoLabel} />
+              <RouteMap
+                customers={customers}
+                bodegaLocation={BODEGA_LOCATION}
+                despachoLabel={despachoLabel}
+                showGeofences={!motoristaId}
+              />
             )}
           </div>
         </CardContent>

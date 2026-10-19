@@ -90,8 +90,8 @@ export function MainNav({ session }: MainNavProps) {
     const allowedHrefs = ['/route-generation', '/geofences'];
     menuItemsToRender = allMenuItems.filter(item => allowedHrefs.includes(item.href));
   } else if (isMobileRole) {
-    // Motoristas y auxiliares ven despachos y generación de ruta.
-    menuItemsToRender = allMenuItems.filter(item => item.href === '/shipments' || item.href === '/route-generation');
+    // Motoristas y auxiliares ven despachos, mapa de rutas y generación de ruta.
+    menuItemsToRender = allMenuItems.filter(item => item.href === '/shipments' || item.href === '/route-generation' || item.href === '/route-map');
   } else if (isRestrictedRole) {
     // Roles operativos solo ven despachos; Asist.Admon también gestiona clientes.
     menuItemsToRender = allMenuItems.filter(item =>

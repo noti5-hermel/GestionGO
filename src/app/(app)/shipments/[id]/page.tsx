@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
-import { ArrowLeft, Pencil, Upload, Camera, X, FileText, Loader2, MapPin, Play, Square, ListOrdered, ArrowUp, ArrowDown, Search, PlusCircle, Trash2, GripVertical } from "lucide-react"
+import { ArrowLeft, Pencil, Upload, Camera, X, FileText, Loader2, MapPin, Play, Square, ListOrdered, ArrowUp, ArrowDown, Search, PlusCircle, Trash2, GripVertical, Map as MapIcon, Check } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
@@ -159,6 +159,8 @@ export default function ShipmentDetailPage() {
   const [pdfData, setPdfData] = useState<{ dataUri: string; fileName: string } | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<Record<string, unknown> | null>(null);
+  // Modo "Completar" del diálogo de factura: solo se edita la forma de pago.
+  const [isCompletingInvoice, setIsCompletingInvoice] = useState(false);
   const [verifyingLocationInvoiceId, setVerifyingLocationInvoiceId] = useState<number | null>(null);
   const verifyingLocationInvoiceIdRef = useRef<number | null>(null);
   const [orderedRoute, setOrderedRoute] = useState<ShipmentInvoice[]>([]);
@@ -343,7 +345,19 @@ export default function ShipmentDetailPage() {
 
   const handleEditInvoice = (invoice: ShipmentInvoice) => {
     handleGeofenceProtectedAction(invoice, (inv, location) => {
+        setIsCompletingInvoice(false);
         setEditingShipmentInvoice({ ...inv, _capturedLocation: location });
+        setIsInvoiceDialogOpen(true);
+    });
+  };
+
+  // "Completar": el motorista/auxiliar solo registra la forma de pago.
+  // El monto se precarga (esperado si aún no hay monto) y el estado queda en completado.
+  const handleCompleteInvoice = (invoice: ShipmentInvoice) => {
+    handleGeofenceProtectedAction(invoice, (inv, location) => {
+        const montoCargado = (inv.monto ?? 0) > 0 ? inv.monto : (inv.net_to_pay ?? 0);
+        setIsCompletingInvoice(true);
+        setEditingShipmentInvoice({ ...inv, monto: montoCargado, state: true, _capturedLocation: location });
         setIsInvoiceDialogOpen(true);
     });
   };
@@ -888,7 +902,7 @@ const handleUpdateInvoice = async (values: ShipmentInvoiceEditValues) => {
     fetchData();
   };
 
-  const closeInvoiceDialog = () => { setIsInvoiceDialogOpen(false); setEditingShipmentInvoice(null); setSelectedFile(null); setSelectedFileUbicacion(null); form.reset(); };
+  const closeInvoiceDialog = () => { setIsInvoiceDialogOpen(false); setEditingShipmentInvoice(null); setIsCompletingInvoice(false); setSelectedFile(null); setSelectedFileUbicacion(null); form.reset(); };
   const handleOpenImageModal = (imageUrl: string) => { setSelectedImage(imageUrl); setImageModalOpen(true); }
   const openCameraDialog = (invoice: ShipmentInvoice, type: 'comprobante' | 'ubicacion' = 'comprobante') => handleGeofenceProtectedAction(invoice, (inv, location) => { setInvoiceForCamera({ ...inv, _capturedLocation: location }); setPhotoType(type); setIsCameraDialogOpen(true); });
   const closeCameraDialog = () => { setIsCameraDialogOpen(false); setInvoiceForCamera(null); setCapturedImage(null); setPhotoType('comprobante'); if (videoRef.current?.srcObject) (videoRef.current.srcObject as MediaStream).getTracks().forEach(t => t.stop()); };
@@ -933,6 +947,8 @@ const handleUpdateInvoice = async (values: ShipmentInvoiceEditValues) => {
   const isGerenteAdmon = currentUserRole.includes('gerente.admon');
   // Orden manual de facturas dentro del despacho: ADMIN, Gerente Admon y Facturación.
   const canReorder = isAdmin || isGerenteAdmon || isFacturacion;
+  // Roles móviles: en lugar de "Editar" usan "Completar" (solo registran la forma de pago).
+  const canCompleteOnly = isMotorista || isAuxiliar;
 
   // Sensores de arrastre para la tabla de facturas.
   const dndSensors = useSensors(
@@ -959,6 +975,7 @@ const handleUpdateInvoice = async (values: ShipmentInvoiceEditValues) => {
                 </>
               )}
               <Button variant="outline" onClick={handleExportRouteToMaps}><MapPin className="mr-2 h-4 w-4" /> Exportar a Maps</Button>
+              <Button variant="outline" onClick={() => router.push(`/route-map?despacho=${shipment.id_despacho}&fecha=${shipment.fecha_despacho}`)}><MapIcon className="mr-2 h-4 w-4" /> Ver en Mapa de Rutas</Button>
               <Button variant="outline" onClick={() => { handleGeneratePdf(); setIsPreviewOpen(true); }}><FileText className="mr-2 h-4 w-4" /> PDF</Button>
               <Button variant="outline" onClick={() => router.back()}><ArrowLeft className="mr-2 h-4 w-4" /> Volver</Button>
             </div>
@@ -1013,17 +1030,14 @@ const handleUpdateInvoice = async (values: ShipmentInvoiceEditValues) => {
                               <TableCell>{inv.customer_name}<br/><span className="text-xs text-muted-foreground">{inv.code_customer}</span></TableCell>
                               <TableCell><Badge variant={inv.geocerca ? 'default' : 'outline'}>{inv.geocerca ? 'Sí' : 'No'}</Badge></TableCell>
                               <TableCell>
-                                <div className="flex items-center gap-1">
-                                  {inv.foto_ubicacion ? (
-                                    <>
-                                      <button onClick={() => handleOpenImageModal(inv.foto_ubicacion!)}><Image src={inv.foto_ubicacion!} alt="Foto Sucursal" width={40} height={40} className="rounded object-cover" /></button>
-                                      <Button variant="ghost" size="sm" onClick={() => handleOpenImageModal(inv.foto_ubicacion!)} className="text-xs">Ver</Button>
-                                    </>
-                                  ) : null}
-                                  <Button variant="ghost" size="icon" onClick={() => openCameraDialog(inv, 'ubicacion')} title="Tomar foto de ubicación">
-                                    <Camera className="h-4 w-4" />
-                                  </Button>
-                                </div>
+                                {inv.foto_ubicacion ? (
+                                  <div className="flex items-center gap-1">
+                                    <button onClick={() => handleOpenImageModal(inv.foto_ubicacion!)}><Image src={inv.foto_ubicacion!} alt="Foto Sucursal" width={40} height={40} className="rounded object-cover" /></button>
+                                    <Button variant="ghost" size="sm" onClick={() => handleOpenImageModal(inv.foto_ubicacion!)} className="text-xs">Ver</Button>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">N/A</span>
+                                )}
                               </TableCell>
                               <TableCell>{inv.comprobante ? <button onClick={() => handleOpenImageModal(inv.comprobante)}><Image src={inv.comprobante} alt="Foto" width={40} height={40} className="rounded object-cover" /></button> : 'N/A'}</TableCell>
                               <TableCell>{inv.fecha_entrega ? new Date(inv.fecha_entrega).toLocaleTimeString() : 'N/A'}</TableCell>
@@ -1038,8 +1052,10 @@ const handleUpdateInvoice = async (values: ShipmentInvoiceEditValues) => {
                                       ) : (
                                           <>
                                             <Button variant="outline" size="sm" title="Ver la ubicación de este cliente en el mapa" onClick={() => router.push(`/route-generation?customer=${encodeURIComponent(inv.code_customer)}`)}><MapPin className="mr-1 h-3.5 w-3.5" /> Generar Ruta</Button>
-                                            <Button type="button" variant="ghost" size="icon" disabled={verifyingLocationInvoiceId === inv.id_fac_desp} onClick={() => handleEditInvoice(inv)}>{verifyingLocationInvoiceId === inv.id_fac_desp ? (
+                                            <Button type="button" variant="ghost" size="icon" title={canCompleteOnly ? 'Completar entrega' : 'Editar factura'} disabled={verifyingLocationInvoiceId === inv.id_fac_desp} onClick={() => (canCompleteOnly ? handleCompleteInvoice(inv) : handleEditInvoice(inv))}>{verifyingLocationInvoiceId === inv.id_fac_desp ? (
                                                     <Loader2 className="h-4 w-4 animate-spin" />
+                                                  ) : canCompleteOnly ? (
+                                                    <Check />
                                                   ) : (
                                                     <Pencil />
                                                   )}
@@ -1076,15 +1092,14 @@ const handleUpdateInvoice = async (values: ShipmentInvoiceEditValues) => {
                                   <div><p className={inv.state ? 'text-gray-300' : 'text-muted-foreground'}>PAGO</p><p>{inv.forma_pago}</p></div>
                                   <div><p className={inv.state ? 'text-gray-300' : 'text-muted-foreground'}>MONTO</p><p>${inv.monto.toFixed(2)}</p></div>
                               </div>
-                              <div className="border-t pt-3">
-                                <p className={`text-xs mb-1 ${inv.state ? 'text-gray-300' : 'text-muted-foreground'}`}>FOTO SUCURSAL</p>
-                                <div className="flex items-center gap-2">
-                                  {inv.foto_ubicacion ? (
+                              {inv.foto_ubicacion && (
+                                <div className="border-t pt-3">
+                                  <p className={`text-xs mb-1 ${inv.state ? 'text-gray-300' : 'text-muted-foreground'}`}>FOTO SUCURSAL</p>
+                                  <div className="flex items-center gap-2">
                                     <button onClick={() => handleOpenImageModal(inv.foto_ubicacion!)}><Image src={inv.foto_ubicacion!} alt="Foto Sucursal" width={60} height={60} className="rounded object-cover" /></button>
-                                  ) : null}
-                                  <Button variant="outline" size="sm" className="text-foreground" onClick={() => openCameraDialog(inv, 'ubicacion')}><Camera className="mr-2 h-4 w-4" />{inv.foto_ubicacion ? 'Cambiar' : 'Agregar'}</Button>
+                                  </div>
                                 </div>
-                              </div>
+                              )}
                               <div className="border-t pt-3">
                                 <p className={`text-xs mb-1 ${inv.state ? 'text-gray-300' : 'text-muted-foreground'}`}>COMPROBANTE</p>
                                 <div className="flex items-center gap-2">
@@ -1107,7 +1122,7 @@ const handleUpdateInvoice = async (values: ShipmentInvoiceEditValues) => {
                                       <div className="flex-1 flex justify-center py-2"><Loader2 className="h-6 w-6 animate-spin" /></div>
                                   ) : (
                                       <>
-                                          <Button variant="outline" className="flex-1 text-foreground" onClick={() => handleEditInvoice(inv)}><Pencil className="mr-2"/>Editar</Button>
+                                          <Button variant="outline" className="flex-1 text-foreground" onClick={() => (canCompleteOnly ? handleCompleteInvoice(inv) : handleEditInvoice(inv))}>{canCompleteOnly ? (<><Check className="mr-2"/>Completar</>) : (<><Pencil className="mr-2"/>Editar</>)}</Button>
                                           <Button className="flex-1" onClick={() => openCameraDialog(inv)}><Camera className="mr-2"/>Foto</Button>
                                       </>
                                   )}
@@ -1123,30 +1138,103 @@ const handleUpdateInvoice = async (values: ShipmentInvoiceEditValues) => {
 
       <Dialog open={isOrderDialogOpen} onOpenChange={setIsOrderDialogOpen}>
         <DialogContent><DialogHeader><DialogTitle>Orden de Visita</DialogTitle></DialogHeader>
-          <ol className="list-decimal list-inside space-y-2">{orderedRoute.map(inv => <li key={inv.id_fac_desp}>{inv.customer_name} {inv.id_fac_desp > -1 && <span className="text-xs text-muted-foreground">(Fact: {String(inv.reference_number)})</span>}</li>)}</ol>
+          <ol className="list-decimal list-inside space-y-2">{orderedRoute.map(inv => <li key={inv.id_fac_desp}><span className={inv.state ? 'line-through text-muted-foreground' : ''}>{inv.customer_name}</span> {inv.id_fac_desp > -1 && <span className="text-xs text-muted-foreground">(Fact: {String(inv.reference_number)})</span>}{inv.state && <span className="text-xs font-semibold text-primary"> Entregado</span>}</li>)}</ol>
         </DialogContent>
       </Dialog>
 
       <Dialog open={isInvoiceDialogOpen} onOpenChange={setIsInvoiceDialogOpen}>
-        <DialogContent aria-describedby={undefined}><DialogHeader><DialogTitle>Editar Factura</DialogTitle><DialogDescription> {/* <-- AGREGA ESTA LÍNEA */}
-        Actualiza el estado de entrega, el monto y la forma de pago de la factura.
-      </DialogDescription></DialogHeader>
-          <Form {...form}><form className="space-y-4" onSubmit={form.handleSubmit(handleUpdateInvoice)}>
-              <FormItem><FormLabel>Comprobante</FormLabel><FormControl><Input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" /></FormControl></FormItem>
-              <FormItem><FormLabel>Foto de Ubicación</FormLabel><FormControl><Input type="file" ref={fileInputUbicacionRef} onChange={handleFileChangeUbicacion} accept="image/*" /></FormControl></FormItem>
+        <DialogContent aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle>{isCompletingInvoice ? 'Completar Entrega' : 'Editar Factura'}</DialogTitle>
+            <DialogDescription>
+              {isCompletingInvoice
+                ? 'Confirma la entrega registrando la forma de pago. El monto se mantiene conforme a la factura y el estado se guardará como completado.'
+                : 'Actualiza el estado de entrega, el monto y la forma de pago de la factura.'}
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...form}>
+            <form className="space-y-4" onSubmit={form.handleSubmit(handleUpdateInvoice)}>
+              {!isCompletingInvoice && (
+                <FormItem>
+                  <FormLabel>Comprobante</FormLabel>
+                  <FormControl>
+                    <Input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" />
+                  </FormControl>
+                </FormItem>
+              )}
+              {!isCompletingInvoice && (
+                <FormItem>
+                  <FormLabel>Foto de Ubicación</FormLabel>
+                  <FormControl>
+                    <Input type="file" ref={fileInputUbicacionRef} onChange={handleFileChangeUbicacion} accept="image/*" />
+                  </FormControl>
+                </FormItem>
+              )}
               <FormField control={form.control} name="forma_pago" render={({ field }) => (
                 <FormItem><FormLabel>Forma de Pago</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{paymentMethods.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>
               )}/>
-              <FormField control={form.control} name="monto" render={({ field }) => (<FormItem><FormLabel>Monto</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} /></FormControl><FormMessage /></FormItem>)}/>
-              <FormField control={form.control} name="state" render={({ field }) => (<FormItem><FormLabel>Estado</FormLabel><Select onValueChange={v => field.onChange(v === 'true')} value={String(field.value)}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent><SelectItem value="true">Completado</SelectItem><SelectItem value="false">Pendiente</SelectItem></SelectContent></Select></FormItem>)}/>
-             {Object.keys(form.formState.errors).length > 0 && (
-  <div className="text-red-500 text-sm p-2 bg-red-50 rounded">
-    Por favor, corrige los errores en el formulario antes de guardar.
-    {console.log("Errores de Zod:", form.formState.errors)}
-  </div>
-)}
-              <DialogFooter><Button type="submit" disabled={loading || form.formState.isSubmitting}>{loading ? 'Guardando...' : 'Guardar'}</Button></DialogFooter>
-            </form></Form>
+              {isCompletingInvoice ? (
+                <FormItem>
+                  <FormLabel>Monto</FormLabel>
+                  <FormControl>
+                    <Input type="number" step="0.01" value={form.getValues('monto')} readOnly disabled />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              ) : (
+                <FormField
+                  control={form.control}
+                  name="monto"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Monto</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          {...field}
+                          onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+              {!isCompletingInvoice && (
+                <FormField
+                  control={form.control}
+                  name="state"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Estado</FormLabel>
+                      <Select onValueChange={(v) => field.onChange(v === 'true')} value={String(field.value)}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="true">Completado</SelectItem>
+                          <SelectItem value="false">Pendiente</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </FormItem>
+                  )}
+                />
+              )}
+              {Object.keys(form.formState.errors).length > 0 && (
+                <div className="text-red-500 text-sm p-2 bg-red-50 rounded">
+                  Por favor, corrige los errores en el formulario antes de guardar.
+                </div>
+              )}
+              <DialogFooter>
+                <Button type="submit" disabled={loading || form.formState.isSubmitting}>
+                  {loading ? 'Guardando...' : 'Guardar'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
       
