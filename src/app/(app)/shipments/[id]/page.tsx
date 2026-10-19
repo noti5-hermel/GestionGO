@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo, useCallback } from "react"
+import { useState, useEffect, useRef, useMemo, useCallback, type ReactNode } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
-import { ArrowLeft, Pencil, Upload, Camera, X, FileText, Loader2, MapPin, Play, Square, ListOrdered, ArrowUp, ArrowDown, Search, PlusCircle, Trash2 } from "lucide-react"
+import { ArrowLeft, Pencil, Upload, Camera, X, FileText, Loader2, MapPin, Play, Square, ListOrdered, ArrowUp, ArrowDown, Search, PlusCircle, Trash2, GripVertical } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
@@ -33,6 +33,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { DndContext, DragEndEvent, PointerSensor, TouchSensor, KeyboardSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core"
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 
 /**
  * @file shipments/[id]/page.tsx
@@ -43,7 +46,7 @@ const BUCKET_NAME = 'comprobante';
 const BUCKET_UBICACION = 'sucursales';
 
 const shipmentInvoiceEditSchema = z.object({
-  comprobante: z.string().optional(),
+  comprobante: z.string().nullable().optional(),
   forma_pago: z.enum(["Efectivo", "Tarjeta", "Transferencia", "Cheque", "Quedan", "Firma", "Credito", "Devolucion"]),
   monto: z.coerce.number().min(0, "El monto debe ser un número positivo."),
   state: z.boolean(),
@@ -107,6 +110,17 @@ type Role = { id_ruta: string; ruta_desc: string }
 const paymentMethods: ShipmentInvoice['forma_pago'][] = ["Efectivo", "Tarjeta", "Transferencia", "Cheque", "Quedan", "Firma", "Credito", "Devolucion"];
 const BODEGA_LOCATION = { lat: 13.725410116705362, lng: -89.21911777270175 };
 
+const withTimeout = <T,>(operation: PromiseLike<T>, timeoutMs: number, message: string): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+
+  return Promise.race([Promise.resolve(operation), timeout]).finally(() => {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  });
+};
+
 const StatusBadge = ({ checked, text }: { checked: boolean, text: string }) => {
     return (
         <div className="flex items-center gap-2">
@@ -144,8 +158,9 @@ export default function ShipmentDetailPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [pdfData, setPdfData] = useState<{ dataUri: string; fileName: string } | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-  const [currentUser, setCurrentUser] = useState<any | null>(null);
+  const [currentUser, setCurrentUser] = useState<Record<string, unknown> | null>(null);
   const [verifyingLocationInvoiceId, setVerifyingLocationInvoiceId] = useState<number | null>(null);
+  const verifyingLocationInvoiceIdRef = useRef<number | null>(null);
   const [orderedRoute, setOrderedRoute] = useState<ShipmentInvoice[]>([]);
   const [isOrderDialogOpen, setIsOrderDialogOpen] = useState(false);
   const [isOptimizingRoute, setIsOptimizingRoute] = useState(false);
@@ -274,10 +289,13 @@ export default function ShipmentDetailPage() {
   
   useEffect(() => {
     if (editingShipmentInvoice) {
+        const montoPredeterminado = editingShipmentInvoice.monto > 0 
+          ? editingShipmentInvoice.monto 
+          : (editingShipmentInvoice.net_to_pay ?? 0);
         form.reset({
             comprobante: editingShipmentInvoice.comprobante,
             forma_pago: editingShipmentInvoice.forma_pago,
-            monto: editingShipmentInvoice.monto,
+            monto: montoPredeterminado,
             state: editingShipmentInvoice.state,
             fecha_entrega: editingShipmentInvoice.fecha_entrega ? new Date(editingShipmentInvoice.fecha_entrega).toISOString().split('T')[0] : null
         });
@@ -389,40 +407,67 @@ export default function ShipmentDetailPage() {
   
     await supabase.from('despacho').update({ total_contado: totalContado, total_credito: totalCredito, total_general: totalGeneral }).eq('id_despacho', shipmentId);
   };
+const handleUpdateInvoice = async (values: ShipmentInvoiceEditValues) => {
+    if (!editingShipmentInvoice) return; 
+    
+    setLoading(true);
 
-  const handleUpdateInvoice = async (values: ShipmentInvoiceEditValues) => {
-    if (!editingShipmentInvoice) return;
-    const imageUrl = await uploadComprobante();
-    if (!imageUrl && selectedFile) return;
-    const ubicacionUrl = await uploadFotoUbicacion();
-    if (!ubicacionUrl && selectedFileUbicacion) return;
+    try {
+      // 1. Intentar subir comprobante si existe
+      const imageUrl = await uploadComprobante();
+      if (selectedFile && !imageUrl) {
+        toast({ title: "Error", description: "No se pudo subir el comprobante.", variant: "destructive" });
+        return; // Detenemos solo si el usuario seleccionó archivo y falló la subida
+      }
 
-    const isCompleted = values.state || (!!imageUrl && values.monto > 0);
+      // 2. Intentar subir foto de ubicación si existe
+      const ubicacionUrl = await uploadFotoUbicacion();
+      if (selectedFileUbicacion && !ubicacionUrl) {
+        toast({ title: "Error", description: "No se pudo subir la foto de ubicación.", variant: "destructive" });
+        return;
+      }
 
-    const dataToUpdate: any = { 
-        comprobante: imageUrl, 
-        forma_pago: values.forma_pago, 
-        monto: values.monto, 
-        state: isCompleted 
-    };
+      const isCompleted = values.state || !!imageUrl || values.monto > 0;
 
-    if (selectedFile) {
-        dataToUpdate.fecha_entrega = new Date().toISOString();
-        if (editingShipmentInvoice._capturedLocation) {
-            const { latitude, longitude } = editingShipmentInvoice._capturedLocation;
-            await supabase.from('customer').update({ last_known_location: `POINT(${longitude} ${latitude})` }).eq('code_customer', editingShipmentInvoice.code_customer);
-        }
-    }
-    if (ubicacionUrl) {
-        await supabase.from('customer').update({ foto_ubicacion: ubicacionUrl }).eq('code_customer', editingShipmentInvoice.code_customer);
-    }
-    const { error } = await supabase.from('facturacion_x_despacho').update(dataToUpdate).eq('id_fac_desp', editingShipmentInvoice.id_fac_desp);
-    if (error) toast({ title: "Error al actualizar", variant: "destructive" });
-    else {
-      toast({ title: "Éxito" });
-      if (shipment) await recalculateAndSaveShipmentTotals(shipment.id_despacho);
-      fetchData();
-      closeInvoiceDialog();
+      const dataToUpdate: any = { 
+          comprobante: imageUrl ?? editingShipmentInvoice.comprobante, 
+          forma_pago: values.forma_pago, 
+          monto: values.monto, 
+          state: isCompleted 
+      };
+
+      if (selectedFile) {
+          dataToUpdate.fecha_entrega = new Date().toISOString();
+          if (editingShipmentInvoice._capturedLocation) {
+              const { latitude, longitude } = editingShipmentInvoice._capturedLocation;
+              await supabase.from('customer').update({ last_known_location: `POINT(${longitude} ${latitude})` }).eq('code_customer', editingShipmentInvoice.code_customer);
+          }
+      }
+
+      if (ubicacionUrl) {
+          await supabase.from('customer').update({ foto_ubicacion: ubicacionUrl }).eq('code_customer', editingShipmentInvoice.code_customer);
+      }
+
+      // 3. Actualizar la base de datos
+      const { error } = await supabase
+        .from('facturacion_x_despacho')
+        .update(dataToUpdate)
+        .eq('id_fac_desp', editingShipmentInvoice.id_fac_desp);
+
+      if (error) {
+        console.error("Error de Supabase al actualizar:", error);
+        toast({ title: "Error al actualizar", description: error.message, variant: "destructive" });
+      } else {
+        toast({ title: "Éxito", description: "Factura actualizada correctamente." });
+        if (shipment) await recalculateAndSaveShipmentTotals(shipment.id_despacho);
+        await fetchData();
+        closeInvoiceDialog();
+      }
+    } catch (err: any) {
+      console.error("Error inesperado en handleUpdateInvoice:", err);
+      toast({ title: "Error", description: "Ocurrió un error inesperado al guardar.", variant: "destructive" });
+    } finally { 
+      setLoading(false); // <-- Garantiza que el botón se reactive pase lo que pase
     }
   };
 
@@ -545,73 +590,111 @@ export default function ShipmentDetailPage() {
   };
   
   const handleGeofenceProtectedAction = (invoice: ShipmentInvoice, onSuccess: (invoice: ShipmentInvoice, location: { latitude: number; longitude: number } | null) => void) => {
-    const role = currentUser?.role?.toLowerCase() || '';
+    const role = typeof currentUser?.role === 'string' ? currentUser.role.trim().toLowerCase() : '';
     const isRestrictedRole = role.includes('motorista') || role.includes('auxiliar') || role.includes('reparto');
     const isAdmin = role.includes('admin');
+
+    if (!role || role === 'sin rol') {
+      toast({
+        title: "Rol no identificado",
+        description: "No se pudo validar el rol. Se permitirá continuar sin verificación geográfica; revise su sesión.",
+        variant: "destructive",
+      });
+    }
 
     if (!isRestrictedRole || isAdmin) {
       onSuccess(invoice, null);
       return;
     }
 
+    if (verifyingLocationInvoiceIdRef.current !== null) {
+      toast({ title: "Verificación en curso", description: "Espere a que termine la verificación de ubicación actual." });
+      return;
+    }
+
+    verifyingLocationInvoiceIdRef.current = invoice.id_fac_desp;
     setVerifyingLocationInvoiceId(invoice.id_fac_desp);
-    
-    const geoOptions = { 
-        enableHighAccuracy: true, 
-        timeout: 15000,
-        maximumAge: 0   // Ignorar ubicación en caché para máxima frescura
+    const geoOptions: PositionOptions = {
+      enableHighAccuracy: true,
+      timeout: 15000,
+      maximumAge: 0,
     };
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude, accuracy } = position.coords;
-        console.log(`GPS Accuracy: ${accuracy} meters`);
+    void (async () => {
+      try {
+        if (!navigator.geolocation) {
+          throw new Error('GEOLOCATION_UNAVAILABLE');
+        }
 
-        // Si la precisión es muy mala (ej. > 100m), avisamos al usuario que podría fallar
+        const position = await withTimeout(
+          new Promise<GeolocationPosition>((resolve, reject) => {
+            try {
+              navigator.geolocation.getCurrentPosition(resolve, reject, geoOptions);
+            } catch (error) {
+              reject(error);
+            }
+          }),
+          20000,
+          'GEOLOCATION_TIMEOUT',
+        );
+        const { latitude, longitude, accuracy } = position.coords;
+
         if (accuracy > 150) {
-            toast({ 
-                title: "Señal GPS débil", 
-                description: `Precisión baja (${Math.round(accuracy)}m). Intente moverse a un lugar más despejado.`, 
-                variant: "destructive" 
-            });
+          toast({
+            title: "Señal GPS débil",
+            description: `Precisión baja (${Math.round(accuracy)}m). Intente moverse a un lugar más despejado.`,
+            variant: "destructive",
+          });
         }
 
         if (invoice.geocerca) {
-          const { data, error } = await supabase.rpc('is_user_in_client_geofence', { 
-            user_latitude: latitude, 
-            user_longitude: longitude, 
-            p_code_customer: invoice.code_customer 
-          });
-          
-          setVerifyingLocationInvoiceId(null);
-          
+          const { data, error } = await withTimeout(
+            supabase.rpc('is_user_in_client_geofence', {
+              user_latitude: latitude,
+              user_longitude: longitude,
+              p_code_customer: invoice.code_customer,
+            }),
+            15000,
+            'GEOFENCE_TIMEOUT',
+          );
+
           if (error) {
-              toast({ title: "Error de servidor", description: "No se pudo verificar la ubicación.", variant: "destructive" });
+            toast({ title: "Error de servidor", description: "No se pudo verificar la ubicación.", variant: "destructive" });
           } else if (data === true) {
-              onSuccess(invoice, null);
+            onSuccess(invoice, null);
           } else {
-              toast({ 
-                  title: "Fuera de rango", 
-                  description: `Ubicación no coincide con el cliente. (Precisión actual: ${Math.round(accuracy)}m)`, 
-                  variant: "destructive" 
-              });
+            toast({
+              title: "Fuera de rango",
+              description: `Ubicación no coincide con el cliente. (Precisión actual: ${Math.round(accuracy)}m)`,
+              variant: "destructive",
+            });
           }
         } else {
-          setVerifyingLocationInvoiceId(null);
           onSuccess(invoice, { latitude, longitude });
         }
-      },
-      (error) => {
-        setVerifyingLocationInvoiceId(null);
-        let msg = "No se pudo obtener la ubicación.";
-        if (error.code === 1) msg = "Active el GPS y permita el acceso en el navegador.";
-        else if (error.code === 2) msg = "Señal de GPS no disponible. Salga a un lugar abierto.";
-        else if (error.code === 3) msg = "Tiempo de espera agotado al obtener GPS.";
-        
-        toast({ title: "Error de GPS", description: msg, variant: "destructive" });
-      },
-      geoOptions
-    );
+      } catch (error) {
+        console.error("No se pudo completar la verificación de ubicación", error);
+        let description = "No se pudo verificar la ubicación. La acción protegida no se realizó.";
+        if (error instanceof Error && error.message === 'GEOLOCATION_UNAVAILABLE') {
+          description = "Este navegador no permite acceder al GPS. Active la ubicación o pruebe otro navegador.";
+        } else if (error instanceof Error && error.message === 'GEOLOCATION_TIMEOUT') {
+          description = "El GPS no respondió a tiempo. Revise los permisos y vuelva a intentarlo.";
+        } else if (error instanceof Error && error.message === 'GEOFENCE_TIMEOUT') {
+          description = "La verificación de geocerca tardó demasiado. Intente nuevamente.";
+        } else if (typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'number') {
+          if (error.code === 1) description = "Active el GPS y permita el acceso en el navegador.";
+          else if (error.code === 2) description = "Señal de GPS no disponible. Salga a un lugar abierto.";
+          else if (error.code === 3) description = "Tiempo de espera agotado al obtener GPS. Revise los permisos y vuelva a intentarlo.";
+        }
+
+        toast({ title: "Error de ubicación", description, variant: "destructive" });
+      } finally {
+        if (verifyingLocationInvoiceIdRef.current === invoice.id_fac_desp) {
+          verifyingLocationInvoiceIdRef.current = null;
+          setVerifyingLocationInvoiceId(null);
+        }
+      }
+    })();
   };
   
   const parseGeofenceCentroid = (geofenceData: any): { lat: string; lng: string } | null => {
@@ -749,6 +832,62 @@ export default function ShipmentDetailPage() {
         if (!errorA && !errorB) fetchData();
     };
 
+  /**
+   * Clave del grupo visual de una factura. La tabla agrupa por estado de pago y geocerca,
+   * por lo que el arrastre solo se permite entre facturas del mismo grupo.
+   */
+  const getInvoiceGroupKey = (invoice: ShipmentInvoice) =>
+    `${invoice.state ? 'pagada' : 'pendiente'}-${invoice.geocerca ? 'con-geocerca' : 'sin-geocerca'}`;
+
+  /**
+   * Reordena al soltar una fila (arrastrar y soltar) y persiste el nuevo orden en 'orden_visita'.
+   * Solo permite mover dentro del mismo grupo (estado/geocerca) para que la fila no "salte".
+   */
+  const handleInvoiceDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const fullList = sortedInvoices;
+    const oldIndex = fullList.findIndex(inv => inv.id_fac_desp === active.id);
+    const newIndex = fullList.findIndex(inv => inv.id_fac_desp === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    if (getInvoiceGroupKey(fullList[oldIndex]) !== getInvoiceGroupKey(fullList[newIndex])) {
+      toast({
+        title: "Movimiento no permitido",
+        description: "Solo puede reordenar facturas dentro del mismo grupo (mismo estado de pago y geocerca).",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const reordered = [...fullList];
+    const [movedInvoice] = reordered.splice(oldIndex, 1);
+    reordered.splice(newIndex, 0, movedInvoice);
+
+    const changes = reordered
+      .map((inv, index) => ({ id_fac_desp: inv.id_fac_desp, orden_visita: index + 1, previous: inv.orden_visita }))
+      .filter(row => row.orden_visita !== row.previous);
+
+    if (changes.length === 0) return;
+
+    setLoading(true);
+    const results = await Promise.all(
+      changes.map(row =>
+        supabase.from('facturacion_x_despacho').update({ orden_visita: row.orden_visita }).eq('id_fac_desp', row.id_fac_desp)
+      )
+    );
+    setLoading(false);
+    const updateError = results.find(result => result.error)?.error;
+
+    if (updateError) {
+      toast({ title: "Error al reordenar", description: updateError.message, variant: "destructive" });
+      return;
+    }
+
+    fetchData();
+  };
+
   const closeInvoiceDialog = () => { setIsInvoiceDialogOpen(false); setEditingShipmentInvoice(null); setSelectedFile(null); setSelectedFileUbicacion(null); form.reset(); };
   const handleOpenImageModal = (imageUrl: string) => { setSelectedImage(imageUrl); setImageModalOpen(true); }
   const openCameraDialog = (invoice: ShipmentInvoice, type: 'comprobante' | 'ubicacion' = 'comprobante') => handleGeofenceProtectedAction(invoice, (inv, location) => { setInvoiceForCamera({ ...inv, _capturedLocation: location }); setPhotoType(type); setIsCameraDialogOpen(true); });
@@ -786,10 +925,21 @@ export default function ShipmentDetailPage() {
       return { totalContadoCalculado: tc, totalCreditoCalculado: tcr, totalGeneralCalculado: tc + tcr };
   }, [invoices]);
   
-  const isMotorista = currentUser?.role?.toLowerCase()?.includes('motorista');
-  const isAuxiliar = currentUser?.role?.toLowerCase()?.includes('auxiliar');
-  const isFacturacion = currentUser?.role?.toLowerCase()?.includes('facturacion');
-  const isAdmin = currentUser?.role?.toLowerCase()?.includes('admin');
+  const currentUserRole = typeof currentUser?.role === 'string' ? currentUser.role.toLowerCase() : '';
+  const isMotorista = currentUserRole.includes('motorista');
+  const isAuxiliar = currentUserRole.includes('auxiliar');
+  const isFacturacion = currentUserRole.includes('facturacion');
+  const isAdmin = currentUserRole.includes('admin');
+  const isGerenteAdmon = currentUserRole.includes('gerente.admon');
+  // Orden manual de facturas dentro del despacho: ADMIN, Gerente Admon y Facturación.
+  const canReorder = isAdmin || isGerenteAdmon || isFacturacion;
+
+  // Sensores de arrastre para la tabla de facturas.
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+    useSensor(KeyboardSensor)
+  );
 
   if (loading && !shipment) return <p>Cargando detalles...</p>;
   if (!shipment) return <p>No encontrado.</p>;
@@ -844,17 +994,21 @@ export default function ShipmentDetailPage() {
         </CardHeader>
         <CardContent>
             <div className="hidden md:block">
+              <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleInvoiceDragEnd}>
               <Table>
                   <TableHeader>
                       <TableRow>
-                          {isFacturacion && <TableHead className="w-20">Orden</TableHead>}
+                          {canReorder && <TableHead className="w-20">Orden</TableHead>}
                           <TableHead>Factura</TableHead><TableHead>Cliente</TableHead><TableHead>Geocerca</TableHead><TableHead>Foto Sucursal</TableHead><TableHead>Foto</TableHead><TableHead>Entrega</TableHead><TableHead>Total</TableHead><TableHead>Pago</TableHead><TableHead>Monto</TableHead><TableHead>Estado</TableHead><TableHead className="text-right">Acciones</TableHead>
                       </TableRow>
                   </TableHeader>
                   <TableBody>
+                      <SortableContext items={filteredAndSortedInvoices.map(inv => inv.id_fac_desp)} strategy={verticalListSortingStrategy}>
                       {filteredAndSortedInvoices.map((inv, idx) => (
-                          <TableRow key={inv.id_fac_desp}>
-                              {isFacturacion && <TableCell><div className="flex gap-1"><Button variant="ghost" size="icon" className="h-6 w-6" disabled={idx === 0} onClick={() => handleReorder(inv.id_fac_desp, 'up')}><ArrowUp /></Button><Button variant="ghost" size="icon" className="h-6 w-6" disabled={idx === invoices.length - 1} onClick={() => handleReorder(inv.id_fac_desp, 'down')}><ArrowDown /></Button></div></TableCell>}
+                          <SortableTableRow key={inv.id_fac_desp} id={inv.id_fac_desp} disabled={!canReorder}>
+                            {(handle) => (
+                            <>
+                              {canReorder && <TableCell><div className="flex items-center gap-1"><Button ref={handle.setActivatorNodeRef} variant="ghost" size="icon" className="h-6 w-6 cursor-grab touch-none text-muted-foreground" title="Arrastrar para reordenar" {...handle.attributes} {...handle.listeners}><GripVertical className="h-4 w-4" /></Button><Button variant="ghost" size="icon" className="h-6 w-6" disabled={idx === 0} onClick={() => handleReorder(inv.id_fac_desp, 'up')}><ArrowUp /></Button><Button variant="ghost" size="icon" className="h-6 w-6" disabled={idx === filteredAndSortedInvoices.length - 1} onClick={() => handleReorder(inv.id_fac_desp, 'down')}><ArrowDown /></Button></div></TableCell>}
                               <TableCell className="font-medium">{String(inv.reference_number || inv.id_factura)}</TableCell>
                               <TableCell>{inv.customer_name}<br/><span className="text-xs text-muted-foreground">{inv.code_customer}</span></TableCell>
                               <TableCell><Badge variant={inv.geocerca ? 'default' : 'outline'}>{inv.geocerca ? 'Sí' : 'No'}</Badge></TableCell>
@@ -876,7 +1030,7 @@ export default function ShipmentDetailPage() {
                               <TableCell>${(inv.net_to_pay ?? 0).toFixed(2)}</TableCell>
                               <TableCell>{inv.forma_pago}</TableCell>
                               <TableCell>${inv.monto.toFixed(2)}</TableCell>
-                              <TableCell><Badge variant="default" className={inv.state ? '!bg-black !text-white font-bold' : ''}>{inv.state ? "Pagado" : "Pendiente"}</Badge></TableCell>
+                              <TableCell><Badge variant="default" className={inv.state ? '!bg-black !text-white font-bold' : ''}>{inv.state ? "Completado" : "Pendiente"}</Badge></TableCell>
                               <TableCell className="text-right">
                                   <div className="flex justify-end gap-1">
                                       {verifyingLocationInvoiceId === inv.id_fac_desp ? (
@@ -884,7 +1038,12 @@ export default function ShipmentDetailPage() {
                                       ) : (
                                           <>
                                             <Button variant="outline" size="sm" title="Ver la ubicación de este cliente en el mapa" onClick={() => router.push(`/route-generation?customer=${encodeURIComponent(inv.code_customer)}`)}><MapPin className="mr-1 h-3.5 w-3.5" /> Generar Ruta</Button>
-                                            <Button variant="ghost" size="icon" onClick={() => handleEditInvoice(inv)}><Pencil /></Button>
+                                            <Button type="button" variant="ghost" size="icon" disabled={verifyingLocationInvoiceId === inv.id_fac_desp} onClick={() => handleEditInvoice(inv)}>{verifyingLocationInvoiceId === inv.id_fac_desp ? (
+                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                  ) : (
+                                                    <Pencil />
+                                                  )}
+                                            </Button>
                                             <Button variant="ghost" size="icon" onClick={() => openCameraDialog(inv)}><Camera /></Button>
                                           </>
                                       )}
@@ -896,49 +1055,59 @@ export default function ShipmentDetailPage() {
                                       )}
                                   </div>
                               </TableCell>
-                          </TableRow>
+                            </>
+                            )}
+                          </SortableTableRow>
                       ))}
+                      </SortableContext>
                   </TableBody>
               </Table>
+              </DndContext>
             </div>
             <div className="md:hidden">
               <Accordion type="single" collapsible className="w-full">
-                  {filteredAndSortedInvoices.map(inv => (
+                  {filteredAndSortedInvoices.map((inv, idx) => (
                       <AccordionItem value={`item-${inv.id_fac_desp}`} key={inv.id_fac_desp} className={`rounded-lg border ${inv.state ? 'bg-gray-800 text-gray-100 border-gray-700' : !inv.geocerca ? 'bg-amber-50 dark:bg-amber-950 border-amber-300 dark:border-amber-700' : ''}`}>
-                          <AccordionTrigger className="p-4 hover:no-underline"><div className="text-left"><p className="font-semibold">{String(inv.reference_number || inv.id_factura)}</p><p className="text-xs text-muted-foreground">{inv.customer_name}</p></div></AccordionTrigger>
+                          <AccordionTrigger className="p-4 hover:no-underline"><div className="text-left"><p className="font-semibold">{String(inv.reference_number || inv.id_factura)}</p><p className={`text-xs ${inv.state ? 'text-gray-300' : 'text-muted-foreground'}`}>{inv.customer_name}</p></div></AccordionTrigger>
                           <AccordionContent className="p-4 space-y-4">
                               <div className="grid grid-cols-2 gap-4 text-xs">
-                                  <div><p className="text-muted-foreground">GEOCERCA</p><Badge variant={inv.geocerca ? 'default' : 'outline'}>{inv.geocerca ? 'Sí' : 'No'}</Badge></div>
-                                  <div><p className="text-muted-foreground">TOTAL</p><p className="font-bold">${(inv.net_to_pay ?? 0).toFixed(2)}</p></div>
-                                  <div><p className="text-muted-foreground">PAGO</p><p>{inv.forma_pago}</p></div>
-                                  <div><p className="text-muted-foreground">MONTO</p><p>${inv.monto.toFixed(2)}</p></div>
+                                  <div><p className={inv.state ? 'text-gray-300' : 'text-muted-foreground'}>GEOCERCA</p><Badge variant={inv.geocerca ? 'default' : 'outline'}>{inv.geocerca ? 'Sí' : 'No'}</Badge></div>
+                                  <div><p className={inv.state ? 'text-gray-300' : 'text-muted-foreground'}>TOTAL</p><p className="font-bold">${(inv.net_to_pay ?? 0).toFixed(2)}</p></div>
+                                  <div><p className={inv.state ? 'text-gray-300' : 'text-muted-foreground'}>PAGO</p><p>{inv.forma_pago}</p></div>
+                                  <div><p className={inv.state ? 'text-gray-300' : 'text-muted-foreground'}>MONTO</p><p>${inv.monto.toFixed(2)}</p></div>
                               </div>
                               <div className="border-t pt-3">
-                                <p className="text-xs text-muted-foreground mb-1">FOTO SUCURSAL</p>
+                                <p className={`text-xs mb-1 ${inv.state ? 'text-gray-300' : 'text-muted-foreground'}`}>FOTO SUCURSAL</p>
                                 <div className="flex items-center gap-2">
                                   {inv.foto_ubicacion ? (
                                     <button onClick={() => handleOpenImageModal(inv.foto_ubicacion!)}><Image src={inv.foto_ubicacion!} alt="Foto Sucursal" width={60} height={60} className="rounded object-cover" /></button>
                                   ) : null}
-                                  <Button variant="outline" size="sm" onClick={() => openCameraDialog(inv, 'ubicacion')}><Camera className="mr-2 h-4 w-4" />{inv.foto_ubicacion ? 'Cambiar' : 'Agregar'}</Button>
+                                  <Button variant="outline" size="sm" className="text-foreground" onClick={() => openCameraDialog(inv, 'ubicacion')}><Camera className="mr-2 h-4 w-4" />{inv.foto_ubicacion ? 'Cambiar' : 'Agregar'}</Button>
                                 </div>
                               </div>
                               <div className="border-t pt-3">
-                                <p className="text-xs text-muted-foreground mb-1">COMPROBANTE</p>
+                                <p className={`text-xs mb-1 ${inv.state ? 'text-gray-300' : 'text-muted-foreground'}`}>COMPROBANTE</p>
                                 <div className="flex items-center gap-2">
                                   {inv.comprobante ? (
                                     <button onClick={() => handleOpenImageModal(inv.comprobante)}><Image src={inv.comprobante} alt="Comprobante" width={60} height={60} className="rounded object-cover" /></button>
                                   ) : (
-                                    <span className="text-xs text-muted-foreground">N/A</span>
+                                    <span className={`text-xs ${inv.state ? 'text-gray-300' : 'text-muted-foreground'}`}>N/A</span>
                                   )}
                                 </div>
                               </div>
-                              <Button variant="outline" className="w-full" onClick={() => router.push(`/route-generation?customer=${encodeURIComponent(inv.code_customer)}`)}><MapPin className="mr-2"/>Generar Ruta</Button>
+                              {canReorder && (
+                                <div className="flex gap-2">
+                                  <Button variant="outline" className="flex-1 text-foreground" disabled={idx === 0} onClick={() => handleReorder(inv.id_fac_desp, 'up')}><ArrowUp className="mr-2 h-4 w-4" /> Subir</Button>
+                                  <Button variant="outline" className="flex-1 text-foreground" disabled={idx === filteredAndSortedInvoices.length - 1} onClick={() => handleReorder(inv.id_fac_desp, 'down')}><ArrowDown className="mr-2 h-4 w-4" /> Bajar</Button>
+                                </div>
+                              )}
+                              <Button variant="outline" className="w-full text-foreground" onClick={() => router.push(`/route-generation?customer=${encodeURIComponent(inv.code_customer)}`)}><MapPin className="mr-2"/>Generar Ruta</Button>
                               <div className="flex gap-2">
                                   {verifyingLocationInvoiceId === inv.id_fac_desp ? (
                                       <div className="flex-1 flex justify-center py-2"><Loader2 className="h-6 w-6 animate-spin" /></div>
                                   ) : (
                                       <>
-                                          <Button variant="outline" className="flex-1" onClick={() => handleEditInvoice(inv)}><Pencil className="mr-2"/>Editar</Button>
+                                          <Button variant="outline" className="flex-1 text-foreground" onClick={() => handleEditInvoice(inv)}><Pencil className="mr-2"/>Editar</Button>
                                           <Button className="flex-1" onClick={() => openCameraDialog(inv)}><Camera className="mr-2"/>Foto</Button>
                                       </>
                                   )}
@@ -959,16 +1128,24 @@ export default function ShipmentDetailPage() {
       </Dialog>
 
       <Dialog open={isInvoiceDialogOpen} onOpenChange={setIsInvoiceDialogOpen}>
-        <DialogContent><DialogHeader><DialogTitle>Editar Factura</DialogTitle></DialogHeader>
+        <DialogContent aria-describedby={undefined}><DialogHeader><DialogTitle>Editar Factura</DialogTitle><DialogDescription> {/* <-- AGREGA ESTA LÍNEA */}
+        Actualiza el estado de entrega, el monto y la forma de pago de la factura.
+      </DialogDescription></DialogHeader>
           <Form {...form}><form className="space-y-4" onSubmit={form.handleSubmit(handleUpdateInvoice)}>
               <FormItem><FormLabel>Comprobante</FormLabel><FormControl><Input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" /></FormControl></FormItem>
               <FormItem><FormLabel>Foto de Ubicación</FormLabel><FormControl><Input type="file" ref={fileInputUbicacionRef} onChange={handleFileChangeUbicacion} accept="image/*" /></FormControl></FormItem>
               <FormField control={form.control} name="forma_pago" render={({ field }) => (
-                <FormItem><FormLabel>Forma de Pago</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{paymentMethods.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select></FormItem>
+                <FormItem><FormLabel>Forma de Pago</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{paymentMethods.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>
               )}/>
-              <FormField control={form.control} name="monto" render={({ field }) => (<FormItem><FormLabel>Monto</FormLabel><FormControl><Input type="number" step="0.01" {...field}/></FormControl></FormItem>)}/>
+              <FormField control={form.control} name="monto" render={({ field }) => (<FormItem><FormLabel>Monto</FormLabel><FormControl><Input type="number" step="0.01" {...field} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} /></FormControl><FormMessage /></FormItem>)}/>
               <FormField control={form.control} name="state" render={({ field }) => (<FormItem><FormLabel>Estado</FormLabel><Select onValueChange={v => field.onChange(v === 'true')} value={String(field.value)}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent><SelectItem value="true">Completado</SelectItem><SelectItem value="false">Pendiente</SelectItem></SelectContent></Select></FormItem>)}/>
-              <DialogFooter><Button type="submit" disabled={loading}>Guardar</Button></DialogFooter>
+             {Object.keys(form.formState.errors).length > 0 && (
+  <div className="text-red-500 text-sm p-2 bg-red-50 rounded">
+    Por favor, corrige los errores en el formulario antes de guardar.
+    {console.log("Errores de Zod:", form.formState.errors)}
+  </div>
+)}
+              <DialogFooter><Button type="submit" disabled={loading || form.formState.isSubmitting}>{loading ? 'Guardando...' : 'Guardar'}</Button></DialogFooter>
             </form></Form>
         </DialogContent>
       </Dialog>
@@ -995,4 +1172,38 @@ export default function ShipmentDetailPage() {
       {pdfData && <PdfPreviewModal isOpen={isPreviewOpen} setIsOpen={setIsPreviewOpen} pdfDataUri={pdfData.dataUri} fileName={pdfData.fileName} />}
     </div>
   )
+}
+
+/**
+ * Fila de tabla arrastrable para el orden manual de facturas.
+ * Expone las props del asa de arrastre mediante un render prop.
+ */
+function SortableTableRow({
+  id,
+  disabled,
+  children,
+}: {
+  id: number | string;
+  disabled?: boolean;
+  children: (handle: {
+    attributes: ReturnType<typeof useSortable>['attributes'];
+    listeners: ReturnType<typeof useSortable>['listeners'];
+    setActivatorNodeRef: ReturnType<typeof useSortable>['setActivatorNodeRef'];
+  }) => ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id, disabled });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : undefined,
+    position: 'relative' as const,
+    zIndex: isDragging ? 1 : undefined,
+  };
+
+  return (
+    <TableRow ref={setNodeRef} style={style} className={isDragging ? 'bg-muted/50' : undefined}>
+      {children({ attributes, listeners, setActivatorNodeRef })}
+    </TableRow>
+  );
 }

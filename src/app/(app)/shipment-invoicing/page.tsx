@@ -23,12 +23,15 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { PlusCircle, Pencil, Trash2, FilterX, Search } from "lucide-react"
+import { PlusCircle, Pencil, Trash2, FilterX, Search, ArrowUp, ArrowDown, GripVertical } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 import Image from "next/image"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
+import { DndContext, DragEndEvent, PointerSensor, TouchSensor, KeyboardSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core"
+import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 
 /**
  * @file shipment-invoicing/page.tsx
@@ -53,10 +56,12 @@ const shipmentInvoiceSchema = z.object({
 
 
 // Tipos de datos para la gestión de facturación por despacho.
-type ShipmentInvoice = Omit<z.infer<typeof shipmentInvoiceSchema>, 'state'> & { id_fac_desp: number, comprobante: string, fecha_entrega: string | null, tax_type?: string, state: boolean }
+type ShipmentInvoice = Omit<z.infer<typeof shipmentInvoiceSchema>, 'state'> & { id_fac_desp: number, comprobante: string, fecha_entrega: string | null, tax_type?: string, state: boolean, orden_visita: number | null, net_to_pay?: number }
 type Invoice = { id_factura: string, reference_number: string | number, fecha: string, net_to_pay: number, customer_name: string, code_customer: string, geocerca: any | null, fecha_import: string | null }
 type Shipment = { id_despacho: number, fecha_despacho: string, id_ruta: string, estado_recorrido: 'pendiente' | 'en_curso' | 'finalizado' }
 type Route = { id_ruta: string; ruta_desc: string };
+// Tipo de los registros mostrados en el diálogo de ordenamiento manual.
+type OrderInvoice = { id_fac_desp: number, id_factura: string, customer_name: string, monto: number, orden_visita: number | null }
 
 
 // Opciones estáticas para menús desplegables.
@@ -78,6 +83,27 @@ export default function ShipmentInvoicingPage() {
   const [editingShipmentInvoice, setEditingShipmentInvoice] = useState<ShipmentInvoice | null>(null)
   const { toast } = useToast()
 
+  // Rol del usuario actual: ADMIN, Gerente Admon y Facturación pueden reordenar manualmente las facturas.
+  const [currentUserRole, setCurrentUserRole] = useState<string>('');
+  useEffect(() => {
+    try {
+      const userSessionString = localStorage.getItem('user-session');
+      if (userSessionString) {
+        const userSession = JSON.parse(userSessionString);
+        setCurrentUserRole(String(userSession.role || '').toLowerCase());
+      }
+    } catch (error) {
+      console.error("No se pudo leer la sesión del usuario", error);
+    }
+  }, []);
+  const canReorder = useMemo(
+    () =>
+      currentUserRole.includes('admin') ||
+      currentUserRole.includes('gerente.admon') ||
+      currentUserRole.includes('facturacion'),
+    [currentUserRole]
+  );
+
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -93,6 +119,12 @@ export default function ShipmentInvoicingPage() {
   const [massAssignImportDate, setMassAssignImportDate] = useState('');
   
   const [availableInvoices, setAvailableInvoices] = useState<Invoice[]>([]);
+  
+  // Estados del diálogo de ordenamiento manual (drag & drop)
+  const [isOrderDialogOpen, setIsOrderDialogOpen] = useState(false);
+  const [orderDialogShipmentId, setOrderDialogShipmentId] = useState<string>('');
+  const [orderDialogInvoices, setOrderDialogInvoices] = useState<OrderInvoice[]>([]);
+  const [loadingOrderList, setLoadingOrderList] = useState(false);
   
   // Estados de filtrado y paginación
   const [currentPage, setCurrentPage] = useState(1);
@@ -132,11 +164,17 @@ export default function ShipmentInvoicingPage() {
   // Rellena el formulario cuando se selecciona un registro para editar.
   useEffect(() => {
     if (editingShipmentInvoice) {
+      // Si aún no se ha registrado un monto, se precarga el precio esperado de la factura (net_to_pay).
+      const montoPredeterminado = (editingShipmentInvoice.monto ?? 0) > 0
+        ? editingShipmentInvoice.monto
+        : (editingShipmentInvoice.net_to_pay ?? 0);
+
       form.reset({
         ...editingShipmentInvoice,
         id_despacho: String(editingShipmentInvoice.id_despacho),
         forma_pago: editingShipmentInvoice.forma_pago,
         state: editingShipmentInvoice.state,
+        monto: montoPredeterminado,
       })
     } else {
       form.reset({
@@ -227,41 +265,57 @@ export default function ShipmentInvoicingPage() {
     setSelectedInvoicesForMassAssign({}); // Resetea la selección de facturas
   }, [selectedShipmentForMassAssign, getAvailableInvoices]);
 
+  // Carga las facturas del despacho seleccionado en el diálogo de ordenamiento manual.
+  useEffect(() => {
+    if (!isOrderDialogOpen || !orderDialogShipmentId) {
+      setOrderDialogInvoices([]);
+      return;
+    }
+    fetchOrderDialogInvoices(orderDialogShipmentId);
+  }, [isOrderDialogOpen, orderDialogShipmentId]);
+
   /** Obtiene los registros de facturación por despacho desde Supabase. */
     const fetchShipmentInvoices = useCallback(async () => {
     const from = (currentPage - 1) * ITEMS_PER_PAGE;
     const to = from + ITEMS_PER_PAGE - 1;
 
-    let query = supabase.from('facturacion_x_despacho').select('*, facturacion(code_customer, customer(id_impuesto, tipo_impuesto(impt_desc)))', { count: 'exact' });
+    // Constructor de la consulta con todos los filtros activos.
+    const buildQuery = () => {
+      let query = supabase.from('facturacion_x_despacho').select('*, facturacion(code_customer, net_to_pay, customer(id_impuesto, tipo_impuesto(impt_desc)))', { count: 'exact' });
 
-    if (filterShipmentId) {
-        query = query.eq('id_despacho', filterShipmentId);
-    }
-    if (filterAmount) {
-        query = query.gte('monto', filterAmount);
-    }
-    if (filterDeliveryDate) {
-        // Filtra por el día completo, ignorando la hora
-        const startDate = `${filterDeliveryDate}T00:00:00.000Z`;
-        const endDate = `${filterDeliveryDate}T23:59:59.999Z`;
-        query = query.gte('fecha_entrega', startDate).lte('fecha_entrega', endDate);
-    }
-    if (filterPaymentMethod) {
-        query = query.eq('forma_pago', filterPaymentMethod);
-    }
-    if (filterState) {
-        query = query.eq('state', filterState === 'true');
-    }
-    
-    query = query.range(from, to).order('id_fac_desp', { ascending: false });
+      if (filterShipmentId) {
+          query = query.eq('id_despacho', filterShipmentId);
+      }
+      if (filterAmount) {
+          query = query.gte('monto', filterAmount);
+      }
+      if (filterDeliveryDate) {
+          // Filtra por el día completo, ignorando la hora
+          const startDate = `${filterDeliveryDate}T00:00:00.000Z`;
+          const endDate = `${filterDeliveryDate}T23:59:59.999Z`;
+          query = query.gte('fecha_entrega', startDate).lte('fecha_entrega', endDate);
+      }
+      if (filterPaymentMethod) {
+          query = query.eq('forma_pago', filterPaymentMethod);
+      }
+      if (filterState) {
+          query = query.eq('state', filterState === 'true');
+      }
 
-    const { data, error, count } = await query;
+      return query.range(from, to);
+    };
+
+    // Orden manual persistido en la columna 'orden_visita' (mismo orden usado en el detalle del despacho).
+    const { data, error, count } = await buildQuery()
+      .order('orden_visita', { ascending: true })
+      .order('id_fac_desp', { ascending: false });
     if (error) {
         toast({ title: "Error", description: "No se pudieron cargar los registros.", variant: "destructive" })
     } else {
-        const enrichedData = data.map((d: any) => ({
+        const enrichedData = (data ?? []).map((d: any) => ({
           ...d,
           tax_type: d.facturacion?.customer?.tipo_impuesto?.impt_desc,
+          net_to_pay: Number(d.facturacion?.net_to_pay ?? 0),
         }));
         setShipmentInvoices(enrichedData as ShipmentInvoice[]);
         setTotalRecords(count ?? 0);
@@ -474,6 +528,141 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
   }
 
   /**
+   * Mueve una factura hacia arriba o hacia abajo dentro de su despacho y persiste el nuevo orden.
+   * Usa la columna 'orden_visita', compartida con el detalle del despacho.
+   * Disponible para ADMIN, Gerente Admon y Facturación.
+   */
+  const handleMoveInvoice = async (shipmentInvoice: ShipmentInvoice, direction: 'up' | 'down') => {
+    if (!canReorder) return;
+
+    const idDespacho = Number(shipmentInvoice.id_despacho);
+    const { data, error } = await supabase
+      .from('facturacion_x_despacho')
+      .select('id_fac_desp, orden_visita')
+      .eq('id_despacho', idDespacho)
+      .order('orden_visita', { ascending: true })
+      .order('id_fac_desp', { ascending: false });
+
+    if (error) {
+      toast({
+        title: "Error al reordenar",
+        description: "No se pudo obtener el orden actual del despacho.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!data || data.length < 2) return;
+
+    // Normaliza el orden: los registros nuevos sin orden (null) quedan al final.
+    const ordered = data.map((row: any, index: number) => ({
+      id_fac_desp: row.id_fac_desp as number,
+      orden_visita: (row.orden_visita as number | null) ?? index + 1,
+      previous: row.orden_visita as number | null,
+    }));
+    ordered.forEach((row, index) => { row.orden_visita = index + 1; });
+
+    const currentIndex = ordered.findIndex(row => row.id_fac_desp === shipmentInvoice.id_fac_desp);
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (currentIndex === -1 || targetIndex < 0 || targetIndex >= ordered.length) return;
+
+    // Intercambia la posición con el registro vecino.
+    const currentOrden = ordered[currentIndex].orden_visita;
+    ordered[currentIndex].orden_visita = ordered[targetIndex].orden_visita;
+    ordered[targetIndex].orden_visita = currentOrden;
+
+    const changes = ordered
+      .filter(row => row.orden_visita !== row.previous)
+      .map(({ id_fac_desp, orden_visita }) => ({ id_fac_desp, orden_visita }));
+
+    if (changes.length === 0) return;
+
+    const results = await Promise.all(
+      changes.map(row =>
+        supabase.from('facturacion_x_despacho').update({ orden_visita: row.orden_visita }).eq('id_fac_desp', row.id_fac_desp)
+      )
+    );
+    const updateError = results.find(result => result.error)?.error;
+
+    if (updateError) {
+      toast({ title: "Error al reordenar", description: updateError.message, variant: "destructive" });
+      return;
+    }
+
+    fetchShipmentInvoices();
+  };
+
+  /**
+   * Carga todas las facturas de un despacho para el diálogo de ordenamiento manual,
+   * ordenadas por el orden guardado (o por antigüedad si aún no tienen orden).
+   */
+  const fetchOrderDialogInvoices = async (shipmentId: string) => {
+    setLoadingOrderList(true);
+    const { data, error } = await supabase
+      .from('facturacion_x_despacho')
+      .select('id_fac_desp, orden_visita, monto, facturacion(id_factura, customer_name)')
+      .eq('id_despacho', shipmentId)
+      .order('orden_visita', { ascending: true })
+      .order('id_fac_desp', { ascending: false });
+
+    if (error) {
+      toast({ title: "Error", description: "No se pudieron cargar las facturas del despacho.", variant: "destructive" });
+    } else {
+      const list = (data ?? []).map((row: any, index: number) => ({
+        id_fac_desp: row.id_fac_desp as number,
+        id_factura: String(row.facturacion?.id_factura ?? ''),
+        customer_name: String(row.facturacion?.customer_name ?? ''),
+        monto: Number(row.monto ?? 0),
+        orden_visita: (row.orden_visita as number | null) ?? index + 1,
+      }));
+      setOrderDialogInvoices(list);
+    }
+    setLoadingOrderList(false);
+  };
+
+  // Sensores de arrastre: mouse con distancia mínima (para no interferir con clics),
+  // táctil con retardo para permitir el scroll, y teclado para accesibilidad.
+  const orderDialogSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+    useSensor(KeyboardSensor)
+  );
+
+  /**
+   * Reordena las facturas al soltar una fila y persiste el nuevo orden en 'orden_visita'.
+   * La actualización es optimista: si falla en la base de datos, se revierte.
+   */
+  const handleOrderDialogDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const previous = orderDialogInvoices;
+    const oldIndex = previous.findIndex(inv => inv.id_fac_desp === active.id);
+    const newIndex = previous.findIndex(inv => inv.id_fac_desp === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reordered = arrayMove(previous, oldIndex, newIndex).map((inv, index) => ({ ...inv, orden_visita: index + 1 }));
+    setOrderDialogInvoices(reordered);
+
+    // Compara el nuevo orden de cada factura contra su valor anterior (por id, no por posición).
+    const previousOrderById = new Map(previous.map(inv => [inv.id_fac_desp, inv.orden_visita]));
+    const changes = reordered.filter(inv => inv.orden_visita !== previousOrderById.get(inv.id_fac_desp));
+    const results = await Promise.all(
+      changes.map(inv =>
+        supabase.from('facturacion_x_despacho').update({ orden_visita: inv.orden_visita }).eq('id_fac_desp', inv.id_fac_desp)
+      )
+    );
+    const updateError = results.find(result => result.error)?.error;
+
+    if (updateError) {
+      setOrderDialogInvoices(previous);
+      toast({ title: "Error al reordenar", description: updateError.message, variant: "destructive" });
+      return;
+    }
+
+    fetchShipmentInvoices();
+  };
+
+  /**
    * Gestiona la asignación masiva de facturas a un despacho.
    */
   const handleMassAssign = async () => {
@@ -616,6 +805,29 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
     return paymentMethods;
   }, []);
 
+  /**
+   * Posición de cada registro dentro de su despacho, según el orden manual guardado.
+   * La lista ya llega ordenada por 'orden_visita' ascendente desde la consulta.
+   */
+  const shipmentOrderInfo = useMemo(() => {
+    const position = new Map<number, number>();
+    const total = new Map<number, number>();
+    const groups = new Map<number, ShipmentInvoice[]>();
+
+    shipmentInvoices.forEach(si => {
+      const idDespacho = Number(si.id_despacho);
+      if (!groups.has(idDespacho)) groups.set(idDespacho, []);
+      groups.get(idDespacho)!.push(si);
+    });
+
+    groups.forEach((list, idDespacho) => {
+      total.set(idDespacho, list.length);
+      list.forEach((si, index) => position.set(si.id_fac_desp, index + 1));
+    });
+
+    return { position, total };
+  }, [shipmentInvoices]);
+
 
   // --- RENDERIZADO DEL COMPONENTE ---
   return (
@@ -624,8 +836,16 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <CardTitle>Facturación por Despacho</CardTitle>
-            <CardDescription>Asigne masivamente facturas a un despacho o edite una asignación individual.</CardDescription>
+            <CardDescription>Asigne masivamente facturas a un despacho o edite una asignación individual. Con el filtro de despacho puede usar las flechas para definir el orden de entrega.</CardDescription>
           </div>
+          {canReorder && (
+            <Button
+              variant="outline"
+              onClick={() => { setOrderDialogShipmentId(filterShipmentId || ''); setIsOrderDialogOpen(true); }}
+            >
+              <GripVertical className="mr-2 h-4 w-4" /> Ordenar facturas
+            </Button>
+          )}
           <Dialog open={isMassAssignDialogOpen} onOpenChange={setIsMassAssignDialogOpen}>
             <DialogTrigger asChild>
                <Button onClick={() => setIsMassAssignDialogOpen(true)}>
@@ -761,6 +981,50 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+
+          {/* Diálogo de ordenamiento manual con arrastrar y soltar */}
+          <Dialog open={isOrderDialogOpen} onOpenChange={setIsOrderDialogOpen}>
+            <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+              <DialogHeader>
+                <DialogTitle>Ordenar facturas del despacho</DialogTitle>
+                <DialogDescription>
+                  Arrastre las facturas desde el asa para definir su orden de entrega. El orden se guarda automáticamente.
+                </DialogDescription>
+              </DialogHeader>
+              <Select value={orderDialogShipmentId} onValueChange={setOrderDialogShipmentId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccione un despacho..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {allShipments.map((shipment) => (
+                    <SelectItem key={shipment.id_despacho} value={String(shipment.id_despacho)}>
+                      ID: {shipment.id_despacho} - Ruta: {getRouteDescription(shipment.id_ruta)} - Fecha: {getShipmentDate(shipment.id_despacho)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="border rounded-md flex-1 overflow-y-auto">
+                {loadingOrderList ? (
+                  <p className="text-center text-muted-foreground py-12">Cargando facturas...</p>
+                ) : !orderDialogShipmentId ? (
+                  <p className="text-center text-muted-foreground py-12">Seleccione un despacho para ver y ordenar sus facturas.</p>
+                ) : orderDialogInvoices.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-12">Este despacho no tiene facturas asignadas.</p>
+                ) : (
+                  <DndContext sensors={orderDialogSensors} collisionDetection={closestCenter} onDragEnd={handleOrderDialogDragEnd}>
+                    <SortableContext items={orderDialogInvoices.map(inv => inv.id_fac_desp)} strategy={verticalListSortingStrategy}>
+                      {orderDialogInvoices.map((invoice, index) => (
+                        <OrderSortableRow key={invoice.id_fac_desp} invoice={invoice} index={index} />
+                      ))}
+                    </SortableContext>
+                  </DndContext>
+                )}
+              </div>
+              <DialogFooter>
+                <Button variant="secondary" onClick={() => setIsOrderDialogOpen(false)}>Listo</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
         <div className="flex flex-col sm:flex-row flex-wrap items-center gap-4 mt-4">
             <Select value={filterShipmentId} onValueChange={setFilterShipmentId}>
@@ -825,6 +1089,7 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
               <TableRow>
                 <TableHead>No. Factura</TableHead>
                 <TableHead>ID Despacho</TableHead>
+                <TableHead className="text-center">Orden</TableHead>
                 <TableHead>Comprobante</TableHead>
                 <TableHead>Fecha Entrega</TableHead>
                 <TableHead>Forma de Pago</TableHead>
@@ -838,6 +1103,9 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
                 <TableRow key={shipmentInvoice.id_fac_desp}>
                   <TableCell className="font-medium">{getInvoiceNumber(shipmentInvoice.id_factura)}</TableCell>
                   <TableCell>{shipmentInvoice.id_despacho}</TableCell>
+                  <TableCell className="text-center">
+                    {shipmentOrderInfo.position.get(shipmentInvoice.id_fac_desp) ?? '—'}
+                  </TableCell>
                   <TableCell>
                     {shipmentInvoice.comprobante ? (
                        <Image
@@ -858,6 +1126,26 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
                   <TableCell><Badge variant={getBadgeVariant(shipmentInvoice.state)}>{shipmentInvoice.state ? "Completado" : "Pendiente"}</Badge></TableCell>
                    <TableCell>
                     <div className="flex justify-end items-center gap-2">
+                      {canReorder && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Mover arriba en el despacho"
+                            onClick={() => handleMoveInvoice(shipmentInvoice, 'up')}
+                          >
+                            <ArrowUp className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Mover abajo en el despacho"
+                            onClick={() => handleMoveInvoice(shipmentInvoice, 'down')}
+                          >
+                            <ArrowDown className="h-4 w-4" />
+                          </Button>
+                        </>
+                      )}
                       <Button variant="ghost" size="icon" onClick={() => handleEdit(shipmentInvoice)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
@@ -1031,5 +1319,41 @@ const recalculateAndSaveShipmentTotals = async (shipmentId: number) => {
         </DialogContent>
       </Dialog>
     </Card>
+  )
+}
+
+/**
+ * Fila arrastrable dentro del diálogo de ordenamiento manual.
+ * Muestra el asa de arrastre, la posición actual, la factura y el cliente.
+ */
+function OrderSortableRow({ invoice, index }: { invoice: OrderInvoice, index: number }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: invoice.id_fac_desp });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : undefined,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-center gap-3 border-b last:border-b-0 px-3 py-2.5 bg-background">
+      <button
+        type="button"
+        aria-label="Arrastrar para reordenar"
+        className="cursor-grab touch-none text-muted-foreground hover:text-foreground"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="h-5 w-5" />
+      </button>
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold">
+        {index + 1}
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="font-medium truncate">{invoice.id_factura || '—'}</p>
+        <p className="text-xs text-muted-foreground truncate">{invoice.customer_name}</p>
+      </div>
+      <span className="text-sm shrink-0">${invoice.monto.toFixed(2)}</span>
+    </div>
   )
 }
