@@ -138,6 +138,14 @@ export default function RouteGenerationPage() {
 
   const selectedCodes = useMemo(() => new Set(selectedCustomers.map(c => c.code_customer)), [selectedCustomers]);
 
+  // Identidad estable: evita que el mapa recalcule la ruta con cada tecla del buscador.
+  const mapCustomers = useMemo(() => generatedRoute.map(c => ({
+    code_customer: c.code_customer,
+    customer_name: c.customer_name,
+    geocerca: c.geocerca,
+    foto_ubicacion: c.foto_ubicacion,
+  })), [generatedRoute]);
+
   /**
    * Si llega un parÃ¡metro `?customer=<cÃ³digo>` en la URL, carga automÃ¡ticamente
    * a ese cliente y genera su ruta para ver su ubicaciÃ³n en el mapa.
@@ -395,12 +403,7 @@ export default function RouteGenerationPage() {
             <>
               <div className="h-[300px] md:h-[500px] w-full rounded-lg overflow-hidden border">
                 <RouteMap
-customers={generatedRoute.map(c => ({
-                    code_customer: c.code_customer,
-                    customer_name: c.customer_name,
-                    geocerca: c.geocerca,
-                    foto_ubicacion: c.foto_ubicacion,
-                  }))}
+                  customers={mapCustomers}
                   bodegaLocation={BODEGA_LOCATION}
                   showBodega={false}
                   showGeofences={false}

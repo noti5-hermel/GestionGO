@@ -3,8 +3,10 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
+import type { RouteResolvedPayload } from '@/components/route-map-view';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/lib/supabase';
+import { applyOptimizedInvoiceOrder, getDespachoRuta, saveDespachoRuta, type DespachoRuta } from '@/lib/despacho-ruta';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
@@ -27,6 +29,7 @@ type Customer = {
   comprobante: string | null;
   reference_number?: string | number | null;
   foto_ubicacion?: string | null;
+  id_fac_desp?: number;
 };
 
 type Despacho = {
@@ -65,6 +68,8 @@ export default function LiveMapPage() {
   const [customerGeofences, setCustomerGeofences] = useState<Customer[]>([]);
   const [motoristaPath, setMotoristaPath] = useState<LocationPoint[]>([]);
   const [motoristaLocation, setMotoristaLocation] = useState<LocationPoint | null>(null);
+  const [despachoRuta, setDespachoRuta] = useState<DespachoRuta | null>(null);
+  const [despachoInvoiceIds, setDespachoInvoiceIds] = useState<number[]>([]);
 
   const [allDespachos, setAllDespachos] = useState<Despacho[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
@@ -108,9 +113,13 @@ export default function LiveMapPage() {
         setCustomerGeofences([]);
         setMotoristaPath([]);
         setMotoristaLocation(null);
+        setDespachoRuta(null);
+        setDespachoInvoiceIds([]);
         return;
       }
       setLoading(true);
+      setDespachoRuta(null);
+      setDespachoInvoiceIds([]);
       
       const despacho = allDespachos.find(d => String(d.id_despacho) === selectedDespachoId);
       if (!despacho) {
@@ -121,15 +130,16 @@ export default function LiveMapPage() {
       // --- 1. Obtener datos de las facturas y clientes (ruta planificada) ---
       const { data: facDespacho, error: facDespachoError } = await supabase
         .from('facturacion_x_despacho')
-        .select('id_factura, state, comprobante, orden_visita') // Incluimos orden_visita
+        .select('id_fac_desp, id_factura, state, comprobante, orden_visita') // Incluimos orden_visita
         .eq('id_despacho', selectedDespachoId);
 
       if (facDespachoError) {
         toast({ title: "Error", description: "No se pudieron obtener las facturas del despacho.", variant: "destructive" });
       } else {
         const invoiceIds = facDespacho.map(item => item.id_factura);
+        setDespachoInvoiceIds(facDespacho.map(item => item.id_fac_desp).filter((id): id is number => typeof id === 'number'));
         if (invoiceIds.length > 0) {
-          const invoiceDetailsMap = new Map(facDespacho.map(item => [item.id_factura, { state: item.state, comprobante: item.comprobante, orden_visita: item.orden_visita }]));
+          const invoiceDetailsMap = new Map(facDespacho.map(item => [item.id_factura, { id_fac_desp: item.id_fac_desp, state: item.state, comprobante: item.comprobante, orden_visita: item.orden_visita }]));
 
           const { data: facturacionData, error: facturacionError } = await supabase.from('facturacion').select('id_factura, code_customer, reference_number').in('id_factura', invoiceIds);
           
@@ -142,7 +152,7 @@ export default function LiveMapPage() {
               const enrichedCustomers = customersData.map(customer => {
                   const factRow = facturacionData.find(f => f.code_customer === customer.code_customer);
                   const invoiceId = factRow?.id_factura;
-                  const details = invoiceId ? invoiceDetailsMap.get(invoiceId) : { state: false, comprobante: null, orden_visita: null };
+                  const details = invoiceId ? invoiceDetailsMap.get(invoiceId) : { id_fac_desp: undefined, state: false, comprobante: null, orden_visita: null };
                   return { ...customer, ...details, reference_number: factRow?.reference_number ?? null };
               });
               
@@ -160,6 +170,10 @@ export default function LiveMapPage() {
             setCustomerGeofences([]);
         }
       }
+
+      // --- 1.b. Ruta ya calculada y guardada (caché de la Routes API) ---
+      const rutaGuardada = await getDespachoRuta(selectedDespachoId);
+      setDespachoRuta(rutaGuardada);
 
       // --- 2. Obtener el historial de ubicación del despacho (recorrido real) ---
       // Esta es la consulta clave: filtra el historial por el `id_despacho` seleccionado.
@@ -238,6 +252,22 @@ export default function LiveMapPage() {
   const handleShipmentChange = (despachoId: string) => {
     setSelectedDespachoId(despachoId);
   };
+
+  /**
+   * Guarda la ruta recién calculada para no volver a facturarla en la próxima
+   * apertura, y persiste el orden de visita optimizado por Google.
+   */
+  const handleRouteResolved = useCallback(async (payload: RouteResolvedPayload) => {
+    if (!selectedDespachoId) return;
+    await saveDespachoRuta(selectedDespachoId, payload.polyline, payload.hash);
+    setDespachoRuta({ polyline: payload.polyline, ruta_hash: payload.hash });
+    if (payload.optimizedInvoiceIds && payload.optimizedInvoiceIds.length > 0) {
+      // Las paradas sin geocerca se renumberan al final para evitar duplicados.
+      const optimizedIds = payload.optimizedInvoiceIds;
+      const remaining = despachoInvoiceIds.filter(id => !optimizedIds.includes(id));
+      await applyOptimizedInvoiceOrder([...optimizedIds, ...remaining]);
+    }
+  }, [selectedDespachoId, despachoInvoiceIds]);
   
   // Filtra los despachos disponibles para la fecha seleccionada.
   const despachosDelDia = useMemo(() => {
@@ -307,6 +337,9 @@ export default function LiveMapPage() {
             motoristaPath={motoristaPath}
             motoristaLocation={motoristaLocation}
             despachoLabel={`Despacho ${selectedDespachoId}`}
+            storedPolyline={despachoRuta?.polyline ?? null}
+            storedHash={despachoRuta?.ruta_hash ?? null}
+            onRouteResolved={handleRouteResolved}
           />
         )}
       </CardContent>

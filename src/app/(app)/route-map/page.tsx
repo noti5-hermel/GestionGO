@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
-import type { MapCustomer } from '@/components/route-map-view';
+import type { MapCustomer, RouteResolvedPayload } from '@/components/route-map-view';
+import { applyOptimizedInvoiceOrder, getDespachoRuta, saveDespachoRuta, type DespachoRuta } from '@/lib/despacho-ruta';
 
 /**
  * @file route-map/page.tsx
@@ -40,6 +41,8 @@ export default function RouteMapPage() {
   const [routes, setRoutes] = useState<Route[]>([]);
   const [selectedDespachoId, setSelectedDespachoId] = useState<string>('');
   const [customers, setCustomers] = useState<MapCustomer[]>([]);
+  const [despachoRuta, setDespachoRuta] = useState<DespachoRuta | null>(null);
+  const [despachoInvoiceIds, setDespachoInvoiceIds] = useState<number[]>([]);
   const [despachoLabel, setDespachoLabel] = useState('Bodega');
   const [loading, setLoading] = useState(false);
 
@@ -108,8 +111,10 @@ export default function RouteMapPage() {
   useEffect(() => { fetchDespachos(); }, [fetchDespachos]);
 
   const loadDespachoData = useCallback(async (despachoId: string) => {
-    if (!despachoId) { setCustomers([]); return; }
+    if (!despachoId) { setCustomers([]); setDespachoRuta(null); setDespachoInvoiceIds([]); return; }
     setLoading(true);
+    setDespachoRuta(null);
+    setDespachoInvoiceIds([]);
 
     const despacho = despachos.find(d => String(d.id_despacho) === despachoId);
     if (despacho) {
@@ -119,7 +124,7 @@ export default function RouteMapPage() {
 
     const { data: facDespacho, error: facError } = await supabase
       .from('facturacion_x_despacho')
-      .select('id_factura, state, orden_visita')
+      .select('id_fac_desp, id_factura, state, orden_visita')
       .eq('id_despacho', despachoId);
 
     if (facError) {
@@ -130,9 +135,10 @@ export default function RouteMapPage() {
     }
 
     const invoiceIds = (facDespacho || []).map(f => f.id_factura);
+    setDespachoInvoiceIds((facDespacho || []).map(f => f.id_fac_desp).filter((id): id is number => typeof id === 'number'));
     if (invoiceIds.length === 0) { setCustomers([]); setLoading(false); return; }
 
-    const invoiceStateMap = new Map((facDespacho || []).map(f => [f.id_factura, { state: f.state, orden_visita: f.orden_visita }]));
+    const invoiceStateMap = new Map((facDespacho || []).map(f => [f.id_factura, { id_fac_desp: f.id_fac_desp, state: f.state, orden_visita: f.orden_visita }]));
 
     const { data: facturacionData, error: factError } = await supabase
       .from('facturacion')
@@ -153,7 +159,7 @@ export default function RouteMapPage() {
     const customerMap = new Map((customersData || []).map(c => [c.code_customer, { geocerca: c.geocerca, foto_ubicacion: c.foto_ubicacion }]));
 
     const enriched = (facturacionData || []).map(f => {
-      const details = invoiceStateMap.get(f.id_factura) || { state: false, orden_visita: null };
+      const details = invoiceStateMap.get(f.id_factura) || { id_fac_desp: undefined, state: false, orden_visita: null };
       const customer = customerMap.get(f.code_customer);
       return {
         code_customer: f.code_customer,
@@ -163,14 +169,35 @@ export default function RouteMapPage() {
         foto_ubicacion: customer?.foto_ubicacion ?? null,
         state: details.state === true,
         orden_visita: details.orden_visita,
+        id_fac_desp: details.id_fac_desp,
       } as MapCustomer;
     });
 
     setCustomers(enriched);
+
+    // Ruta ya calculada y guardada (caché de la Routes API).
+    const rutaGuardada = await getDespachoRuta(despachoId);
+    if (rutaGuardada) setDespachoRuta(rutaGuardada);
     setLoading(false);
   }, [despachos, routes, toast]);
 
   useEffect(() => { loadDespachoData(selectedDespachoId); }, [selectedDespachoId, loadDespachoData]);
+
+  /**
+   * Guarda la ruta recién calculada para no volver a facturarla en la próxima
+   * apertura, y persiste el orden de visita optimizado por Google.
+   */
+  const handleRouteResolved = useCallback(async (payload: RouteResolvedPayload) => {
+    if (!selectedDespachoId) return;
+    await saveDespachoRuta(selectedDespachoId, payload.polyline, payload.hash);
+    setDespachoRuta({ polyline: payload.polyline, ruta_hash: payload.hash });
+    if (payload.optimizedInvoiceIds && payload.optimizedInvoiceIds.length > 0) {
+      // Las paradas sin geocerca se renumberan al final para evitar duplicados.
+      const optimizedIds = payload.optimizedInvoiceIds;
+      const remaining = despachoInvoiceIds.filter(id => !optimizedIds.includes(id));
+      await applyOptimizedInvoiceOrder([...optimizedIds, ...remaining]);
+    }
+  }, [selectedDespachoId, despachoInvoiceIds]);
 
   const dailyDespachos = despachos;
 
@@ -232,6 +259,9 @@ export default function RouteMapPage() {
                 bodegaLocation={BODEGA_LOCATION}
                 despachoLabel={despachoLabel}
                 showGeofences={!motoristaId}
+                storedPolyline={despachoRuta?.polyline ?? null}
+                storedHash={despachoRuta?.ruta_hash ?? null}
+                onRouteResolved={handleRouteResolved}
               />
             )}
           </div>
