@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input"
 import Image from "next/image"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 import { generateShipmentPDF } from "@/lib/generate-shipment-pdf"
+import { optimizeOrderLocally } from "@/lib/route-chunks"
 import { PdfPreviewModal } from "@/components/pdf-preview-modal"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { AsyncCombobox } from "@/components/ui/async-combobox"
@@ -265,7 +266,6 @@ export default function ShipmentDetailPage() {
                         }
                       });
                       setInvoices(enrichedInvoices);
-                      saveOptimizedRouteOrder(enrichedInvoices);
                   }
               }
           }
@@ -514,12 +514,21 @@ const handleUpdateInvoice = async (values: ShipmentInvoiceEditValues) => {
 
       if (insertInvoiceError) throw new Error(`Error al crear factura: ${insertInvoiceError.message}`);
 
+      // Si el despacho ya tiene un orden completo, la nueva factura se agrega al
+      // final sin recurrir a Google. Si no, queda sin orden y se optimizará luego.
+      const existingOrders = invoices
+        .map(inv => inv.orden_visita)
+        .filter((n): n is number => typeof n === 'number');
+      const allOrdered = invoices.length > 0 && existingOrders.length === invoices.length;
+      const nextOrdenVisita = allOrdered ? Math.max(...existingOrders) + 1 : null;
+
       const { error: assignError } = await supabase.from('facturacion_x_despacho').insert({
         id_despacho: parseInt(shipment.id_despacho, 10),
         id_factura: values.id_factura,
         monto: 0,
         state: false,
         forma_pago: 'Efectivo',
+        ...(nextOrdenVisita !== null ? { orden_visita: nextOrdenVisita } : {}),
       });
 
       if (assignError) throw new Error(`Error al asignar factura: ${assignError.message}`);
@@ -736,61 +745,154 @@ const handleUpdateInvoice = async (values: ShipmentInvoiceEditValues) => {
     return { lng: String(centroid.lng / allPoints.length), lat: String(centroid.lat / allPoints.length) };
   };
 
-  const getVisitOrder = async (): Promise<ShipmentInvoice[]> => {
-    const hasManualOrder = invoices.some(inv => inv.orden_visita !== null);
-    if (hasManualOrder) {
-      const manuallyOrderedInvoices = [...invoices].sort((a, b) => (a.orden_visita || Infinity) - (b.orden_visita || Infinity));
-      return [{ customer_name: 'Bodega (Partida)', id_fac_desp: -1 } as ShipmentInvoice, ...manuallyOrderedInvoices];
-    }
-    const waypointsWithCentroids = invoices.map(invoice => {
-        const centroid = parseGeofenceCentroid(invoice.geocerca);
-        return centroid ? { invoice, centroid } : null;
-    }).filter((c): c is { invoice: ShipmentInvoice; centroid: { lat: string; lng: string } } => c !== null);
-    if (waypointsWithCentroids.length === 0) return [];
-    setIsOptimizingRoute(true);
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-    if (!apiKey) { setIsOptimizingRoute(false); return []; }
-    const toApiLatLng = (latLng: { lat: number | string; lng: number | string }) => ({ location: { latLng: { latitude: Number(latLng.lat), longitude: Number(latLng.lng) } } });
-    const requestBody = { travelMode: "DRIVE", routingPreference: "TRAFFIC_AWARE", origin: toApiLatLng(BODEGA_LOCATION), destination: toApiLatLng(BODEGA_LOCATION), intermediates: waypointsWithCentroids.map(w => toApiLatLng(w.centroid)), optimizeWaypointOrder: true };
-    try {
-      const response = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", { method: "POST", headers: { "Content-Type": "application/json", "X-Goog-Api-Key": apiKey, "X-Goog-FieldMask": "routes.optimizedIntermediateWaypointIndex" }, body: JSON.stringify(requestBody) });
-      const data = await response.json();
-      const waypointOrder: number[] = data.routes[0].optimizedIntermediateWaypointIndex || [];
-      const orderedInvoices = waypointOrder.map(index => waypointsWithCentroids[index].invoice);
-      return [{ customer_name: 'Bodega (Partida)', id_fac_desp: -1 } as ShipmentInvoice, ...orderedInvoices];
-    } catch { return []; } finally { setIsOptimizingRoute(false); }
+  /** Máximo de paradas intermedias que acepta la Routes API en una solicitud. */
+  const MAX_ROUTE_WAYPOINTS = 25;
+
+  /**
+   * Asigna un número de visita a las facturas que todavía no lo tienen,
+   * continuando después del último orden existente. No llama a Google.
+   */
+  const appendInvoicesToOrder = async (
+    pending: ShipmentInvoice[],
+    startIndex: number,
+  ): Promise<ShipmentInvoice[]> => {
+    if (pending.length === 0) return [];
+    const updates = pending.map((invoice, i) => ({ invoice, orden: startIndex + i + 1 }));
+    await Promise.all(
+      updates.map(({ invoice, orden }) =>
+        supabase
+          .from('facturacion_x_despacho')
+          .update({ orden_visita: orden })
+          .eq('id_fac_desp', invoice.id_fac_desp),
+      ),
+    );
+    return updates.map(({ invoice, orden }) => ({ ...invoice, orden_visita: orden }));
   };
 
-  const saveOptimizedRouteOrder = async (invoiceList: ShipmentInvoice[]) => {
-    if (invoiceList.length < 2) return;
-    const hasExistingOrder = invoiceList.some(inv => inv.orden_visita !== null);
-    if (hasExistingOrder) return;
+  /**
+   * Persiste el orden de visita de las facturas y devuelve la lista ordenada.
+   * Las facturas sin geocerca (o no incluidas) quedan al final.
+   */
+  const persistVisitOrder = async (
+    invoiceList: ShipmentInvoice[],
+    ordered: ShipmentInvoice[],
+  ): Promise<ShipmentInvoice[]> => {
+    const orderedIds = new Set(ordered.map(inv => inv.id_fac_desp));
+    const rest = invoiceList.filter(inv => !orderedIds.has(inv.id_fac_desp));
+    const finalList = [...ordered, ...rest];
+
+    await Promise.all(
+      finalList.map((invoice, i) =>
+        supabase
+          .from('facturacion_x_despacho')
+          .update({ orden_visita: i + 1 })
+          .eq('id_fac_desp', invoice.id_fac_desp),
+      ),
+    );
+    return finalList.map((invoice, i) => ({ ...invoice, orden_visita: i + 1 }));
+  };
+
+  /**
+   * Optimiza el recorrido y persiste el orden resultante.
+   * - 25 paradas o menos: Google Routes (una sola llamada).
+   * - Más de 25: heurística local, sin costo y sin límite de paradas.
+   */
+  const optimizeAndSaveOrder = async (invoiceList: ShipmentInvoice[]): Promise<ShipmentInvoice[]> => {
     const waypointsWithCentroids = invoiceList.map(invoice => {
       const centroid = parseGeofenceCentroid(invoice.geocerca);
       return centroid ? { invoice, centroid } : null;
     }).filter((c): c is { invoice: ShipmentInvoice; centroid: { lat: string; lng: string } } => c !== null);
-    if (waypointsWithCentroids.length < 2) return;
+
+    if (waypointsWithCentroids.length === 0) return invoiceList;
+
+    // Google no puede optimizar más de 25 paradas intermedias en una sola
+    // solicitud, así que a partir de ahí se ordena localmente (gratis).
+    if (waypointsWithCentroids.length > MAX_ROUTE_WAYPOINTS) {
+      const points: [number, number][] = waypointsWithCentroids.map(w => [
+        Number(w.centroid.lat),
+        Number(w.centroid.lng),
+      ]);
+      const localOrder = optimizeOrderLocally(points, [BODEGA_LOCATION.lat, BODEGA_LOCATION.lng]);
+      const ordered = localOrder.map(index => waypointsWithCentroids[index].invoice);
+      return persistVisitOrder(invoiceList, ordered);
+    }
+
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-    if (!apiKey) return;
+    if (!apiKey) return invoiceList;
+
     const toApiLatLng = (latLng: { lat: number | string; lng: number | string }) => ({ location: { latLng: { latitude: Number(latLng.lat), longitude: Number(latLng.lng) } } });
     const requestBody = { travelMode: "DRIVE", routingPreference: "TRAFFIC_AWARE", origin: toApiLatLng(BODEGA_LOCATION), destination: toApiLatLng(BODEGA_LOCATION), intermediates: waypointsWithCentroids.map(w => toApiLatLng(w.centroid)), optimizeWaypointOrder: true };
+
+    setIsOptimizingRoute(true);
     try {
       const response = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", { method: "POST", headers: { "Content-Type": "application/json", "X-Goog-Api-Key": apiKey, "X-Goog-FieldMask": "routes.optimizedIntermediateWaypointIndex" }, body: JSON.stringify(requestBody) });
+      if (!response.ok) {
+        console.warn('[shipments] No se pudo optimizar la ruta:', response.status, await response.text().catch(() => ''));
+        return invoiceList;
+      }
       const data = await response.json();
-      const waypointOrder: number[] = data.routes[0]?.optimizedIntermediateWaypointIndex || [];
-      if (waypointOrder.length === 0) return;
-      for (let i = 0; i < waypointOrder.length; i++) {
-        const inv = waypointsWithCentroids[waypointOrder[i]].invoice;
-        await supabase.from('facturacion_x_despacho').update({ orden_visita: i + 1 }).eq('id_fac_desp', inv.id_fac_desp);
-      }
-      const ordered = waypointOrder.map(idx => waypointsWithCentroids[idx].invoice);
-      const geocercaIds = new Set(ordered.map(i => i.id_fac_desp));
-      const noGeocerca = invoiceList.filter(i => !geocercaIds.has(i.id_fac_desp));
-      for (let i = 0; i < noGeocerca.length; i++) {
-        await supabase.from('facturacion_x_despacho').update({ orden_visita: ordered.length + i + 1 }).eq('id_fac_desp', noGeocerca[i].id_fac_desp);
-      }
-      fetchData();
-    } catch { return; }
+      const waypointOrder: number[] = data.routes?.[0]?.optimizedIntermediateWaypointIndex || [];
+      const ordered = waypointOrder
+        .map(index => waypointsWithCentroids[index]?.invoice)
+        .filter((inv): inv is ShipmentInvoice => Boolean(inv));
+      if (ordered.length === 0) return invoiceList;
+
+      return await persistVisitOrder(invoiceList, ordered);
+    } catch (error) {
+      console.warn('[shipments] Error al optimizar la ruta:', error);
+      return invoiceList;
+    } finally {
+      setIsOptimizingRoute(false);
+    }
+  };
+
+  /**
+   * Sincroniza el orden recién persistido con el estado local, para que un
+   * segundo clic no vuelva a disparar la llamada a Google.
+   */
+  const applyOrderToState = (ordered: ShipmentInvoice[]) => {
+    // La fila ficticia de la bodega (id -1) no existe en la tabla.
+    const real = ordered.filter(invoice => invoice.id_fac_desp !== -1);
+    const orderById = new Map(real.map((invoice, i) => [invoice.id_fac_desp, i + 1]));
+    setInvoices(prev =>
+      prev.map(invoice => {
+        const orden = orderById.get(invoice.id_fac_desp);
+        return orden === undefined ? invoice : { ...invoice, orden_visita: orden };
+      }),
+    );
+  };
+
+  /**
+   * Devuelve el orden de visita del despacho.
+   * - Si todas las facturas ya tienen orden: 0 llamadas a Google.
+   * - Si hay un orden parcial: las nuevas se agregan al final, 0 llamadas.
+   * - Si no hay ningún orden: se optimiza una única vez con Google.
+   */
+  const getVisitOrder = async (): Promise<ShipmentInvoice[]> => {
+    const withOrder = invoices
+      .filter(inv => typeof inv.orden_visita === 'number')
+      .sort((a, b) => (a.orden_visita as number) - (b.orden_visita as number));
+    const pending = invoices.filter(inv => typeof inv.orden_visita !== 'number');
+
+    const bodega = { customer_name: 'Bodega (Partida)', id_fac_desp: -1 } as ShipmentInvoice;
+
+    if (pending.length === 0) {
+      if (withOrder.length === 0) return [];
+      return [bodega, ...withOrder];
+    }
+
+    if (withOrder.length > 0) {
+      const appended = await appendInvoicesToOrder(pending, withOrder.length);
+      const result = [bodega, ...withOrder, ...appended];
+      applyOrderToState(result);
+      return result;
+    }
+
+    const optimized = await optimizeAndSaveOrder(pending);
+    if (optimized.length === 0) return [];
+    const result = [bodega, ...optimized];
+    applyOrderToState(result);
+    return result;
   };
 
   const handleExportRouteToMaps = async () => {
