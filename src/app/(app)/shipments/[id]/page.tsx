@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
-import { ArrowLeft, Pencil, Upload, Camera, X, FileText, Loader2, MapPin, Play, Square, ListOrdered, ArrowUp, ArrowDown, Search, PlusCircle, Trash2, GripVertical, Map as MapIcon, Check } from "lucide-react"
+import { ArrowLeft, Pencil, Upload, Camera, X, FileText, Loader2, MapPin, Play, Square, ListOrdered, ArrowUp, ArrowDown, Search, PlusCircle, Trash2, GripVertical, Map as MapIcon, Check, Navigation } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
@@ -895,6 +895,27 @@ const handleUpdateInvoice = async (values: ShipmentInvoiceEditValues) => {
     return result;
   };
 
+  /**
+   * Abre la ubicación de una factura en Waze (una parada a la vez).
+   * Usa el centroide de la geocerca, el mismo criterio que el resto de la app.
+   */
+  const handleOpenInWaze = (invoice: ShipmentInvoice) => {
+    const centroid = parseGeofenceCentroid(invoice.geocerca);
+    if (!centroid) {
+      toast({
+        title: 'Sin ubicación',
+        description: `La factura ${invoice.reference_number || invoice.id_factura} no tiene geocerca registrada.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+    window.open(
+      `https://waze.com/ul?ll=${centroid.lat},${centroid.lng}&navigate=yes`,
+      '_blank',
+      'noopener,noreferrer',
+    );
+  };
+
   const handleExportRouteToMaps = async () => {
     const orderedInvoices = await getVisitOrder();
     if (orderedInvoices.length <= 1) return;
@@ -1154,6 +1175,7 @@ const handleUpdateInvoice = async (values: ShipmentInvoiceEditValues) => {
                                       ) : (
                                           <>
                                             <Button variant="outline" size="sm" title="Ver la ubicación de este cliente en el mapa" onClick={() => router.push(`/route-generation?customer=${encodeURIComponent(inv.code_customer)}`)}><MapPin className="mr-1 h-3.5 w-3.5" /> Generar Ruta</Button>
+                                            <Button variant="outline" size="sm" title="Abrir la ubicación de esta factura en Waze" onClick={() => handleOpenInWaze(inv)}><Navigation className="mr-1 h-3.5 w-3.5" /> Waze</Button>
                                             <Button type="button" variant="ghost" size="icon" title={canCompleteOnly ? 'Completar entrega' : 'Editar factura'} disabled={verifyingLocationInvoiceId === inv.id_fac_desp} onClick={() => (canCompleteOnly ? handleCompleteInvoice(inv) : handleEditInvoice(inv))}>{verifyingLocationInvoiceId === inv.id_fac_desp ? (
                                                     <Loader2 className="h-4 w-4 animate-spin" />
                                                   ) : canCompleteOnly ? (
@@ -1219,6 +1241,7 @@ const handleUpdateInvoice = async (values: ShipmentInvoiceEditValues) => {
                                 </div>
                               )}
                               <Button variant="outline" className="w-full text-foreground" onClick={() => router.push(`/route-generation?customer=${encodeURIComponent(inv.code_customer)}`)}><MapPin className="mr-2"/>Generar Ruta</Button>
+                              <Button variant="outline" className="w-full text-foreground" onClick={() => handleOpenInWaze(inv)}><Navigation className="mr-2"/>Abrir en Waze</Button>
                               <div className="flex gap-2">
                                   {verifyingLocationInvoiceId === inv.id_fac_desp ? (
                                       <div className="flex-1 flex justify-center py-2"><Loader2 className="h-6 w-6 animate-spin" /></div>
